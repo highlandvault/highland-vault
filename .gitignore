@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+.next/
+next-env.d.ts
+out/
+
+# test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# environment — never commit real values; .env.example is the template
+.env
+.env.*
+!.env.example
+
+# logs / OS / editors
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

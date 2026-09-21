@@ -1,0 +1,7 @@
+{
+  "dialect": "postgres",
+  "url": "env(MIGRATION_DATABASE_URL)",
+  "outFile": "src/generated/db.ts",
+  "excludePattern": "schema_migrations",
+  "typeMapping": { "int8": "number" }
+}

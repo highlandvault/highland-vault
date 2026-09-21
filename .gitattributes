@@ -1,0 +1,6 @@
+# Normalise line endings so SQL migration checksums, shell scripts and
+# formatting are identical on Windows, macOS, Linux and CI.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

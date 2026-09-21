@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Packages whose install scripts are allowed to run (native binaries only).
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild
+  - sharp
+  - unrs-resolver
+
+# Optional native accelerator for BullMQ (msgpackr); the pure-JS fallback is used.
+ignoredBuiltDependencies:
+  - msgpackr-extract

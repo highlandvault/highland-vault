@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "declaration": true,
+    "sourceMap": true,
+    "noEmit": true,
+
+    // Source-first resolution of workspace packages for typecheck, tests and editors.
+    // Build configs (tsconfig.build.json) clear these so each package compiles
+    // against its dependencies' published dist/ output instead.
+    "paths": {
+      "@hv/contracts": ["../contracts/src/index.ts"],
+      "@hv/db": ["../db/src/index.ts"],
+      "@hv/db/testing": ["../db/src/testing/index.ts"],
+      "@hv/domain": ["../domain/src/index.ts"]
+    }
+  }
+}

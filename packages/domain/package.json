@@ -1,0 +1,19 @@
+{
+  "name": "@hv/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure business primitives with no I/O (money, later state machines and settlement algorithm).",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@hv/config": "workspace:*"
+  }
+}

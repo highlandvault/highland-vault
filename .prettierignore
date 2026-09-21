@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+dist/
+.next/
+coverage/
+test-results/
+playwright-report/
+packages/db/src/generated/
+docs/PROJECT_INITIALIZATION_REPORT.md

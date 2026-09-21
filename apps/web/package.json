@@ -1,0 +1,27 @@
+{
+  "name": "@hv/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Highland Vault web app (Next.js App Router): /uk, /ie customer routes; /admin from Phase 2.",
+  "scripts": {
+    "build": "next build",
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "next start -H 127.0.0.1 -p 3000",
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@hv/contracts": "workspace:*",
+    "next": "16.3.5",
+    "server-only": "0.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@hv/config": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

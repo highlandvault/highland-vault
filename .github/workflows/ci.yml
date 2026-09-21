@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (lint, typecheck, tests, migrations, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history for the secret scan
+
+      # Uses the pnpm version pinned in package.json#packageManager.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Secret scan (gitleaks, all commits)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --no-banner --redact .
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Same docker-compose stack and bootstrap script as local development.
+      # .env.example only holds local-only placeholder values.
+      - name: Start PostgreSQL 18 and Redis
+        run: |
+          cp .env.example .env
+          docker compose up -d --wait postgres redis
+
+      - name: Migrations — up, status, verify
+        run: |
+          pnpm db:migrate up
+          pnpm db:migrate status
+          pnpm db:migrate verify
+
+      - name: Generated DB types are up to date
+        run: pnpm --filter @hv/db run codegen:verify
+
+      - name: Integration tests (real PostgreSQL + Redis)
+        run: pnpm test:integration
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @hv/web exec playwright install --with-deps chromium
+
+      - name: Web smoke tests (Playwright)
+        run: pnpm test:e2e
+
+      - name: Docker logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop infrastructure
+        if: always()
+        run: docker compose down --volumes

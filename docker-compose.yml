@@ -1,0 +1,63 @@
+# Highland Vault — LOCAL DEVELOPMENT infrastructure only (ADR-0001).
+# Not a production deployment definition.
+#
+# Values come from .env (copy .env.example). All ports bind to 127.0.0.1 only.
+
+name: highland-vault
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      # Consumed by infra/docker/postgres/init/01-roles-and-database.sh on first start.
+      HV_DB_NAME: ${HV_DB_NAME:-highland_vault}
+      HV_OWNER_PASSWORD: ${HV_OWNER_PASSWORD:?set HV_OWNER_PASSWORD in .env}
+      HV_APP_PASSWORD: ${HV_APP_PASSWORD:?set HV_APP_PASSWORD in .env}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker,
+      # so the volume is mounted at the parent directory.
+      - postgres-data:/var/lib/postgresql
+      - ./infra/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ${HV_DB_NAME:-highland_vault}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    # BullMQ requires noeviction; AOF keeps queued jobs across container restarts.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:
+  redis-data:
