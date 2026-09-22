@@ -38,14 +38,16 @@ test('an admin creates, completes and publishes a draw; customers then see it', 
 
   await page.getByLabel('1st prize').fill('E2E prize');
   await page.getByRole('button', { name: 'Save prizes' }).click();
-  await expect(page.getByTestId('form-saved')).toBeVisible();
+  // Wait for this save specifically: a notice from an earlier save must not count.
+  await expect(page.getByTestId('form-saved')).toHaveText('Saved (prizes).');
 
   await page.getByLabel('Question', { exact: true }).fill('How many days are in a week?');
   await page.getByLabel('Option 1').fill('5');
   await page.getByLabel('Option 2').fill('7');
   await page.getByRole('radio', { name: 'Correct answer' }).nth(1).check();
   await page.getByRole('button', { name: 'Save skill question' }).click();
-  await expect(page.getByTestId('form-saved')).toBeVisible();
+  await expect(page.getByTestId('form-saved')).toHaveText('Saved (question).');
+  await expect(page.getByTestId('publish-blockers')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Publish draw' }).click();
   await expect(page.getByTestId('admin-draw-status')).toHaveText('stored status: scheduled');
