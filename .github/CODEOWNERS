@@ -1,0 +1,51 @@
+# Code owners for Highland Vault.
+#
+# STATUS: INACTIVE. Every rule below is commented out on purpose.
+#
+# The owner's GitHub username has not been recorded yet. <OWNER_GITHUB_USERNAME>
+# is a placeholder, not a real account. GitHub reports unknown owners as errors,
+# so the rules stay commented out until the placeholder is replaced.
+#
+# To activate:
+#   1. Replace <OWNER_GITHUB_USERNAME> with the real username (for example
+#      @someone) or with a team (@highlandvault/<team>).
+#   2. Uncomment the rules.
+#   3. Optional, owner decision: enable "Require review from Code Owners" in
+#      the branch protection for main. This repository does not configure it.
+#
+# Later rules override earlier ones, so the most specific paths come last.
+# Paths marked (planned) do not exist yet. They are the intended locations from
+# the Initialization Report (Parts B and C) and take effect once created.
+
+# Default owner for everything
+# *                                  @<OWNER_GITHUB_USERNAME>
+
+# Repository governance, CI, shared rules and architecture
+# /.github/                          @<OWNER_GITHUB_USERNAME>
+# /docs/adr/                         @<OWNER_GITHUB_USERNAME>
+# /docs/DEVELOPMENT_RULES.md         @<OWNER_GITHUB_USERNAME>
+# /docs/PROJECT_INITIALIZATION_REPORT.md @<OWNER_GITHUB_USERNAME>
+
+# Infrastructure and environment
+# /infra/                            @<OWNER_GITHUB_USERNAME>
+# /docker-compose.yml                @<OWNER_GITHUB_USERNAME>
+# /.env.example                      @<OWNER_GITHUB_USERNAME>
+
+# Database: client, migrations, migration tool (exists)
+# /packages/db/                      @<OWNER_GITHUB_USERNAME>
+
+# Money primitives (exists)
+# /packages/domain/                  @<OWNER_GITHUB_USERNAME>
+
+# Legacy data migration (exists, placeholder)
+# /tools/migration/                  @<OWNER_GITHUB_USERNAME>
+
+# Payments abstraction (planned, Phase 6)
+# /packages/payments/                @<OWNER_GITHUB_USERNAME>
+
+# Sensitive API areas (planned)
+# /apps/api/src/payments/            @<OWNER_GITHUB_USERNAME>
+# /apps/api/src/wallet/              @<OWNER_GITHUB_USERNAME>
+# /apps/api/src/tickets/             @<OWNER_GITHUB_USERNAME>
+# /apps/api/src/settlement/          @<OWNER_GITHUB_USERNAME>
+# /apps/api/src/auth/                @<OWNER_GITHUB_USERNAME>

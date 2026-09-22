@@ -1,10 +1,10 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-22_
 
 ## Current phase
 
-**Phase 1 (Day 1): Foundation — complete, awaiting owner review.**
+**Phase 1 (Day 1): Foundation — complete, approved by the owner on 2026-09-22.**
 
 Every Definition of Done item below was verified by actually running it on the development machine: Windows 11, Docker Desktop 29.8.0, Compose v5.5.1, Node 24.11.1, pnpm 10.34.5. **Phase 2 has not started** and will not start without explicit approval.
 
@@ -127,7 +127,7 @@ These are implementation choices within the approved architecture, recorded for 
 - **`corepack enable` needs admin rights** on this machine (`EPERM` on `C:\Program Files\nodejs`). The workaround, `corepack enable --install-directory "%APPDATA%\npm"`, is in the README.
 - **npm flags ESLint 9 as "deprecated"** because ESLint 10 exists. It is functional and supported by the configs in use.
 - **Vite warns about loading the config as CommonJS**, cosmetic only. `vitest.config.mts` is ESM; the warning comes from the Vite native config loader preview.
-- **CI has not run on GitHub yet**, because nothing is pushed. It was validated locally with actionlint only.
+- **CI result on GitHub not yet confirmed.** Commit `a16ca35` is now on `origin/main` and `origin/develop`. CI was validated locally with actionlint.
 
 ## Open decisions (Revision 2 Part G, still unresolved)
 
@@ -156,4 +156,4 @@ O1–O6 and O18 were approved by the owner on 2026-09-21. They are recorded in A
 
 ## Next task
 
-**Stop for owner review of Phase 1.** Phase 2 (users, authentication/sessions, markets, RBAC, MFA, audit log, admin shell) starts only on explicit instruction.
+Phase 1 is approved. For active work and task ownership, see [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md) and [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md). Phase 2 (users, authentication/sessions, markets, RBAC, MFA, audit log, admin shell) starts only on explicit instruction.
