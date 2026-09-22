@@ -64,3 +64,83 @@ export async function insertFixtureUser(db: Queryable, email: string): Promise<s
   );
   return result.rows[0]!.id;
 }
+
+export interface FixtureDrawOptions {
+  market: 'uk' | 'ie' | 'de';
+  slug: string;
+  title?: string;
+  /** How far through the real lifecycle to take the draw. */
+  state: 'draft' | 'scheduled' | 'live' | 'cancelled';
+  opensAt?: Date;
+  closesAt?: Date;
+  ticketPriceMinor?: number;
+  totalTickets?: number;
+  maxPerPerson?: number;
+  prizes?: readonly string[];
+}
+
+/**
+ * Creates a draw the way the application does — draft, then skill question and
+ * prizes, then the requested transitions — so every database rule applies.
+ * Content is labelled as test data.
+ */
+export async function insertFixtureDraw(
+  db: Queryable,
+  options: FixtureDrawOptions,
+): Promise<string> {
+  const prizes = options.prizes ?? ['Test fixture first prize'];
+  const opensAt = options.opensAt ?? new Date(Date.now() - 60 * 60 * 1000);
+  const closesAt = options.closesAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const draw = await db.query<{ id: string; market_id: string }>(
+    `INSERT INTO draws (market_id, currency, slug, title, description, ticket_price_minor,
+                        total_tickets, max_per_person, winner_positions, opens_at, closes_at)
+     SELECT m.id, m.currency, $2, $3, 'Test fixture draw. Not a real competition.', $4, $5, $6, $7, $8, $9
+       FROM markets m WHERE m.code = $1
+     RETURNING id, market_id`,
+    [
+      options.market,
+      options.slug,
+      options.title ?? `Test fixture: ${options.slug}`,
+      options.ticketPriceMinor ?? 250,
+      options.totalTickets ?? 1000,
+      options.maxPerPerson ?? 25,
+      prizes.length,
+      opensAt,
+      closesAt,
+    ],
+  );
+  const { id, market_id: marketId } = draw.rows[0]!;
+
+  const question = await db.query<{ id: string }>(
+    `INSERT INTO skill_questions (market_id, prompt) VALUES ($1, 'Test fixture: what is 2 + 3?') RETURNING id`,
+    [marketId],
+  );
+  const questionId = question.rows[0]!.id;
+  await db.query(
+    `INSERT INTO skill_question_options (skill_question_id, position, label, is_correct)
+     VALUES ($1, 1, '4', false), ($1, 2, '5', true), ($1, 3, '6', false)`,
+    [questionId],
+  );
+  await db.query(`UPDATE draws SET skill_question_id = $2 WHERE id = $1`, [id, questionId]);
+  for (const [index, title] of prizes.entries()) {
+    await db.query(
+      `INSERT INTO draw_prizes (draw_id, position, title, description) VALUES ($1, $2, $3, 'Test fixture prize.')`,
+      [id, index + 1, title],
+    );
+  }
+
+  if (options.state === 'cancelled') {
+    await db.query(`UPDATE draws SET status = 'cancelled', cancelled_at = now() WHERE id = $1`, [
+      id,
+    ]);
+  }
+  if (options.state === 'scheduled' || options.state === 'live') {
+    await db.query(`UPDATE draws SET status = 'scheduled', published_at = now() WHERE id = $1`, [
+      id,
+    ]);
+  }
+  if (options.state === 'live') {
+    await db.query(`UPDATE draws SET status = 'live' WHERE id = $1`, [id]);
+  }
+  return id;
+}

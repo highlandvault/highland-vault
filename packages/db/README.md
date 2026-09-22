@@ -39,17 +39,20 @@ The tool connects with `MIGRATION_DATABASE_URL` (the owner role `hv_owner`). `--
 - `hv_app` is the runtime role (api and worker). Default privileges give it DML on new tables; append-only tables revoke UPDATE/DELETE from it in their own migrations.
 - `hv_app` can only read `schema_migrations`.
 
-## Schema (Phase 2)
+## Schema
 
-| Migration                   | Contents                                                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 0001_foundation             | `hv_forbid_update_delete()` for append-only tables                                                         |
-| 0002_extensions_and_helpers | `citext`, `hv_set_updated_at()`                                                                            |
-| 0003_users                  | `users`: normalized, globally unique email (citext); Argon2id hashes only; no market column (ADR-0003)     |
-| 0004_markets                | `markets`, `market_settings`; fixed market definitions; Germany legal-approval CHECK; compliance gate      |
-| 0005_sessions_and_mfa       | `sessions` (token hash only), `user_mfa` (encrypted TOTP secret), `mfa_recovery_codes` (hashes)            |
-| 0006_rbac                   | `roles`, `permissions`, `role_permissions` (Revision 2 B7 matrix), `user_roles` (optionally market-scoped) |
-| 0007_audit_log              | append-only `audit_log` (trigger + REVOKE)                                                                 |
+| Migration                   | Contents                                                                                                                                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0001_foundation             | `hv_forbid_update_delete()` for append-only tables                                                                                                                                                                                |
+| 0002_extensions_and_helpers | `citext`, `hv_set_updated_at()`                                                                                                                                                                                                   |
+| 0003_users                  | `users`: normalized, globally unique email (citext); Argon2id hashes only; no market column (ADR-0003)                                                                                                                            |
+| 0004_markets                | `markets`, `market_settings`; fixed market definitions; Germany legal-approval CHECK; compliance gate                                                                                                                             |
+| 0005_sessions_and_mfa       | `sessions` (token hash only), `user_mfa` (encrypted TOTP secret), `mfa_recovery_codes` (hashes)                                                                                                                                   |
+| 0006_rbac                   | `roles`, `permissions`, `role_permissions` (Revision 2 B7 matrix), `user_roles` (optionally market-scoped)                                                                                                                        |
+| 0007_audit_log              | append-only `audit_log` (trigger + REVOKE)                                                                                                                                                                                        |
+| 0008_draws                  | `draws` (one market; currency pinned by the `(market_id, currency)` FK; lifecycle trigger; frozen once published), `draw_prizes` (one per winner position), `skill_questions` + options (same market; exactly one correct option) |
+
+`hv_draw_publish_blockers(draw_id)` is the single definition of what a draft still needs before it can be published.
 
 `hv_market_missing_settings(market_id)` is the single definition of which compliance settings are required before a market can be enabled.
 

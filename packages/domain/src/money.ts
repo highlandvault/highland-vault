@@ -76,3 +76,18 @@ export function formatMoney(value: Money, locale: string): string {
   });
   return formatter.format(toDecimalString(value) as Intl.StringNumericLiteral);
 }
+
+/**
+ * Parses a typed decimal amount ("2.50", "12", "0.99") into Money without any
+ * float arithmetic: the digits are read as a string. More fraction digits than
+ * the currency has, signs, exponents and separators are rejected.
+ */
+export function parseDecimalMoney(input: string, currency: Currency): Money {
+  const digits = MINOR_UNIT_DIGITS[currency];
+  const match = /^(\d{1,13})(?:\.(\d+))?$/.exec(input.trim());
+  if (!match || (match[2] !== undefined && match[2].length > digits)) {
+    throw new MoneyError(`Not an amount with at most ${digits} decimal places: ${input}`);
+  }
+  const fraction = (match[2] ?? '').padEnd(digits, '0');
+  return money(Number(`${match[1]}${fraction}`), currency);
+}

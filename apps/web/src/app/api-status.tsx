@@ -18,8 +18,10 @@ async function fetchReadiness(): Promise<ReadinessResponse | { error: string }> 
 export async function ApiStatus() {
   const readiness = await fetchReadiness();
   return (
-    <section aria-labelledby="api-status">
-      <h2 id="api-status">API status</h2>
+    <section aria-labelledby="api-status" className="hint">
+      <h2 id="api-status" className="visually-hidden">
+        API status
+      </h2>
       {'error' in readiness ? (
         <p data-testid="api-status">API unavailable ({readiness.error})</p>
       ) : (

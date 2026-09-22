@@ -405,6 +405,24 @@ describe('runtime role privileges (production-style provisioning)', () => {
     });
   });
 
+  it('can create and change draws, but never delete them (they are cancelled instead)', async () => {
+    expect(await privileges('draws')).toEqual({
+      SELECT: true,
+      INSERT: true,
+      UPDATE: true,
+      DELETE: false,
+      TRUNCATE: false,
+    });
+    for (const table of ['draw_prizes', 'skill_questions', 'skill_question_options']) {
+      expect(await privileges(table)).toMatchObject({
+        SELECT: true,
+        INSERT: true,
+        UPDATE: true,
+        DELETE: true,
+      });
+    }
+  });
+
   it('has ordinary DML on identity tables', async () => {
     for (const table of ['users', 'sessions', 'user_mfa', 'mfa_recovery_codes', 'user_roles']) {
       expect(await privileges(table)).toMatchObject({ SELECT: true, INSERT: true, UPDATE: true });

@@ -22,6 +22,13 @@ function e2eDatabaseUrl(): string {
   return url.toString();
 }
 
+/** A Redis logical database of its own (14), emptied by e2e:prepare before every run. */
+function e2eRedisUrl(): string {
+  const url = new URL(required('TEST_REDIS_URL'));
+  url.pathname = '/14';
+  return url.toString();
+}
+
 /**
  * The e2e API env, shared with the setup project (which runs the operator CLI).
  * DE is listed in ENABLED_MARKETS on purpose: the database gate alone must keep it closed.
@@ -32,7 +39,7 @@ export const E2E_API_ENV = {
   API_HOST: '127.0.0.1',
   API_PORT: '4100',
   DATABASE_URL: e2eDatabaseUrl(),
-  REDIS_URL: required('TEST_REDIS_URL'),
+  REDIS_URL: e2eRedisUrl(),
   ENABLED_MARKETS: 'uk,ie,de',
   WEB_ORIGINS: E2E_WEB_ORIGIN,
   SESSION_COOKIE_SECURE: 'false',
@@ -43,6 +50,10 @@ export const E2E_API_ENV = {
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
+  // Every request goes through the real API (Argon2id hashing, PostgreSQL, Redis); more
+  // workers than this only queue behind each other and push slow steps past the timeout.
+  workers: 3,
+  expect: { timeout: 10_000 },
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -55,6 +66,13 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
+    },
+    {
+      // The customer journey again on a phone-sized viewport.
+      name: 'mobile',
+      use: { ...devices['Pixel 7'] },
+      testMatch: /(^|[\\/])draws\.spec\.ts$/,
       dependencies: ['setup'],
     },
   ],

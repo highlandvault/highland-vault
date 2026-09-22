@@ -23,6 +23,8 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@hv/config": "workspace:*"
+    "@hv/config": "workspace:*",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.0"
   }
 }

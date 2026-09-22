@@ -44,7 +44,7 @@ Next:
 
 - **Phase 1 (Day 1) Foundation:** complete and approved by the owner.
 - **Phase 2 (Day 2):** DONE: merged into `develop` (PR #3; test fix PR #4). Governance follow-ups merged: PR #5 (branch policy), PR #6 (CI on `develop` pushes).
-- **Phase 3 (Day 3):** IN PROGRESS, started on owner instruction on 2026-09-22.
+- **Phase 3 (Day 3):** implementation complete, IN REVIEW (PR #7 into `develop`).
 - **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is still at `a16ca35`.
 - **GitHub CI:** runs on PRs and on pushes to `main` and `develop`; green on `develop` (`8677781`).
 
@@ -55,8 +55,8 @@ Next:
 Developer: Divyanshu (repository owner), working with Claude
 Branch: `feature/p3-draws` (from `origin/develop` `8677781`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub API)
-PR: draft PR into `develop` (see TASK_BOARD)
-Status: IN PROGRESS
+PR: #7 into `develop`
+Status: IN REVIEW
 
 Current task:
 Phase 3 (Initialization Report, Part F): draw schema + lifecycle, prizes and winner positions, per-draw skill question, publishing, customer draw list/detail per market, admin draw management.
@@ -68,10 +68,10 @@ Avoid modifying:
 `packages/db/migrations/` (0008+ are taken by this branch), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/`, `apps/web/src/app/layout.tsx` and global styles.
 
 Blockers:
-None. Customer pages stay unreachable on real databases until O12 lets a market be enabled; tests use fixture markets.
+None for the implementation. Decisions needed: see PROJECT_STATUS.md ("Decisions needed").
 
 Last update:
-2026-09-22 — Task claimed, branch created.
+2026-09-22 — Phase 3 implemented and verified: `pnpm verify` exit 0 (unit 126/126, integration 198/198), e2e 33/33, migration 0008 applied to the dev DB, handoff written.
 
 Next:
-Migrations, domain rules, API, worker sweeper, web, tests.
+Review of PR #7. On merge: remove this entry and mark P3 DONE. Phase 4 needs explicit approval.

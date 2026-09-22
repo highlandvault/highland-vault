@@ -43,9 +43,7 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID  | Task                                             | Owner             | Branch             | Dependencies | Area                       | Issue / PR | Notes                                   |
-| --- | ------------------------------------------------ | ----------------- | ------------------ | ------------ | -------------------------- | ---------- | --------------------------------------- |
-| P3  | Draws foundation + first customer vertical slice | Divyanshu (owner) | `feature/p3-draws` | P2           | db draws, API, worker, web | draft PR   | Started 2026-09-22 on owner instruction |
+_None._
 
 ## BLOCKED
 
@@ -55,7 +53,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN REVIEW
 
-_None._
+| ID  | Task                                             | Owner             | Branch             | Dependencies | Area                       | Issue / PR | Notes                                                                                     |
+| --- | ------------------------------------------------ | ----------------- | ------------------ | ------------ | -------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| P3  | Draws foundation + first customer vertical slice | Divyanshu (owner) | `feature/p3-draws` | P2           | db draws, API, worker, web | PR #7      | Implemented and verified 2026-09-22; awaiting review. Decisions needed: PROJECT_STATUS.md |
 
 ## READY
 

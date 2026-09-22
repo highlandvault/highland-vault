@@ -108,6 +108,9 @@ importers:
       '@hv/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@hv/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7)(@playwright/test@1.63.0)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -176,6 +179,12 @@ importers:
       '@hv/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
 
   packages/config: {}
 
@@ -204,6 +213,9 @@ importers:
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1
       kysely-codegen:
         specifier: 0.19.0
         version: 0.19.0(kysely@0.28.17)(pg@8.23.0)(typescript@5.9.3)

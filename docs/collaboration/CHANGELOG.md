@@ -17,6 +17,12 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
+- **P3:** Migration `0008_draws`: draws, prizes (one per winner position) and skill questions. Run `pnpm db:migrate up`. Next free migration number: `0009`.
+- **P3:** Customer API `GET /markets/:market/draws` and `/:slug`; admin draw API under `/admin/markets/:market/draws` (`draws.write`, scoped to the market). Correct skill answers never leave the admin API.
+- **P3:** The worker now also runs the `draw-lifecycle` sweep every minute (scheduled → live → closed, audited).
+- **P3:** The customer website starts: `/{market}`, `/{market}/draws`, `/{market}/draws/{slug}`, plus admin draw pages. Design tokens live in `apps/web/src/app/globals.css` (plain CSS, no UI framework). The web app now depends on `@hv/domain`.
+- **P3:** e2e uses Redis DB 14 (emptied by `e2e:prepare`), 3 workers and a mobile project; seeded test draws live in `packages/db/src/testing/e2e-database.ts`.
+
 - **Process:** Branch policy settled: `feature/*` → PR → `develop` (integration) → release PR → `main` (production). Task PRs target `develop`. DEVELOPMENT_RULES §4, §5, §7, §10 and the TASK_BOARD definition of DONE were updated.
 
 - **P2:** Migrations `0002`–`0007` add users, markets + settings, sessions + MFA, RBAC and the audit log. Run `pnpm db:migrate up` after pulling. Next free migration number: `0008`.
