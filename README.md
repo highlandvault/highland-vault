@@ -4,6 +4,7 @@ This is the native Highland Vault competition platform, replacing the WordPress/
 
 - **Architecture and decisions:** [docs/PROJECT_INITIALIZATION_REPORT.md](docs/PROJECT_INITIALIZATION_REPORT.md) (Revision 2) and [docs/adr/](docs/adr/README.md)
 - **Current status:** [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
+- **Working on the project (developers and Claude):** [docs/DEVELOPMENT_RULES.md](docs/DEVELOPMENT_RULES.md) and [docs/collaboration/](docs/collaboration/TASK_BOARD.md)
 
 ## Repository layout
 
