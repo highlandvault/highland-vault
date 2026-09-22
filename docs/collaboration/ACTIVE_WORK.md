@@ -43,11 +43,35 @@ Next:
 ## Current project state
 
 - **Phase 1 (Day 1) Foundation:** complete and approved by the owner.
-- **T-001 collaboration layer:** approved and merged into `develop` (PR #2, `e05f270`).
-- **Phase 2 (Day 2):** DONE: merged into `develop` (PR #3, `6b0ea82`; commit `b06226b`). Phase 3 not started; it needs explicit owner approval.
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/develop` = `main` + PR #2 + PR #3; `origin/main` is still at `a16ca35`.
-- **GitHub issues / PRs:** PR #2 and PR #3 (both merged into `develop`). The GitHub CLI is not installed on this machine, so no issue could be created or checked.
+- **Phase 2 (Day 2):** DONE: merged into `develop` (PR #3; test fix PR #4). Governance follow-ups merged: PR #5 (branch policy), PR #6 (CI on `develop` pushes).
+- **Phase 3 (Day 3):** IN PROGRESS, started on owner instruction on 2026-09-22.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is still at `a16ca35`.
+- **GitHub CI:** runs on PRs and on pushes to `main` and `develop`; green on `develop` (`8677781`).
 
 ## Active entries
 
-_None._
+### P3 — Draws foundation + first customer vertical slice
+
+Developer: Divyanshu (repository owner), working with Claude
+Branch: `feature/p3-draws` (from `origin/develop` `8677781`)
+Issue: none (no GitHub CLI; PRs are opened through the GitHub API)
+PR: draft PR into `develop` (see TASK_BOARD)
+Status: IN PROGRESS
+
+Current task:
+Phase 3 (Initialization Report, Part F): draw schema + lifecycle, prizes and winner positions, per-draw skill question, publishing, customer draw list/detail per market, admin draw management.
+
+Affected areas:
+`packages/db/migrations/` (0008 onwards), `packages/db/src/`, `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/draws/` (new), `apps/worker/src/draws/` (new, lifecycle sweeper), `apps/web/src/app/` (customer + admin draw pages, styles), `apps/web/e2e/`, docs.
+
+Avoid modifying:
+`packages/db/migrations/` (0008+ are taken by this branch), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/`, `apps/web/src/app/layout.tsx` and global styles.
+
+Blockers:
+None. Customer pages stay unreachable on real databases until O12 lets a market be enabled; tests use fixture markets.
+
+Last update:
+2026-09-22 — Task claimed, branch created.
+
+Next:
+Migrations, domain rules, API, worker sweeper, web, tests.
