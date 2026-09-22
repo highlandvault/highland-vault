@@ -1,20 +1,20 @@
 import { notFound } from 'next/navigation';
-import { WEB_MARKETS, isWebMarket } from '@/markets';
+import { fetchMarket } from '@/markets';
 
-export function generateStaticParams() {
-  return Object.keys(WEB_MARKETS).map((market) => ({ market }));
-}
+// Market availability can change at any time (admin gate changes), so render per request.
+export const dynamic = 'force-dynamic';
 
-// uk/ie are prerendered; any other segment (including /de while Germany is gated) is a 404.
+// The API decides: unknown, disabled or environment-excluded markets (including
+// /de while Germany is gated) are all a 404 here.
 export default async function MarketHomePage({ params }: { params: Promise<{ market: string }> }) {
-  const { market } = await params;
-  if (!isWebMarket(market)) notFound();
-  const config = WEB_MARKETS[market];
+  const { market: segment } = await params;
+  const market = await fetchMarket(segment);
+  if (!market) notFound();
   return (
     <>
-      <h1 data-testid="market-heading">{config.name}</h1>
+      <h1 data-testid="market-heading">{market.name}</h1>
       <p>
-        Market shell for /{market} — locale {config.locale}, currency {config.currency}. Draws
+        Market shell for /{market.code} — locale {market.locale}, currency {market.currency}. Draws
         arrive in Phase 3.
       </p>
     </>

@@ -4,6 +4,7 @@ import type { DependencyCheck, LivenessResponse, ReadinessResponse } from '@hv/c
 import { sql, type Database } from '@hv/db';
 import type { Redis } from 'ioredis';
 import { DATABASE } from '../database/database.module';
+import { Public } from '../rbac/access';
 import { REDIS } from '../redis/redis.module';
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -34,6 +35,7 @@ async function timed(check: () => Promise<unknown>): Promise<DependencyCheck> {
 }
 
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,

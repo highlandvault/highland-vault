@@ -1,5 +1,5 @@
-export { createDb, createPool, type Database, type DbOptions } from './client';
-export type { DB } from './generated/db';
+export { createDb, createPool, type Database, type DbExecutor, type DbOptions } from './client';
+export type { DB, Json } from './generated/db';
 export { parseInt8, pgTypes } from './int8';
 export {
   RETRYABLE_SQLSTATES,

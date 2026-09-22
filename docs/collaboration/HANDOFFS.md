@@ -61,4 +61,54 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
-_No handoffs yet._ Phase 1 was completed by a single developer. Its state is recorded in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
+### 2026-09-22 — P2 — Users, markets, auth, RBAC, MFA, audit (foundation for Phase 3)
+
+Status: OPEN
+
+Task: P2 (no GitHub issue; no PR yet)
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p2-users-markets-auth` (from `origin/develop`; not merged, not pushed)
+Status of the work: DONE, awaiting owner review
+
+What was completed:
+
+- Migrations 0002–0007: citext + `hv_set_updated_at()`, `users`, `markets` + `market_settings` (Germany gate, compliance gate), `sessions` + TOTP MFA tables, RBAC (roles, permissions, B7 matrix, `user_roles`), append-only `audit_log`.
+- API modules: `markets` (public + admin gate management), `auth` (register, login, logout, me, TOTP MFA), `rbac` (global deny-by-default `AccessGuard`), `audit`, operator CLI `grant-role`.
+- Web: `/[market]` resolved through the API, `/login`, `/login/mfa`, `/register`, `/account`, `/admin` shell (read-only market gate table).
+
+Important implementation details:
+
+- **No market is enabled anywhere.** The compliance gate (ADR-0016) needs `min_age` and `self_exclusion_required` (OPEN O12) before a market can be enabled, UK and IE included. On a real database `/uk` and `/ie` are 404 until the owner supplies those values. Tests enable markets only in throwaway databases with labelled fixture values (`packages/db/src/testing/fixtures.ts`).
+- **Market context comes only from the `:market` route parameter.** Put `@UseGuards(MarketGuard)` on every market-scoped route. `@CurrentMarket()` fails closed if the guard is missing.
+- **Every route needs an access decorator** (`@Public()`, `@Authenticated()`, `@RequirePermission(...)`). Without one, `AccessGuard` denies it, and a conformance unit test fails.
+- **Isolation key for Phase 3:** reference markets with `FOREIGN KEY (market_id, currency) REFERENCES markets (id, currency)` and add `UNIQUE (id, market_id)` on `draws`, so `order_items` can use a composite FK to draws (Revision 2 B8). `packages/db/test/markets.int.test.ts` shows the pattern.
+- Sensitive operations = `@RequirePermission(p, { sensitive: true })` + a `reason` in the body + `AuditService.record(trx, …)` inside the SAME transaction. See `AdminMarketsService.change()`.
+- Services open transactions; controllers never do. Repositories take a `DbExecutor` (pool or transaction).
+
+Files/modules affected:
+
+- `packages/db/migrations/0002`–`0007`, `packages/db/src/generated/db.ts`, `packages/db/src/testing/{fixtures,e2e-database}.ts`
+- `packages/domain/src/{email,markets}.ts`, `packages/contracts/src/{auth,admin,errors,markets}.ts`
+- `apps/api/src/{auth,rbac,markets,audit,users,common,cli}/`, `apps/api/src/{app,app.module}.ts`, `apps/api/src/config/env.ts`
+- `apps/web/src/{lib,app}/…`, `apps/web/e2e/`, `apps/web/playwright.config.ts`
+
+Tests executed:
+
+- See PROJECT_STATUS.md "Phase 2 verification" for the exact commands and counts.
+- Not tested: behaviour behind real TLS and proxies (`TRUST_PROXY`, `Secure` cookies over https), and graceful shutdown on Windows (unchanged from Phase 1).
+
+Known issues:
+
+- Email verification and password reset are not implemented (decision needed, see PROJECT_STATUS.md).
+- `sessions.user_id` is NOT NULL: guest sessions (ADR-0020) need a migration in Phase 5.
+
+Integration points:
+
+- Database: `markets (id, currency)` and `markets.id` for draws/orders; `users.id` for ownership; `audit_log` for every admin mutation; `hv_market_missing_settings()` is the single definition of "required settings". A later phase that adds a required setting must also update `hv_missing_compliance_settings()` and handle markets that are already enabled.
+- Authentication: `request.hvAuth` (`AuthContext`) after `AccessGuard`; sessions expire after `SESSION_TTL_HOURS` (default 7 days); a session with `mfa_required` and no `mfa_verified_at` gets 401 `MFA_REQUIRED` everywhere except `/auth/mfa/verify` and `/auth/logout`.
+- Security: permissions are checked by code (`draws.write` etc. are already seeded for Phase 3). `hv_app` cannot INSERT/DELETE markets or change roles/permissions; `audit_log` is append-only for everyone.
+- Infrastructure: new env variables `ENABLED_MARKETS`, `WEB_ORIGINS`, `MFA_ENCRYPTION_KEY` (required) and `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `MFA_ENCRYPTION_KEY_ID`, `TRUST_PROXY` (optional). After pulling: copy the new lines from `.env.example` into `.env`, then run `pnpm install` and `pnpm db:migrate up`.
+
+Next developer action:
+
+- Owner review of P2. After approval, Phase 3 (draws) starts from `docs/collaboration/TASK_BOARD.md`. The first Phase 3 migration is `0008_…`.
