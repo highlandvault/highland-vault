@@ -35,7 +35,7 @@ _Last updated: 2026-09-22_
 | Unit / integration / e2e             | ✅     | 126/126 · 198/198 · 33/33                                                                                                                               |
 | Phase 1/2 tests still green          | ✅     | All included in the counts above                                                                                                                        |
 | `pnpm verify`                        | ✅     | exit 0                                                                                                                                                  |
-| GitHub CI on the PR                  | see PR | Recorded in the PR once the run completes                                                                                                               |
+| GitHub CI on the PR                  | ✅     | Passed on `f90ce14`. The first run on `c758360` failed on an e2e wait race in the admin draw test; the test was fixed, not the product                  |
 
 ## Database (migration 0008_draws)
 
@@ -132,6 +132,7 @@ _Last updated: 2026-09-22_
 
 ## Phase 3 known issues
 
+- Under heavy CPU load on this Windows machine, the web app's 5 s API timeout can trip during e2e runs (`UNREACHABLE`). A 2-worker local run passes 33/33, and CI passes with the committed 3 workers.
 - The e2e suite is CPU-heavy on this Windows machine. It is tuned to 3 workers; CI runs the same configuration.
 - `The destination stream closed early` appears in the web server log when a test navigates away mid-stream. It is harmless.
 
