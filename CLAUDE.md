@@ -6,4 +6,4 @@ Before any implementation work, follow the **Claude Collaboration Protocol** in 
 
 When the developer says "Sync with the Highland Vault project state and continue my assigned task", run that protocol's session-start steps, report what you found, and only then continue.
 
-Do not start a new phase, pick an unassigned task, change architecture, or push to `main` unless the owner explicitly asks.
+Do not start a new phase, pick an unassigned task, change architecture, or push to `main` or `develop` unless the owner explicitly asks. Task PRs target `develop` (see DEVELOPMENT_RULES §4).

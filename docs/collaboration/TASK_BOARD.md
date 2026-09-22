@@ -22,9 +22,9 @@ GitHub Issues (and a GitHub Project, once created) are the task authority. This 
 | IN PROGRESS | Claimed. Owner has a branch and is working on it                          |
 | BLOCKED     | Started or ready, but cannot proceed. The blocker is named in Notes       |
 | IN REVIEW   | Pull request open and ready for review                                    |
-| DONE        | Merged to `main` (or, for P1, approved and committed)                     |
+| DONE        | Merged into `develop` (or, for P1, approved and committed)                |
 
-Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REVIEW (PR ready) → DONE (merged). Any state except DONE can go to BLOCKED and back.
+Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REVIEW (PR ready) → DONE (merged into `develop`). Any state except DONE can go to BLOCKED and back.
 
 ## Task IDs
 
@@ -53,9 +53,7 @@ _None._
 
 ## IN REVIEW
 
-| ID  | Task                                               | Owner             | Branch                          | Dependencies | Area                                  | Issue / PR     | Notes                                                                                               |
-| --- | -------------------------------------------------- | ----------------- | ------------------------------- | ------------ | ------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
-| P2  | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth` | P1           | db, auth, RBAC, `/admin`, `/[market]` | — (not pushed) | Implemented and verified 2026-09-22; awaiting owner review. Decisions needed: see PROJECT_STATUS.md |
+_None._
 
 ## READY
 
@@ -85,7 +83,8 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 
 ## DONE
 
-| ID    | Task                                    | Owner             | Branch                                         | Dependencies | Area                             | Issue / PR | Notes                                                                                      |
-| ----- | --------------------------------------- | ----------------- | ---------------------------------------------- | ------------ | -------------------------------- | ---------- | ------------------------------------------------------------------------------------------ |
-| P1    | Foundation                              | owner             | committed as `a16ca35` on `main` and `develop` | —            | everything                       | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md) |
-| T-001 | Collaboration and synchronization layer | Divyanshu (owner) | `docs/collaboration-layer`                     | P1           | `docs/`, `.github/`, `CLAUDE.md` | PR #2      | Merged into `develop` (`e05f270`) on 2026-09-22                                            |
+| ID    | Task                                               | Owner             | Branch                                         | Dependencies | Area                                  | Issue / PR | Notes                                                                                      |
+| ----- | -------------------------------------------------- | ----------------- | ---------------------------------------------- | ------------ | ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| P1    | Foundation                                         | owner             | committed as `a16ca35` on `main` and `develop` | —            | everything                            | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md) |
+| T-001 | Collaboration and synchronization layer            | Divyanshu (owner) | `docs/collaboration-layer`                     | P1           | `docs/`, `.github/`, `CLAUDE.md`      | PR #2      | Merged into `develop` (`e05f270`) on 2026-09-22                                            |
+| P2    | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth`                | P1           | db, auth, RBAC, `/admin`, `/[market]` | PR #3      | Merged into `develop` (`6b0ea82`) on 2026-09-22. Decisions still open: PROJECT_STATUS.md   |

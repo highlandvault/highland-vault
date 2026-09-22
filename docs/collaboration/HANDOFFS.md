@@ -65,10 +65,10 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 Status: OPEN
 
-Task: P2 (no GitHub issue; no PR yet)
+Task: P2 (no GitHub issue; PR #3)
 Developer: Divyanshu (owner), with Claude
-Branch: `feature/p2-users-markets-auth` (from `origin/develop`; not merged, not pushed)
-Status of the work: DONE, awaiting owner review
+Branch: `feature/p2-users-markets-auth`, merged into `develop` (PR #3, `6b0ea82`)
+Status of the work: DONE (merged into `develop`)
 
 What was completed:
 
@@ -111,4 +111,4 @@ Integration points:
 
 Next developer action:
 
-- Owner review of P2. After approval, Phase 3 (draws) starts from `docs/collaboration/TASK_BOARD.md`. The first Phase 3 migration is `0008_…`.
+- P2 is merged into `develop`. Phase 3 (draws) starts only on explicit owner approval: branch from `develop`, claim it on `docs/collaboration/TASK_BOARD.md`, and use `0008_…` for its first migration.
