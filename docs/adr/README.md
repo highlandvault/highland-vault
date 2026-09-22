@@ -32,3 +32,4 @@ An accepted ADR is changed only by a new ADR that supersedes it.
 | [0024](0024-settlement-grace-period.md)          | Settlement grace period after close                        | O5     |
 | [0025](0025-settlement-edge-cases.md)            | Settlement with too few eligible tickets                   | O6     |
 | [0026](0026-one-basket-per-market.md)            | One basket and order per market                            | O18    |
+| [0027](0027-sequential-ticket-numbers.md)        | Sequential ticket numbers                                  | O15    |

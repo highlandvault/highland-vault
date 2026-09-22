@@ -42,36 +42,34 @@ Next:
 
 ## Current project state
 
-- **Phase 1 (Day 1) Foundation:** complete and approved by the owner.
-- **Phase 2 (Day 2):** DONE: merged into `develop` (PR #3; test fix PR #4). Governance follow-ups merged: PR #5 (branch policy), PR #6 (CI on `develop` pushes).
-- **Phase 3 (Day 3):** implementation complete, IN REVIEW (PR #7 into `develop`).
+- **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
+- **Phase 4 (Day 4):** IN PROGRESS, started on owner instruction on 2026-09-22. O15 decided: sequential ticket numbers (ADR-0027).
 - **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is still at `a16ca35`.
-- **GitHub CI:** runs on PRs and on pushes to `main` and `develop`; green on `develop` (`8677781`).
 
 ## Active entries
 
-### P3 — Draws foundation + first customer vertical slice
+### P4 — Ticket engine + customer entry flow
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `feature/p3-draws` (from `origin/develop` `8677781`)
+Branch: `feature/p4-ticket-engine` (from `origin/develop` `3eb551e`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub API)
-PR: #7 into `develop`
-Status: IN REVIEW
+PR: draft PR into `develop` (see TASK_BOARD)
+Status: IN PROGRESS
 
 Current task:
-Phase 3 (Initialization Report, Part F): draw schema + lifecycle, prizes and winner positions, per-draw skill question, publishing, customer draw list/detail per market, admin draw management.
+Phase 4 (Initialization Report, Part F): sequential ticket pool, allocation with SKIP LOCKED, per-entrant caps, 10-minute reservations and expiry, availability, customer reservation flow, admin inventory. Gates 1 and 2.
 
 Affected areas:
-`packages/db/migrations/` (0008 onwards), `packages/db/src/`, `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/draws/` (new), `apps/worker/src/draws/` (new, lifecycle sweeper), `apps/web/src/app/` (customer + admin draw pages, styles), `apps/web/e2e/`, docs.
+`packages/db/migrations/` (0009 onwards), `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/tickets/` (new), `apps/api/src/draws/` (publish creates the pool), `apps/worker/src/tickets/` (new), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/draws/`, `apps/web/e2e/`, docs.
 
 Avoid modifying:
-`packages/db/migrations/` (0008+ are taken by this branch), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/`, `apps/web/src/app/layout.tsx` and global styles.
+`packages/db/migrations/` (0009+ are taken by this branch), the draw publish path, `apps/web/src/app/[market]/draws/[slug]/`.
 
 Blockers:
-None for the implementation. Decisions needed: see PROJECT_STATUS.md ("Decisions needed").
+None. Guest reservations depend on guest email verification (ADR-0020, Phase 5); the engine supports the email entrant key already.
 
 Last update:
-2026-09-22 — Phase 3 implemented and verified: `pnpm verify` exit 0 (unit 126/126, integration 198/198), e2e 33/33, migration 0008 applied to the dev DB, handoff written.
+2026-09-22 — Task claimed, branch created, ADR-0027 recorded.
 
 Next:
-Review of PR #7. On merge: remove this entry and mark P3 DONE. Phase 4 needs explicit approval.
+Ticket schema, allocation, expiry, API, worker, web, tests.
