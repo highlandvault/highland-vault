@@ -139,5 +139,7 @@ export {
   TEST_FIXTURE_COMPLIANCE,
   enableGermanyForTesting,
   enableMarketsForTesting,
+  insertFixtureDraw,
   insertFixtureUser,
+  type FixtureDrawOptions,
 } from './fixtures';

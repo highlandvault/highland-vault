@@ -4,11 +4,11 @@ import { expect, test } from '@playwright/test';
 // the migrations create it (disabled, no legal approval) although the e2e API
 // lists it in ENABLED_MARKETS. The web app has no market list of its own.
 
-test('home page renders the development shell, API status and the available markets', async ({
+test('home page renders the market chooser, API status and the available markets', async ({
   page,
 }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Development shell' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose your market' })).toBeVisible();
   await expect(page.getByTestId('api-status')).toContainText('API ok');
   const markets = page.getByTestId('market-list');
   await expect(markets).toContainText('/uk — United Kingdom (GBP)');
@@ -17,10 +17,10 @@ test('home page renders the development shell, API status and the available mark
 });
 
 for (const [path, name, detail] of [
-  ['/uk', 'United Kingdom', 'locale en-GB, currency GBP'],
-  ['/ie', 'Ireland', 'locale en-IE, currency EUR'],
+  ['/uk', 'United Kingdom', 'prices in GBP'],
+  ['/ie', 'Ireland', 'prices in EUR'],
 ] as const) {
-  test(`${path} renders the ${name} market shell from the API`, async ({ page }) => {
+  test(`${path} renders the ${name} market home from the API`, async ({ page }) => {
     const response = await page.goto(path);
     expect(response?.status()).toBe(200);
     await expect(page.getByTestId('market-heading')).toHaveText(name);

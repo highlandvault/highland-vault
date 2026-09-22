@@ -4,6 +4,8 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { describe, expect, it } from 'vitest';
 import { AuthController } from '../auth/auth.controller';
 import { AppError } from '../common/errors';
+import { AdminDrawsController } from '../draws/admin-draws.controller';
+import { DrawsController } from '../draws/draws.controller';
 import { HealthController } from '../health/health.controller';
 import { AdminMarketsController } from '../markets/admin-markets.controller';
 import { MarketsController } from '../markets/markets.controller';
@@ -53,7 +55,14 @@ describe('AccessGuard: deny by default', () => {
 
 describe('route conformance', () => {
   const reflector = new Reflector();
-  const controllers = [HealthController, MarketsController, AdminMarketsController, AuthController];
+  const controllers = [
+    HealthController,
+    MarketsController,
+    AdminMarketsController,
+    AuthController,
+    DrawsController,
+    AdminDrawsController,
+  ];
 
   const routes = controllers.flatMap((controller) =>
     Object.getOwnPropertyNames(controller.prototype)
@@ -69,7 +78,7 @@ describe('route conformance', () => {
   );
 
   it('finds the routes', () => {
-    expect(routes.length).toBeGreaterThanOrEqual(14);
+    expect(routes.length).toBeGreaterThanOrEqual(24);
   });
 
   it('declares an access policy on every route', () => {
@@ -102,7 +111,25 @@ describe('route conformance', () => {
     }
   });
 
-  it('exposes only health, market and sign-in routes publicly', () => {
+  it('requires draws.write, scoped to the route market, on every admin draw mutation', () => {
+    const mutations = routes.filter(
+      ({ controller, handler }) =>
+        controller === AdminDrawsController &&
+        (Reflect.getMetadata(METHOD_METADATA, handler) as number) !== 0,
+    );
+    expect(mutations.length).toBe(6);
+    for (const { handler, controller } of mutations) {
+      expect(
+        reflector.getAllAndOverride<AccessPolicy>(ACCESS_POLICY, [handler, controller]),
+      ).toMatchObject({
+        kind: 'permission',
+        permission: 'draws.write',
+        scope: { param: 'market' },
+      });
+    }
+  });
+
+  it('exposes only health, market, draw and sign-in routes publicly', () => {
     const publicRoutes = routes
       .filter(
         ({ controller, handler }) =>
@@ -125,6 +152,8 @@ describe('route conformance', () => {
       'health/ready',
       'markets',
       'markets/:market',
+      'markets/:market/draws',
+      'markets/:market/draws/:slug',
     ]);
   });
 });

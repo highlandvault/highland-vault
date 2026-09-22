@@ -9,6 +9,7 @@ import { createDb, type Database } from '@hv/db';
 import { Redis } from 'ioredis';
 import { LoggerModule } from 'nestjs-pino';
 import { WORKER_ENV, type WorkerEnv } from './config/env';
+import { DrawLifecycleService } from './draws/draw-lifecycle.service';
 import { SystemService } from './system/system.service';
 import { DATABASE, REDIS } from './tokens';
 
@@ -43,11 +44,12 @@ export class WorkerModule implements OnApplicationShutdown {
           },
         },
         SystemService,
+        DrawLifecycleService,
       ],
     };
   }
 
-  /** Runs after SystemService.onModuleDestroy has closed the queue and worker. */
+  /** Runs after the services' onModuleDestroy hooks have closed their queues and workers. */
   async onApplicationShutdown(): Promise<void> {
     await this.db.destroy();
     if (this.redis.status !== 'end') {

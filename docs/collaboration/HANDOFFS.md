@@ -61,6 +61,54 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-22 — P3 — Draws foundation (for Phase 4, the ticket engine)
+
+Status: OPEN
+
+Task: P3 (no GitHub issue; PR #7)
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p3-draws` (PR #7 into `develop`, not merged)
+Status of the work: DONE, in review
+
+What was completed:
+
+- `0008_draws`: `draws`, `draw_prizes`, `skill_questions` + options, lifecycle trigger, publish requirements, configuration lock.
+- `@hv/domain`: draw lifecycle, validation, publish blockers, effective status, market time zones, `parseDecimalMoney`.
+- API `draws` module (customer + admin), worker `draw-lifecycle` sweep, customer and admin web pages.
+
+Important implementation details:
+
+- **Allocation must not trust the stored status alone:** use `effectiveStatus()` or check `opens_at`/`closes_at` in SQL (B9 step 0). The sweeper runs only once a minute.
+- **The ticket pool belongs to the publish transition:** B9 says the pool is generated on publish. Hook it into `AdminDrawsService.publish` (same transaction) or into a new transition; `total_tickets` is frozen once published, so the pool size is stable.
+- **Publishing locks the configuration:** `hv_draws_guard()` refuses changes to price, capacity, cap, positions, times, slug and question after draft.
+- Every draw query is scoped by `market_id`. Keep it that way for tickets (`tickets.draw_id` → draw; the market comes through the draw).
+
+Files/modules affected:
+
+- `packages/db/migrations/0008_draws.sql`, `packages/db/src/testing/{fixtures,e2e-database}.ts`
+- `packages/domain/src/{draws,time,money}.ts`, `packages/contracts/src/draws.ts`
+- `apps/api/src/draws/`, `apps/worker/src/draws/`, `apps/web/src/app/[market]/`, `apps/web/src/app/admin/draws/`, `apps/web/src/components/`
+
+Tests executed:
+
+- `pnpm verify`: unit 126/126, integration 198/198. `pnpm test:e2e`: 33/33 (desktop + mobile). Concurrency files 5/5 repeat runs.
+- Not tested: behaviour with thousands of draws (no pagination yet); real prize images (placeholders).
+
+Known issues:
+
+- No pagination on draw lists (fine for V1 volumes; add before listings grow).
+- Public pages are rendered per request, not cached (see PROJECT_STATUS scope notes).
+
+Integration points:
+
+- **Database:** `draws (id, market_id)` for order lines; `draws.total_tickets`, `max_per_person` and `status` for allocation; `draw_prizes.position` for settlement winners.
+- **Authentication and security:** `draws.write` for mutations, `admin.access` for reads, both market-scoped; the sweeper audits as `system`.
+- **Infrastructure:** the new worker queue `draw-lifecycle`, and Redis DB 14 for e2e.
+
+Next developer action:
+
+- After P3 is reviewed and merged, P4 (ticket engine) starts only on explicit owner approval. O15 (ticket numbering) is needed there.
+
 ### 2026-09-22 — P2 — Users, markets, auth, RBAC, MFA, audit (foundation for Phase 3)
 
 Status: OPEN

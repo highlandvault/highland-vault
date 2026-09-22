@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { ApiExceptionFilter } from './common/exception.filter';
 import { API_ENV, type ApiEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
+import { DrawsModule } from './draws/draws.module';
 import { HealthController } from './health/health.controller';
 import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
@@ -51,6 +52,7 @@ export class AppModule {
         RbacModule,
         MarketsModule,
         AuthModule,
+        DrawsModule,
       ],
       controllers: [HealthController],
       providers: [

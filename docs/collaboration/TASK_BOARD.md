@@ -53,7 +53,9 @@ _None._
 
 ## IN REVIEW
 
-_None._
+| ID  | Task                                             | Owner             | Branch             | Dependencies | Area                       | Issue / PR | Notes                                                                                     |
+| --- | ------------------------------------------------ | ----------------- | ------------------ | ------------ | -------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| P3  | Draws foundation + first customer vertical slice | Divyanshu (owner) | `feature/p3-draws` | P2           | db draws, API, worker, web | PR #7      | Implemented and verified 2026-09-22; awaiting review. Decisions needed: PROJECT_STATUS.md |
 
 ## READY
 
@@ -65,7 +67,6 @@ Phase-level tasks from the Initialization Report, Part F. Dependencies come from
 
 | ID  | Task                                      | Owner      | Branch | Dependencies          | Area                          | Issue / PR | Notes                                        |
 | --- | ----------------------------------------- | ---------- | ------ | --------------------- | ----------------------------- | ---------- | -------------------------------------------- |
-| P3  | Draws                                     | unassigned | —      | P2                    | draws                         | —          |                                              |
 | P4  | Ticket engine                             | unassigned | —      | P3                    | tickets                       | —          | Gates 1, 2. O15 needed                       |
 | P5  | Cart + Checkout                           | unassigned | —      | P4                    | checkout, orders, outbox      | —          | O12 skill-answer behaviour needed            |
 | P6  | Payments                                  | unassigned | —      | P5                    | `packages/payments`, webhooks | —          | Gate 4. Fake provider; O13 before production |

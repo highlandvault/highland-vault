@@ -39,6 +39,39 @@ export interface AuditLog {
   request_id: string | null;
 }
 
+export interface DrawPrizes {
+  created_at: Generated<Timestamp>;
+  description: Generated<string>;
+  draw_id: string;
+  id: Generated<string>;
+  position: number;
+  title: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface Draws {
+  cancelled_at: Timestamp | null;
+  closed_at: Timestamp | null;
+  closes_at: Timestamp;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  currency: string;
+  description: Generated<string>;
+  id: Generated<string>;
+  market_id: string;
+  max_per_person: number;
+  opens_at: Timestamp;
+  published_at: Timestamp | null;
+  skill_question_id: string | null;
+  slug: string;
+  status: Generated<string>;
+  ticket_price_minor: number;
+  title: string;
+  total_tickets: number;
+  updated_at: Generated<Timestamp>;
+  winner_positions: number;
+}
+
 export interface Markets {
   code: string;
   created_at: Generated<Timestamp>;
@@ -99,6 +132,23 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface SkillQuestionOptions {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  is_correct: Generated<boolean>;
+  label: string;
+  position: number;
+  skill_question_id: string;
+}
+
+export interface SkillQuestions {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  market_id: string;
+  prompt: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface UserMfa {
   confirmed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -133,6 +183,8 @@ export interface Users {
 
 export interface DB {
   audit_log: AuditLog;
+  draw_prizes: DrawPrizes;
+  draws: Draws;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
@@ -140,6 +192,8 @@ export interface DB {
   role_permissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
+  skill_question_options: SkillQuestionOptions;
+  skill_questions: SkillQuestions;
   user_mfa: UserMfa;
   user_roles: UserRoles;
   users: Users;

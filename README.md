@@ -10,14 +10,14 @@ This is the native Highland Vault competition platform, replacing the WordPress/
 
 ```
 apps/
-  api/        NestJS (Fastify) HTTP API — health, markets (gate), auth + MFA, RBAC, audit, admin market API
-  worker/     NestJS standalone + BullMQ background worker — heartbeat only in Phase 1
-  web/        Next.js App Router — /[market] via the API, sign-in/registration, /admin shell
+  api/        NestJS (Fastify) HTTP API — health, markets (gate), draws, auth + MFA, RBAC, audit, admin APIs
+  worker/     NestJS standalone + BullMQ background worker — heartbeat, draw lifecycle sweep
+  web/        Next.js App Router — /[market] customer site (draw list/detail), sign-in, /admin (markets, draws)
 packages/
   config/     shared tsconfig, ESLint and Prettier presets
   contracts/  Zod schemas shared by api and web
   db/         Kysely client, plain-SQL migration tool, migrations, real-PostgreSQL test harness
-  domain/     pure business rules (Money in integer minor units, email identity, market rules)
+  domain/     pure business rules (Money, email identity, markets, draw lifecycle, market time zones)
 tools/
   migration/  legacy data migration (Phase 13; placeholder)
 infra/docker/ local-only PostgreSQL bootstrap (roles + database)
@@ -69,14 +69,14 @@ Market gate changes (`/admin/markets/:market/...` on the API) are sensitive oper
 
 ## Local services
 
-| Service       | Address                            | Notes                                                                             |
-| ------------- | ---------------------------------- | --------------------------------------------------------------------------------- |
-| PostgreSQL 18 | `127.0.0.1:5432`                   | DB `highland_vault`. Roles: `hv_owner` (migrations), `hv_app` (runtime, DML only) |
-| Redis 7.4     | `127.0.0.1:6379`                   | DB 0 for development, DB 15 for tests; AOF on, `noeviction`                       |
-| Mailpit SMTP  | `127.0.0.1:1025`                   | Catches all outgoing mail                                                         |
-| Mailpit UI    | http://127.0.0.1:8025              |                                                                                   |
-| API           | http://127.0.0.1:4000/health/ready | 200 when PostgreSQL and Redis are up, otherwise 503                               |
-| Web           | http://127.0.0.1:3000              |                                                                                   |
+| Service       | Address                            | Notes                                                                                        |
+| ------------- | ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| PostgreSQL 18 | `127.0.0.1:5432`                   | DB `highland_vault`. Roles: `hv_owner` (migrations), `hv_app` (runtime, DML only)            |
+| Redis 7.4     | `127.0.0.1:6379`                   | DB 0 for development, DB 15 for tests, DB 14 for e2e (emptied per run); AOF on, `noeviction` |
+| Mailpit SMTP  | `127.0.0.1:1025`                   | Catches all outgoing mail                                                                    |
+| Mailpit UI    | http://127.0.0.1:8025              |                                                                                              |
+| API           | http://127.0.0.1:4000/health/ready | 200 when PostgreSQL and Redis are up, otherwise 503                                          |
+| Web           | http://127.0.0.1:3000              |                                                                                              |
 
 ## Engineering rules (summary)
 

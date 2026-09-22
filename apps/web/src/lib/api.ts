@@ -13,7 +13,13 @@ export const SESSION_COOKIE = 'hv_session';
 
 export type ApiResult<T> =
   | { ok: true; status: number; data: T; response: Response }
-  | { ok: false; status: number; code: ErrorCode | 'UNREACHABLE'; message: string };
+  | {
+      ok: false;
+      status: number;
+      code: ErrorCode | 'UNREACHABLE';
+      message: string;
+      details?: unknown;
+    };
 
 export async function apiFetch<T>(
   path: string,
@@ -57,6 +63,7 @@ export async function apiFetch<T>(
           status: response.status,
           code: parsed.data.error.code,
           message: parsed.data.error.message,
+          details: parsed.data.error.details,
         }
       : {
           ok: false,
