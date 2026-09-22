@@ -101,8 +101,10 @@ describe('identity, RBAC and audit (database layer)', () => {
 
     it('stamps updated_at on every update (hv_set_updated_at)', async () => {
       const id = await insertFixtureUser(client, 'stamp@example.com');
-      await client.query(`BEGIN`);
+      // The pause must come BEFORE the transaction starts: now() is fixed at BEGIN,
+      // and JS Dates keep only milliseconds, so without it both stamps can be equal.
       await client.query(`SELECT pg_sleep(0.01)`);
+      await client.query(`BEGIN`);
       const { rows } = await client.query<{ created_at: Date; updated_at: Date; tx_now: Date }>(
         `UPDATE users SET status = 'disabled' WHERE id = $1 RETURNING created_at, updated_at, now() AS tx_now`,
         [id],
