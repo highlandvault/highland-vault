@@ -7,11 +7,13 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=../../.env --enable-source-maps dist/main.js",
-    "dev": "pnpm run build && pnpm run start"
+    "dev": "pnpm run build && pnpm run start",
+    "cli:grant-role": "node --env-file-if-exists=../../.env dist/cli/grant-role.js"
   },
   "dependencies": {
     "@hv/contracts": "workspace:*",
     "@hv/db": "workspace:*",
+    "@hv/domain": "workspace:*",
     "@nestjs/common": "11.2.5",
     "@nestjs/core": "11.2.5",
     "@nestjs/platform-fastify": "11.2.5",
@@ -26,6 +28,8 @@
   },
   "devDependencies": {
     "@hv/config": "workspace:*",
-    "@nestjs/testing": "11.2.5"
+    "@nestjs/testing": "11.2.5",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.0"
   }
 }

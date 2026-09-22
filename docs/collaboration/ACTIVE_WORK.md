@@ -43,34 +43,42 @@ Next:
 ## Current project state
 
 - **Phase 1 (Day 1) Foundation:** complete and approved by the owner.
-- **Phase 2 (Day 2):** not started. It starts only on explicit owner instruction.
-- **Repository:** one commit, `a16ca35` ("adding day1"). `main` and `develop` both point at it, locally and on `origin`.
-- **GitHub issues / PRs:** none known. The GitHub CLI was not available when this file was written, so this was not checked against GitHub.
+- **T-001 collaboration layer:** approved and merged into `develop` (PR #2, `e05f270`).
+- **Phase 2 (Day 2):** implementation complete, IN REVIEW (owner review). Not committed or pushed.
+- **Branches:** `origin/develop` = `main` + PR #2. `origin/main` is still at `a16ca35`. The role of `develop` is still an owner decision (DEVELOPMENT_RULES §4).
+- **GitHub issues / PRs:** PR #2 (merged). The GitHub CLI is not installed on this machine, so no issue could be created or checked.
 
 ## Active entries
 
-### T-001 — Collaboration and synchronization layer
+### P2 — Users · Markets · Auth · RBAC · MFA · Audit · admin shell
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `develop` (uncommitted working tree)
-Issue: none yet
+Branch: `feature/p2-users-markets-auth` (from `origin/develop`; local only, not pushed yet)
+Issue: none yet (no GitHub CLI available)
 PR: none yet
 Status: IN REVIEW
 
 Current task:
-Add the repository/GitHub-based collaboration layer: development rules, the Claude Collaboration Protocol, active work, task board, handoffs, changelog, CODEOWNERS and the PR template. Operational documentation only.
+Phase 2 as defined in the Initialization Report, Part F: markets (DE disabled, legal-approval CHECK, compliance gate), users with global email, sessions, TOTP MFA + step-up, RBAC, audit log, market API guard, `/[market]` routing via the API, `/admin` shell.
 
 Affected areas:
-`docs/DEVELOPMENT_RULES.md`, `docs/collaboration/`, `.github/CODEOWNERS`, `.github/pull_request_template.md`, `CLAUDE.md`, one link line in `README.md`, the current-phase lines in `docs/PROJECT_STATUS.md`.
+`packages/db/migrations/` (0002–0007), `packages/db/src/`, `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/` (new modules), `apps/web/src/`, `apps/web/e2e/`, `.env.example`, docs.
 
 Avoid modifying:
-The files above until this is reviewed and committed.
+`packages/db/migrations/` (migration numbers 0002–0007 are taken by this branch; the next free number is 0008), `apps/api/src/app.module.ts`, `apps/api/src/config/env.ts`, `apps/web/src/app/[market]/`.
 
 Blockers:
-None. Owner decisions pending: the role of the `develop` branch, the GitHub username for CODEOWNERS, and branch protection on `main`.
+None for the implementation. Decisions needed (details in PROJECT_STATUS.md, "Decisions needed"):
+
+1. O12 values (`min_age`, self-exclusion) for UK and IE. Until they exist, no market can be enabled.
+2. When to build email verification and password reset (with the Phase 5 outbox, or now).
+3. O8: which roles must use MFA.
+4. O9: which configuration changes count as sensitive.
+5. Confirmation of the seeded RBAC matrix.
+6. The PR's target branch (`develop` or `main`).
 
 Last update:
-2026-09-22 — Files created and verified locally. Not committed, not pushed.
+2026-09-22 — Phase 2 implemented and verified. `pnpm verify` exit 0; unit 82/82, integration 133/133, e2e 11/11. Migrations 0002–0007 applied to the local dev DB. Handoff written.
 
 Next:
-Owner review. Once approved, commit (suggested branch `docs/collaboration-layer`) and open a PR into `main`.
+Owner review. On approval: commit on this branch, push, and open the PR (target branch per decision 6). Then remove this entry and mark P2 DONE on the task board.

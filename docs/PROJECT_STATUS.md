@@ -4,11 +4,210 @@ _Last updated: 2026-09-22_
 
 ## Current phase
 
-**Phase 1 (Day 1): Foundation — complete, approved by the owner on 2026-09-22.**
+**Phase 2 (Day 2): Users · Markets · Auth · RBAC · MFA · Audit · admin shell — implementation complete, awaiting owner review.**
 
-Every Definition of Done item below was verified by actually running it on the development machine: Windows 11, Docker Desktop 29.8.0, Compose v5.5.1, Node 24.11.1, pnpm 10.34.5. **Phase 2 has not started** and will not start without explicit approval.
+- Branch `feature/p2-users-markets-auth` (from `origin/develop`). Not committed, not pushed.
+- Phase 1 was approved by the owner on 2026-09-22 (record below).
+- Phase 3 has not started and will not start without explicit instruction.
+- Everything below was verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
-## Day 1 Definition of Done
+> **Decision boundary: no market can be enabled yet.** ADR-0016 says a market cannot be enabled while a required compliance value is unset. The required values (`min_age`, `self_exclusion_required`) are OPEN O12 for **every** market. So UK, IE and DE are all disabled on real databases, and `/uk` and `/ie` return 404 just like `/de`. To open UK and IE, the owner must supply those values for each market. They are then entered through the audited admin API. See "Decisions needed" below.
+
+## Phase 2 Definition of Done
+
+| Item                                          | Status | Evidence                                                                                                                                                                                                                |
+| --------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 2 scope (Revision 2 Part F) implemented | ✅     | Markets seeded (DE disabled, legal-approval CHECK), market settings, auth + sessions, global email, RBAC, TOTP MFA + step-up, audit log, `/admin` shell, `/[market]` via the API + API guard. Exceptions: "Scope notes" |
+| Schema/migrations complete for Phase 2        | ✅     | `0002`–`0007` (below)                                                                                                                                                                                                   |
+| Codegen updated                               | ✅     | `src/generated/db.ts`: 11 tables; `codegen:verify` up to date against the dev DB and against a brand-new DB                                                                                                             |
+| API integration works                         | ✅     | 69 API integration tests; live run of the built API against the dev DB as `hv_app`                                                                                                                                      |
+| Web integration works                         | ✅     | 10 Playwright tests + setup, against the built API and web                                                                                                                                                              |
+| Market model works                            | ✅     | DB: 19 tests; API: 21 tests                                                                                                                                                                                             |
+| Germany remains gated                         | ✅     | Refused at every layer: DB CHECK, compliance gate, `ENABLED_MARKETS`, API guard, web 404                                                                                                                                |
+| Market isolation enforced                     | ✅     | `UNIQUE(id, currency)` composite-FK key tested; route-only market context; market-scoped RBAC (a UK admin cannot touch IE/DE)                                                                                           |
+| User/account foundation works                 | ✅     | Normalized, globally unique email (case-insensitive), Argon2id, no market column                                                                                                                                        |
+| Authentication foundation works               | ✅     | Register/login/logout/me, sessions, rate limits, CSRF origin check, TOTP enrolment, second factor, step-up, recovery codes                                                                                              |
+| Invariants at database level                  | ✅     | CHECK, UNIQUE, FK and trigger constraints listed below; 25-round write-skew race test                                                                                                                                   |
+| Unit tests pass                               | ✅     | 82/82                                                                                                                                                                                                                   |
+| Integration tests pass                        | ✅     | 133/133 (real PostgreSQL + Redis)                                                                                                                                                                                       |
+| e2e/smoke tests pass                          | ✅     | 11/11 (1 setup + 10 browser)                                                                                                                                                                                            |
+| Migrations pass on a clean database           | ✅     | Brand-new DB: `verify` fails while pending, `up` applies 7, `up` again is a no-op, `status` OK, `verify` OK                                                                                                             |
+| Migration verification passes                 | ✅     | Dev DB: `verify: OK — 7 migration(s) applied, all checksums match, none pending`                                                                                                                                        |
+| Typecheck / lint / formatting pass            | ✅     | `pnpm verify` exit 0                                                                                                                                                                                                    |
+| Builds pass                                   | ✅     | 7 workspaces                                                                                                                                                                                                            |
+| Secret scan passes                            | ✅     | gitleaks 8.30.1 (the version pinned in CI): 2 commits and all 196 committable files, no leaks                                                                                                                           |
+| No Phase 3+ business features                 | ✅     | No draws, tickets, orders, payments, wallet or email sending                                                                                                                                                            |
+| Documentation/status updated                  | ✅     | This file, README, `packages/db/README.md`, collaboration files                                                                                                                                                         |
+| Handoff created                               | ✅     | [HANDOFFS.md](collaboration/HANDOFFS.md)                                                                                                                                                                                |
+| No unreviewed architectural decisions         | ✅     | Implementation choices are listed below for review; decisions outside the approved architecture were not taken (see "Decisions needed")                                                                                 |
+
+## Database (Phase 2 migrations)
+
+| Migration                     | What it does                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0002_extensions_and_helpers` | `citext`; `hv_set_updated_at()` trigger function (both deferred from Phase 1)                                                                                                                                                                                                                                                                                                          |
+| `0003_users`                  | `users`: `email citext UNIQUE` stored normalized (CHECK), email shape CHECK, Argon2id-only password hash CHECK, `status ∈ {active, disabled}`, **no `market_id`** (ADR-0003)                                                                                                                                                                                                           |
+| `0004_markets`                | `markets` + `market_settings`. Market set pinned (uk→GBP/en-GB, ie→EUR/en-IE, de→EUR/de-DE); `UNIQUE(code)`; `UNIQUE(id, currency)` for composite FKs; identity immutable (trigger); legal-approval fields all-or-nothing; **B8 Germany CHECK**; compliance-gate triggers on both tables (row-locked, no write skew); `hv_app` may not INSERT or DELETE; all three seeded **disabled** |
+| `0005_sessions_and_mfa`       | `sessions` (SHA-256 token hash only, unique, expiry CHECK, `mfa_required`, `mfa_verified_at`); `user_mfa` (AES-256-GCM secret, key id, `confirmed_at`, `last_used_step` for replay protection); `mfa_recovery_codes` (hashes, single use)                                                                                                                                              |
+| `0006_rbac`                   | `roles` (6, ADR-0010), `permissions` (16), `role_permissions` (Revision 2 B7 starting matrix), `user_roles` (`market_id` NULL = all markets; `UNIQUE NULLS NOT DISTINCT`; customer never market-scoped); role tables read-only for `hv_app`                                                                                                                                            |
+| `0007_audit_log`              | Append-only `audit_log` (actor, action, entity, market, reason, before/after JSON, ip, request id); UPDATE/DELETE/TRUNCATE blocked by trigger for every role and revoked from `hv_app`                                                                                                                                                                                                 |
+
+## API (Phase 2)
+
+Layering: controller (validation + response shape) → service (transactions, application logic) → `@hv/domain` rules → repository (Kysely). Every error is `{ error: { code, message, details? }, requestId }`. Request IDs and structured pino logs from Phase 1 are unchanged; cookies are redacted in logs.
+
+| Endpoint                                     | Access                                          | Behaviour                                                                                 |
+| -------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /health/live`, `GET /health/ready`      | public                                          | Unchanged                                                                                 |
+| `GET /markets`                               | public                                          | Markets allowed by `ENABLED_MARKETS` **and** enabled in the DB                            |
+| `GET /markets/:market`                       | public + `MarketGuard`                          | 404 `MARKET_NOT_AVAILABLE` for unknown, disabled or env-excluded markets; no query params |
+| `POST /auth/register`                        | public, rate-limited                            | Creates the account, the `customer` role and a session cookie                             |
+| `POST /auth/login`                           | public, rate-limited                            | `authenticated` or `mfa_required`                                                         |
+| `POST /auth/logout`                          | session (MFA pending allowed)                   | Revokes the session server-side                                                           |
+| `GET /auth/me`                               | session                                         | User, roles, and permissions with market scope                                            |
+| `POST /auth/mfa/verify`                      | session (MFA pending allowed), rate-limited     | TOTP or recovery code; completes sign-in or refreshes step-up                             |
+| `POST /auth/mfa/totp/setup`, `/confirm`      | session                                         | Enrol TOTP; confirm returns 10 recovery codes once and revokes other sessions             |
+| `GET /admin/markets`                         | `admin.access` (any scope)                      | Full gate state per market, including `environmentAllowed` and `missingSettings`          |
+| `PUT /admin/markets/:market/settings`        | `markets.gate.manage` for that market + step-up | Sensitive: reason required, audited in the same transaction                               |
+| `POST /admin/markets/:market/legal-approval` | same                                            | Only for markets that require it; once                                                    |
+| `POST /admin/markets/:market/enable`         | same                                            | Refused (409) while legal approval or settings are missing                                |
+| `POST /admin/markets/:market/disable`        | same                                            | Audited                                                                                   |
+
+Also:
+
+- a global deny-by-default `AccessGuard`;
+- a CSRF origin check on every state-changing request;
+- security headers (`nosniff`, `DENY`, `no-referrer`, `no-store`);
+- a 64 KiB body limit;
+- the audited operator CLI `grant-role`.
+
+## Web (Phase 2)
+
+- `/[market]` asks the API; the Phase 1 static allow-list is gone. `/de`, `/xx` and any market the API refuses are 404.
+- `/` lists the markets the API reports as available.
+- `/login`, `/login/mfa`, `/register`, `/account`: minimal server-rendered forms (server actions). The session token is kept in the web origin's HttpOnly cookie and forwarded to the API server-side. Browser JavaScript never sees it.
+- `/admin`: a server-side session + `admin.access` check (404 otherwise) and a read-only market gate table. The API enforces everything again.
+
+## Market gate: all layers
+
+1. **Database:** the `markets_legal_approval_required` CHECK (Revision 2 B8); legal-approval fields all-or-nothing; `requires_legal_approval` immutable; compliance-gate triggers.
+2. **Environment:** `ENABLED_MARKETS` (required; `uk,ie` in `.env.example`, DE not listed).
+3. **API guard:** `MarketGuard` on market-scoped routes; the same 404 for every refusal.
+4. **Admin activation:** a sensitive operation (permission + step-up MFA + reason + audit).
+5. **Web:** no market list of its own; 404 whenever the API refuses.
+
+## Phase 2 verification
+
+| Check                              | Command                                                  | Result                                                    |
+| ---------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| Format                             | `pnpm format:check`                                      | ✅ all files                                              |
+| Lint                               | `pnpm lint`                                              | ✅ 0 problems                                             |
+| Typecheck                          | `pnpm typecheck`                                         | ✅ 6 workspaces                                           |
+| Unit                               | `pnpm test`                                              | ✅ 82/82 (9 files)                                        |
+| Integration                        | `pnpm test:integration`                                  | ✅ 133/133 (10 files)                                     |
+| Concurrency repeat                 | concurrency + markets + auth integration files, 10 times | ✅ 10/10 runs (46 tests each)                             |
+| e2e                                | `pnpm test:e2e`                                          | ✅ 11/11                                                  |
+| Build                              | `pnpm build`                                             | ✅ 7 workspaces                                           |
+| Migrations (dev DB)                | `pnpm db:migrate up`, `status`, `verify`                 | ✅ 6 applied; 7 applied, 0 pending, 0 problems; verify OK |
+| Migrations (brand-new DB)          | `up`, `up`, `status`, `verify`, `codegen:verify`         | ✅ 7 applied, then no-op, OK, OK, up to date              |
+| Codegen                            | `pnpm db:codegen` + `codegen:verify`                     | ✅ 11 tables, up to date                                  |
+| Secret scan                        | gitleaks 8.30.1 `git` + `dir`                            | ✅ no leaks                                               |
+| Everything except e2e and the scan | `pnpm verify`                                            | ✅ exit 0                                                 |
+
+Integration tests per file:
+
+- API: admin-markets 17, auth 23, health 8, markets 21;
+- worker: 3;
+- db: concurrency 4, foundation 11, identity 15, markets 19, migrate 12.
+
+Live run (built API against the dev DB):
+
+- The API connected as `hv_app` (`pg_stat_activity`).
+- `/health/ready` returned 200 and `/markets` returned `[]`.
+- `/markets/{uk,ie,de,xx}` returned 404.
+- Registration without an Origin got 403. With one it got 201 and an HttpOnly, SameSite=Lax cookie.
+- As a customer, `/admin/markets` returned 403.
+- The CLI grant was audited, and a second run was a no-op.
+
+## Scope notes
+
+- **Email verification and password reset are not implemented.** B5 lists them under the Phase 2 auth module, but Part F's Phase 2 line does not. Both need transactional email, which B3 routes through the outbox (Phase 5) with per-market templates (Phase 12). `users.email_verified_at` exists and stays NULL. **Decision needed** (below).
+- **Mandatory MFA per role is not enforced** (O8 OPEN). Any account can enrol, and enrolled accounts always need the second factor. Sensitive operations always need step-up.
+- **Guest sessions** (ADR-0020) are Phase 5; `sessions.user_id` is NOT NULL for now.
+
+## Implementation choices made in Phase 2 (for review)
+
+All sit within the approved architecture; each is reversible by a migration or a code change.
+
+1. **Required compliance settings in Phase 2:** `min_age` and `self_exclusion_required` (both OPEN O12). Later phases add their own settings to `hv_missing_compliance_settings()`: skill-answer behaviour in P5; consent, retention and masked names in P12.
+2. **The market set is pinned by a CHECK.** Adding a market later needs a migration. Code, currency, locale and `requires_legal_approval` are immutable.
+3. **`legal_approved_by`** is the staff user who recorded the approval; the approval document itself is `legal_approval_ref`.
+4. **All market gate changes are sensitive operations**, not just Germany activation. This is the stricter reading while O9 is open.
+5. **RBAC matrix = the Revision 2 B7 "proposed starting matrix", seeded as written**, plus `admin.access` (every staff role) for the admin shell. `audit.read` is not seeded because the matrix has no row for it. Please confirm or amend the matrix.
+6. **Security values:**
+   - sessions: 7 days absolute (`SESSION_TTL_HOURS`), no idle timeout;
+   - passwords: 12–128 characters, Argon2id with m=19 MiB, t=2, p=1 (OWASP minimum), through Node's built-in `crypto.argon2`, so there is no native dependency;
+   - TOTP: SHA-1, 6 digits, 30 s, ±1 step; 10 recovery codes of 80 bits each;
+   - step-up window: 15 minutes (Revision 2 B7);
+   - rate limits: login 100/15 min per IP and 10/15 min per email, registration 20/h per IP, MFA 5/15 min per account;
+   - the rate limiter **fails closed**: if Redis is unavailable, auth answers 503.
+7. **MFA enrolment signs out the user's other sessions.**
+8. **Registration answers 409 `EMAIL_TAKEN`** for an existing email. That reveals the account exists; a "check your inbox" flow needs email (decision 2).
+9. **The web relays the session cookie server-side.** CORS is not enabled on the API, so browsers never call it directly.
+10. **An operator CLI bootstraps staff roles.** There is no role-management API yet (O9 decides whether it is sensitive).
+11. **Database sessions run in UTC** (`TimeZone=UTC` on the pool).
+12. **Test harness:** `drop()` retries `42501` while autovacuum holds a throwaway database. The e2e suite uses its own `hv_e2e` database, with the API on :4100 and the web on :3100.
+
+## Decisions needed
+
+| #   | Decision                                                                                                                                | Blocks                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 1   | **O12 values for UK and IE:** `min_age`, and whether self-exclusion is required. Until then no market can be enabled in any environment | Opening UK/IE (any customer-facing testing) |
+| 2   | Email verification + password reset: build them in Phase 5 with the outbox, or build a minimal outbox/mailer now                        | Account recovery; verified emails           |
+| 3   | O8: which roles must use MFA (proposal: all staff roles)                                                                                | Enforcing mandatory staff MFA               |
+| 4   | O9: which configuration changes are sensitive (market gate changes are treated as sensitive meanwhile)                                  | A role-management API; P10 config screens   |
+| 5   | Confirm the seeded RBAC matrix (choice 5)                                                                                               | —                                           |
+| 6   | Role of the `develop` branch: PR #2 was merged into `develop`, while DEVELOPMENT_RULES §4 says PRs target `main`                        | Where the Phase 2 PR should go              |
+
+## Phase 2 known issues
+
+- **`TRUST_PROXY` and X-Forwarded-For** depend on the hosting setup (O14). Until they are configured, per-IP rate limits and audit IPs see the web server's address for traffic that arrives through the web app.
+- **CI has not run Phase 2 on GitHub** (nothing pushed). The CI file is unchanged; the e2e step now also starts the built API. Locally, the same commands pass.
+- **Graceful shutdown on Windows:** unchanged from Phase 1 (see below).
+
+## Open decisions (Revision 2 Part G, still unresolved)
+
+| ID        | Question                                                                                                                                      | Needed by                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| O6 (part) | Policy for cancelling a draw that is already live                                                                                             | Phase 9                                                                                                     |
+| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                       | Phases 6/10                                                                                                 |
+| O8        | Which roles are "privileged" for mandatory MFA (not enforced in Phase 2)                                                                      | Phase 2                                                                                                     |
+| O9        | Exact list of "major configuration changes" (market gate changes are treated as sensitive meanwhile)                                          | Phases 2/10                                                                                                 |
+| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                    | Phases 7/10                                                                                                 |
+| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                           | Phase 11                                                                                                    |
+| O12       | Compliance values: minimum age per market, wrong skill answer behaviour, self-exclusion scope, consent wording, retention, masked-name format | **Now** for UK/IE `min_age` + self-exclusion (market enablement); the rest Phase 12 (skill answer: Phase 5) |
+| O13       | Production payment provider(s)                                                                                                                | Before Phase 14                                                                                             |
+| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                  | Before Phase 13                                                                                             |
+| O15       | Customer-visible ticket numbering: random vs sequential                                                                                       | Phase 4                                                                                                     |
+| O16       | Cash alternative for physical prizes                                                                                                          | Phases 8/9                                                                                                  |
+| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                | Now (migration discovery)                                                                                   |
+
+O1–O6 and O18 were approved by the owner on 2026-09-21. They are recorded in ADR-0020 to ADR-0026 as the Revision 2 proposals, because the approval did not restate them. If any approval differs from the proposal, amend the ADR.
+
+## Blockers
+
+- **Phase 2:** none for the implementation. Opening any market is blocked by O12 (decision 1 above).
+- **Migration discovery:** O17, legacy system access.
+
+## Next task
+
+**Stop for owner review of Phase 2.** Phase 3 (draws) starts only on explicit instruction. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+
+---
+
+# Phase 1 record (approved 2026-09-22)
+
+### Day 1 Definition of Done
 
 | Item                                                  | Status | Evidence                                                                                                                                        |
 | ----------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,9 +236,9 @@ Every Definition of Done item below was verified by actually running it on the d
 | No business features implemented                      | ✅     | Only health endpoints, a heartbeat job and route shells                                                                                         |
 | Repository understandable and reproducible            | ✅     | README setup steps; clean-volume rebuild reproduced the same result                                                                             |
 
-## Verified results
+### Verified results
 
-### Infrastructure (`pnpm infra:up`)
+#### Infrastructure (`pnpm infra:up`)
 
 | Service    | Image                   | Status  | Port (127.0.0.1 only)  |
 | ---------- | ----------------------- | ------- | ---------------------- |
@@ -47,7 +246,7 @@ Every Definition of Done item below was verified by actually running it on the d
 | Redis      | redis:7.4.11-alpine     | healthy | 6379                   |
 | Mailpit    | axllent/mailpit:v1.31.2 | healthy | 1025 (SMTP), 8025 (UI) |
 
-### Migrations (clean database)
+#### Migrations (clean database)
 
 - `up` applied `0001_foundation.sql`. Running it again reported "nothing to apply".
 - Resulting objects:
@@ -55,12 +254,12 @@ Every Definition of Done item below was verified by actually running it on the d
   - function `hv_forbid_update_delete`.
 - The recorded checksum `9c121ea4…0532e` equals `sha256sum` of the file.
 
-### Codegen
+#### Codegen
 
 - `pnpm db:codegen` introspected 0 application tables (correct for Phase 1; `schema_migrations` is excluded) and wrote `src/generated/db.ts`.
 - `codegen:verify` reports: up to date.
 
-### Integration tests (`pnpm test:integration`, real PostgreSQL + Redis): 38/38 passed
+#### Integration tests (`pnpm test:integration`, real PostgreSQL + Redis): 38/38 passed
 
 | File                                        | Tests |
 | ------------------------------------------- | ----- |
@@ -70,7 +269,7 @@ Every Definition of Done item below was verified by actually running it on the d
 | `apps/api/test/health.int.test.ts`          | 8     |
 | `apps/worker/test/system-queue.int.test.ts` | 3     |
 
-### PostgreSQL concurrency test (infrastructure verification)
+#### PostgreSQL concurrency test (infrastructure verification)
 
 This test uses 10 separate `pg.Client` connections, confirmed to be 10 distinct backend PIDs, against PostgreSQL 18. It proves four things:
 
@@ -81,22 +280,22 @@ This test uses 10 separate `pg.Client` connections, confirmed to be 10 distinct 
 
 It passed **10 out of 10 consecutive runs**.
 
-### API (built, running for real)
+#### API (built, running for real)
 
 - `GET /health/live` → **200** `{"status":"ok"}`
 - `GET /health/ready` → **200** `{"status":"ok","checks":{"database":{"status":"up",…},"redis":{"status":"up",…}}}`
 - Structured JSON logs carry `reqId`. A supplied `x-request-id` (≤128 characters) is propagated and echoed on the response; otherwise a UUID is generated.
 
-### Worker (built, running for real)
+#### Worker (built, running for real)
 
 - Logged: `startup check passed: PostgreSQL and Redis reachable` → `worker ready: queue "system", heartbeat every 60s` → `processed heartbeat`.
 - On restart, exactly **1** job scheduler exists, so the upsert is idempotent.
 
-### Final static checks
+#### Final static checks
 
 `pnpm verify` exit 0: format ✅, lint ✅, typecheck (6 workspaces) ✅, unit 19/19 ✅, migrate up/verify ✅, integration 38/38 ✅, build (7 workspaces) ✅. Playwright 5/5 ✅.
 
-## Fixes made during Docker verification
+### Fixes made during Docker verification
 
 1. **Three integration-test assertions were wrong.** These were test bugs only; no production code changed.
    - `SHOW server_version` and `SHOW transaction_isolation` name their result columns after the setting. The tests now use `current_setting(...) AS alias`.
@@ -105,7 +304,7 @@ It passed **10 out of 10 consecutive runs**.
    - Request-ID generation moved to the Fastify adapter in `apps/api/src/app.ts`, and the ID is echoed on the response.
    - Two integration tests were added.
 
-## Important technical decisions made during Phase 1
+### Important technical decisions made during Phase 1
 
 These are implementation choices within the approved architecture, recorded for review.
 
@@ -121,39 +320,10 @@ These are implementation choices within the approved architecture, recorded for 
 7. **Redis DB 15 is reserved for tests** and DB 0 for development.
 8. **Integration tests connect as `hv_owner`** (they need CREATEDB for throwaway databases). The running API is verified to connect as `hv_app`.
 
-## Known issues
+### Known issues
 
 - **Graceful shutdown on OS signals is not verified on Windows.** Windows cannot deliver SIGTERM/SIGINT to a Node process from outside, so the dev processes were stopped with a forced kill. The shutdown hooks (`app.close()`, worker/queue close, DB/Redis teardown) are exercised by the integration tests on every run.
 - **`corepack enable` needs admin rights** on this machine (`EPERM` on `C:\Program Files\nodejs`). The workaround, `corepack enable --install-directory "%APPDATA%\npm"`, is in the README.
 - **npm flags ESLint 9 as "deprecated"** because ESLint 10 exists. It is functional and supported by the configs in use.
 - **Vite warns about loading the config as CommonJS**, cosmetic only. `vitest.config.mts` is ESM; the warning comes from the Vite native config loader preview.
 - **CI result on GitHub not yet confirmed.** Commit `a16ca35` is now on `origin/main` and `origin/develop`. CI was validated locally with actionlint.
-
-## Open decisions (Revision 2 Part G, still unresolved)
-
-| ID        | Question                                                                                                                                      | Needed by                        |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| O6 (part) | Policy for cancelling a draw that is already live                                                                                             | Phase 9                          |
-| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                       | Phases 6/10                      |
-| O8        | Which roles are "privileged" for mandatory MFA                                                                                                | Phase 2                          |
-| O9        | Exact list of "major configuration changes"                                                                                                   | Phases 2/10                      |
-| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                    | Phases 7/10                      |
-| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                           | Phase 11                         |
-| O12       | Compliance values: minimum age per market, wrong skill answer behaviour, self-exclusion scope, consent wording, retention, masked-name format | Phase 12 (skill answer: Phase 5) |
-| O13       | Production payment provider(s)                                                                                                                | Before Phase 14                  |
-| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                  | Before Phase 13                  |
-| O15       | Customer-visible ticket numbering: random vs sequential                                                                                       | Phase 4                          |
-| O16       | Cash alternative for physical prizes                                                                                                          | Phases 8/9                       |
-| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                | Now (migration discovery)        |
-
-O1–O6 and O18 were approved by the owner on 2026-09-21. They are recorded in ADR-0020 to ADR-0026 as the Revision 2 proposals, because the approval did not restate them. If any approval differs from the proposal, amend the ADR.
-
-## Blockers
-
-- **Phase 1:** none.
-- **Migration discovery:** O17, legacy system access.
-- **Phase 2 decisions:** O8 and O9 are needed during Phase 2.
-
-## Next task
-
-Phase 1 is approved. For active work and task ownership, see [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md) and [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md). Phase 2 (users, authentication/sessions, markets, RBAC, MFA, audit log, admin shell) starts only on explicit instruction.

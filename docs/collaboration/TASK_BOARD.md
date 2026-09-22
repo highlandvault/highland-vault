@@ -53,39 +53,39 @@ _None._
 
 ## IN REVIEW
 
-| ID    | Task                                    | Owner             | Branch                  | Dependencies | Area                             | Issue / PR | Notes                                                                                   |
-| ----- | --------------------------------------- | ----------------- | ----------------------- | ------------ | -------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| T-001 | Collaboration and synchronization layer | Divyanshu (owner) | `develop` (uncommitted) | P1           | `docs/`, `.github/`, `CLAUDE.md` | —          | Awaiting owner review. No PR yet, so "in review" means owner review of the working tree |
+| ID  | Task                                               | Owner             | Branch                          | Dependencies | Area                                  | Issue / PR     | Notes                                                                                               |
+| --- | -------------------------------------------------- | ----------------- | ------------------------------- | ------------ | ------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| P2  | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth` | P1           | db, auth, RBAC, `/admin`, `/[market]` | — (not pushed) | Implemented and verified 2026-09-22; awaiting owner review. Decisions needed: see PROJECT_STATUS.md |
 
 ## READY
 
-_None._ Phase 2 becomes READY only on explicit owner instruction.
+_None._
 
 ## BACKLOG
 
 Phase-level tasks from the Initialization Report, Part F. Dependencies come from Part E. Scope and exit criteria are in Part F and are not repeated here.
 
-| ID  | Task                                               | Owner      | Branch | Dependencies          | Area                                  | Issue / PR | Notes                                                         |
-| --- | -------------------------------------------------- | ---------- | ------ | --------------------- | ------------------------------------- | ---------- | ------------------------------------------------------------- |
-| P2  | Users · Markets · RBAC · MFA · Audit · admin shell | unassigned | —      | P1                    | db, auth, RBAC, `/admin`, `/[market]` | —          | Needs O8 and O9 during the phase. Starts on owner instruction |
-| P3  | Draws                                              | unassigned | —      | P2                    | draws                                 | —          |                                                               |
-| P4  | Ticket engine                                      | unassigned | —      | P3                    | tickets                               | —          | Gates 1, 2. O15 needed                                        |
-| P5  | Cart + Checkout                                    | unassigned | —      | P4                    | checkout, orders, outbox              | —          | O12 skill-answer behaviour needed                             |
-| P6  | Payments                                           | unassigned | —      | P5                    | `packages/payments`, webhooks         | —          | Gate 4. Fake provider; O13 before production                  |
-| P7  | Wallet                                             | unassigned | —      | P6                    | wallet                                | —          | Gate 3. O7 affects refunds                                    |
-| P8  | Instant wins                                       | unassigned | —      | P7                    | instant wins                          | —          | Gate 6. O16 affects physical prizes                           |
-| P9  | Settlement                                         | unassigned | —      | P4, P6                | settlement                            | —          | Gate 5. O6 (part) needed                                      |
-| P10 | Admin ops · postal · fulfilment · reports          | unassigned | —      | P3–P9                 | admin, postal, reports                | —          | O7, O9, O10 needed                                            |
-| P11 | Referrals + Vault Meter                            | unassigned | —      | P7                    | referrals                             | —          | Gate 7. Blocked by O11 when started                           |
-| P12 | Markets · Emails · Compliance                      | unassigned | —      | P2, P3, P5            | compliance, email                     | —          | Gate 8. O12 values needed                                     |
-| P13 | Migration test import + QA                         | unassigned | —      | P2–P11, MIG-DISCOVERY | `tools/migration/`, QA                | —          | O14, O17 needed                                               |
-| P14 | UAT + release candidate                            | unassigned | —      | P13                   | all                                   | —          | O13 needed                                                    |
-| P15 | Cutover                                            | unassigned | —      | P14                   | all                                   | —          |                                                               |
+| ID  | Task                                      | Owner      | Branch | Dependencies          | Area                          | Issue / PR | Notes                                        |
+| --- | ----------------------------------------- | ---------- | ------ | --------------------- | ----------------------------- | ---------- | -------------------------------------------- |
+| P3  | Draws                                     | unassigned | —      | P2                    | draws                         | —          |                                              |
+| P4  | Ticket engine                             | unassigned | —      | P3                    | tickets                       | —          | Gates 1, 2. O15 needed                       |
+| P5  | Cart + Checkout                           | unassigned | —      | P4                    | checkout, orders, outbox      | —          | O12 skill-answer behaviour needed            |
+| P6  | Payments                                  | unassigned | —      | P5                    | `packages/payments`, webhooks | —          | Gate 4. Fake provider; O13 before production |
+| P7  | Wallet                                    | unassigned | —      | P6                    | wallet                        | —          | Gate 3. O7 affects refunds                   |
+| P8  | Instant wins                              | unassigned | —      | P7                    | instant wins                  | —          | Gate 6. O16 affects physical prizes          |
+| P9  | Settlement                                | unassigned | —      | P4, P6                | settlement                    | —          | Gate 5. O6 (part) needed                     |
+| P10 | Admin ops · postal · fulfilment · reports | unassigned | —      | P3–P9                 | admin, postal, reports        | —          | O7, O9, O10 needed                           |
+| P11 | Referrals + Vault Meter                   | unassigned | —      | P7                    | referrals                     | —          | Gate 7. Blocked by O11 when started          |
+| P12 | Markets · Emails · Compliance             | unassigned | —      | P2, P3, P5            | compliance, email             | —          | Gate 8. O12 values needed                    |
+| P13 | Migration test import + QA                | unassigned | —      | P2–P11, MIG-DISCOVERY | `tools/migration/`, QA        | —          | O14, O17 needed                              |
+| P14 | UAT + release candidate                   | unassigned | —      | P13                   | all                           | —          | O13 needed                                   |
+| P15 | Cutover                                   | unassigned | —      | P14                   | all                           | —          |                                              |
 
 Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.md#open-decisions-revision-2-part-g-still-unresolved), not here.
 
 ## DONE
 
-| ID  | Task       | Owner | Branch                                         | Dependencies | Area       | Issue / PR | Notes                                                                                      |
-| --- | ---------- | ----- | ---------------------------------------------- | ------------ | ---------- | ---------- | ------------------------------------------------------------------------------------------ |
-| P1  | Foundation | owner | committed as `a16ca35` on `main` and `develop` | —            | everything | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md) |
+| ID    | Task                                    | Owner             | Branch                                         | Dependencies | Area                             | Issue / PR | Notes                                                                                      |
+| ----- | --------------------------------------- | ----------------- | ---------------------------------------------- | ------------ | -------------------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| P1    | Foundation                              | owner             | committed as `a16ca35` on `main` and `develop` | —            | everything                       | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md) |
+| T-001 | Collaboration and synchronization layer | Divyanshu (owner) | `docs/collaboration-layer`                     | P1           | `docs/`, `.github/`, `CLAUDE.md` | PR #2      | Merged into `develop` (`e05f270`) on 2026-09-22                                            |

@@ -7,7 +7,7 @@ import { LivenessResponseSchema, ReadinessResponseSchema } from '@hv/contracts';
 import { createTestDatabase, type TestDatabase } from '@hv/db/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
-import { parseApiEnv } from '../src/config/env';
+import { DEV_PLACEHOLDER_MFA_KEY, parseApiEnv } from '../src/config/env';
 
 function testRedisUrl(): string {
   const url = process.env.TEST_REDIS_URL;
@@ -21,6 +21,9 @@ async function start(overrides: Record<string, string>, database: TestDatabase) 
     LOG_LEVEL: 'silent',
     DATABASE_URL: database.url,
     REDIS_URL: testRedisUrl(),
+    ENABLED_MARKETS: 'uk,ie',
+    WEB_ORIGINS: 'http://127.0.0.1:3000',
+    MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
     ...overrides,
   });
   const app = await createApp(env);
@@ -85,9 +88,10 @@ describe('API health', () => {
       expect(oversized.headers['x-request-id']).toMatch(uuid);
     });
 
-    it('returns 404 for unknown routes (no business endpoints exist yet)', async () => {
+    it('returns 404 for unknown routes (no draw endpoints exist yet)', async () => {
       const response = await app.inject({ method: 'GET', url: '/draws' });
       expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
     });
   });
 

@@ -3,4 +3,144 @@
  * Please do not edit it manually.
  */
 
-export interface DB {}
+import type { ColumnType } from "kysely";
+
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface AuditLog {
+  action: string;
+  actor_type: string;
+  actor_user_id: string | null;
+  after: Json | null;
+  before: Json | null;
+  entity_id: string | null;
+  entity_type: string;
+  id: Generated<string>;
+  ip: string | null;
+  market_id: string | null;
+  occurred_at: Generated<Timestamp>;
+  reason: string | null;
+  request_id: string | null;
+}
+
+export interface Markets {
+  code: string;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  id: Generated<string>;
+  is_enabled: Generated<boolean>;
+  legal_approval_ref: string | null;
+  legal_approved_at: Timestamp | null;
+  legal_approved_by: string | null;
+  locale: string;
+  name: string;
+  requires_legal_approval: boolean;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface MarketSettings {
+  created_at: Generated<Timestamp>;
+  market_id: string;
+  min_age: number | null;
+  self_exclusion_required: boolean | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface MfaRecoveryCodes {
+  code_hash: Buffer;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  used_at: Timestamp | null;
+  user_id: string;
+}
+
+export interface Permissions {
+  code: string;
+  description: string;
+}
+
+export interface RolePermissions {
+  permission_code: string;
+  role_code: string;
+}
+
+export interface Roles {
+  code: string;
+  description: string;
+  name: string;
+}
+
+export interface Sessions {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  ip: string | null;
+  mfa_required: boolean;
+  mfa_verified_at: Timestamp | null;
+  revoked_at: Timestamp | null;
+  token_hash: Buffer;
+  user_agent: string | null;
+  user_id: string;
+}
+
+export interface UserMfa {
+  confirmed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  encryption_key_id: string;
+  last_used_step: number | null;
+  totp_secret_encrypted: Buffer;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
+export interface UserRoles {
+  granted_at: Generated<Timestamp>;
+  granted_by: string | null;
+  id: Generated<string>;
+  market_id: string | null;
+  role_code: string;
+  user_id: string;
+}
+
+export interface Users {
+  created_at: Generated<Timestamp>;
+  /**
+   * Normalized (trim + lower case) and globally unique (case-insensitive via citext).
+   */
+  email: string;
+  email_verified_at: Timestamp | null;
+  id: Generated<string>;
+  password_hash: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface DB {
+  audit_log: AuditLog;
+  market_settings: MarketSettings;
+  markets: Markets;
+  mfa_recovery_codes: MfaRecoveryCodes;
+  permissions: Permissions;
+  role_permissions: RolePermissions;
+  roles: Roles;
+  sessions: Sessions;
+  user_mfa: UserMfa;
+  user_roles: UserRoles;
+  users: Users;
+}

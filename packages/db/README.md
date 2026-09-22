@@ -2,15 +2,15 @@
 
 PostgreSQL access for Highland Vault (ADR-0002). This package contains:
 
-| Path                  | Purpose                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/client.ts`       | `createDb()`: Kysely over a `pg` pool with safe int8 parsing                                                                         |
-| `src/int8.ts`         | `bigint` columns become JS numbers **only if exactly representable**; otherwise an error is thrown (money is never silently rounded) |
-| `src/transaction.ts`  | `withTransaction()`: retries the whole transaction on `40001` (serialization failure) and `40P01` (deadlock) only                    |
-| `src/migrate/`        | The plain-SQL migration tool                                                                                                         |
-| `migrations/`         | The migration files: `NNNN_name.sql`                                                                                                 |
-| `src/generated/db.ts` | Kysely table types generated from the migrated DB. Do not edit.                                                                      |
-| `src/testing/`        | Real-PostgreSQL integration test harness (template DB, throwaway DBs, barrier)                                                       |
+| Path                  | Purpose                                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/client.ts`       | `createDb()`: Kysely over a `pg` pool with safe int8 parsing                                                                             |
+| `src/int8.ts`         | `bigint` columns become JS numbers **only if exactly representable**; otherwise an error is thrown (money is never silently rounded)     |
+| `src/transaction.ts`  | `withTransaction()`: retries the whole transaction on `40001` (serialization failure) and `40P01` (deadlock) only                        |
+| `src/migrate/`        | The plain-SQL migration tool                                                                                                             |
+| `migrations/`         | The migration files: `NNNN_name.sql`                                                                                                     |
+| `src/generated/db.ts` | Kysely table types generated from the migrated DB. Do not edit.                                                                          |
+| `src/testing/`        | Real-PostgreSQL integration test harness (template DB, throwaway DBs, barrier) and test-only fixtures (`fixtures.ts`, `e2e-database.ts`) |
 
 ## Migration tool
 
@@ -38,3 +38,19 @@ The tool connects with `MIGRATION_DATABASE_URL` (the owner role `hv_owner`). `--
 - `hv_owner` owns the schema and runs migrations.
 - `hv_app` is the runtime role (api and worker). Default privileges give it DML on new tables; append-only tables revoke UPDATE/DELETE from it in their own migrations.
 - `hv_app` can only read `schema_migrations`.
+
+## Schema (Phase 2)
+
+| Migration                   | Contents                                                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 0001_foundation             | `hv_forbid_update_delete()` for append-only tables                                                         |
+| 0002_extensions_and_helpers | `citext`, `hv_set_updated_at()`                                                                            |
+| 0003_users                  | `users`: normalized, globally unique email (citext); Argon2id hashes only; no market column (ADR-0003)     |
+| 0004_markets                | `markets`, `market_settings`; fixed market definitions; Germany legal-approval CHECK; compliance gate      |
+| 0005_sessions_and_mfa       | `sessions` (token hash only), `user_mfa` (encrypted TOTP secret), `mfa_recovery_codes` (hashes)            |
+| 0006_rbac                   | `roles`, `permissions`, `role_permissions` (Revision 2 B7 matrix), `user_roles` (optionally market-scoped) |
+| 0007_audit_log              | append-only `audit_log` (trigger + REVOKE)                                                                 |
+
+`hv_market_missing_settings(market_id)` is the single definition of which compliance settings are required before a market can be enabled.
+
+Test fixtures (`src/testing/fixtures.ts`) enable markets **in throwaway test databases only**. Their compliance values are placeholders for tests, not decisions (O12 is OPEN).

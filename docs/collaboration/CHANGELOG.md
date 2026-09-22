@@ -17,11 +17,19 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
-- **T-001:** Collaboration and synchronization layer added: [DEVELOPMENT_RULES.md](../DEVELOPMENT_RULES.md) (including the Claude Collaboration Protocol), `docs/collaboration/`, `.github/CODEOWNERS` (placeholders, rules inactive), the PR template and `CLAUDE.md`. Awaiting owner review; not committed.
+- **P2:** Migrations `0002`–`0007` add users, markets + settings, sessions + MFA, RBAC and the audit log. Run `pnpm db:migrate up` after pulling. Next free migration number: `0008`.
+- **P2:** New env variables: `ENABLED_MARKETS`, `WEB_ORIGINS` and `MFA_ENCRYPTION_KEY` are **required** (the API refuses to start without them); `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `MFA_ENCRYPTION_KEY_ID` and `TRUST_PROXY` are optional. Copy them from `.env.example` into your `.env`.
+- **P2:** **All markets are disabled** on every real database until the O12 compliance values are supplied (ADR-0016), so `/uk` and `/ie` are 404 locally. Tests enable markets only in throwaway databases.
+- **P2:** Convention: every API route declares `@Public()`, `@Authenticated()` or `@RequirePermission()`; routes without one are denied. Market-scoped routes use `@UseGuards(MarketGuard)`. Every API error is `{ error: { code, message, details? }, requestId }`.
+- **P2:** State-changing API requests must send an `Origin` listed in `WEB_ORIGINS` (CSRF check).
+- **P2:** `pnpm test:e2e` now starts the built API and web on ports 4100/3100 against a throwaway `hv_e2e` database. Run `pnpm build` first.
+- **P2:** Operator CLI `pnpm --filter @hv/api cli:grant-role -- --email … --role … --reason …` bootstraps staff accounts (audited).
 
 ## 2026-09-22
 
-- **P1:** Phase 1 (Foundation) approved by the owner. Phase 2 not started.
+- **T-001:** Collaboration and synchronization layer merged into `develop` (PR #2, `e05f270`).
+- **P1:** Phase 1 (Foundation) approved by the owner.
+- **P2:** Phase 2 started on owner instruction (branch `feature/p2-users-markets-auth`).
 
 ## 2026-09-21
 
