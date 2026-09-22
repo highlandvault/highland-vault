@@ -17,6 +17,8 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
+- **Process:** Branch policy settled: `feature/*` → PR → `develop` (integration) → release PR → `main` (production). Task PRs target `develop`. DEVELOPMENT_RULES §4, §5, §7, §10 and the TASK_BOARD definition of DONE were updated.
+
 - **P2:** Migrations `0002`–`0007` add users, markets + settings, sessions + MFA, RBAC and the audit log. Run `pnpm db:migrate up` after pulling. Next free migration number: `0008`.
 - **P2:** New env variables: `ENABLED_MARKETS`, `WEB_ORIGINS` and `MFA_ENCRYPTION_KEY` are **required** (the API refuses to start without them); `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `MFA_ENCRYPTION_KEY_ID` and `TRUST_PROXY` are optional. Copy them from `.env.example` into your `.env`.
 - **P2:** **All markets are disabled** on every real database until the O12 compliance values are supplied (ADR-0016), so `/uk` and `/ie` are 404 locally. Tests enable markets only in throwaway databases.
@@ -29,7 +31,7 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 - **T-001:** Collaboration and synchronization layer merged into `develop` (PR #2, `e05f270`).
 - **P1:** Phase 1 (Foundation) approved by the owner.
-- **P2:** Phase 2 started on owner instruction (branch `feature/p2-users-markets-auth`).
+- **P2:** Phase 2 started on owner instruction and merged into `develop` (PR #3, `6b0ea82`). The P2 entries under **Unreleased** are in `develop` and not yet released to `main`.
 
 ## 2026-09-21
 

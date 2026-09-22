@@ -4,9 +4,10 @@ _Last updated: 2026-09-22_
 
 ## Current phase
 
-**Phase 2 (Day 2): Users · Markets · Auth · RBAC · MFA · Audit · admin shell — implementation complete, awaiting owner review.**
+**Phase 2 (Day 2): Users · Markets · Auth · RBAC · MFA · Audit · admin shell — complete, merged into `develop` (PR #3).**
 
-- Branch `feature/p2-users-markets-auth` (from `origin/develop`). Not committed, not pushed.
+- Commit `b06226b` on `feature/p2-users-markets-auth`, merged into `develop` by PR #3 (`6b0ea82`). Not released to `main`.
+- Re-verified on the merged `develop` state on 2026-09-22: `pnpm verify` exit 0 (unit 82/82, integration 133/133), migrations 7/7 verified on the dev DB and on a brand-new DB.
 - Phase 1 was approved by the owner on 2026-09-22 (record below).
 - Phase 3 has not started and will not start without explicit instruction.
 - Everything below was verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
@@ -167,12 +168,12 @@ All sit within the approved architecture; each is reversible by a migration or a
 | 3   | O8: which roles must use MFA (proposal: all staff roles)                                                                                | Enforcing mandatory staff MFA               |
 | 4   | O9: which configuration changes are sensitive (market gate changes are treated as sensitive meanwhile)                                  | A role-management API; P10 config screens   |
 | 5   | Confirm the seeded RBAC matrix (choice 5)                                                                                               | —                                           |
-| 6   | Role of the `develop` branch: PR #2 was merged into `develop`, while DEVELOPMENT_RULES §4 says PRs target `main`                        | Where the Phase 2 PR should go              |
+| 6   | ~~Role of the `develop` branch~~ — **resolved 2026-09-22**: `feature/*` → `develop` → `main` (DEVELOPMENT_RULES §4)                     | —                                           |
 
 ## Phase 2 known issues
 
 - **`TRUST_PROXY` and X-Forwarded-For** depend on the hosting setup (O14). Until they are configured, per-IP rate limits and audit IPs see the web server's address for traffic that arrives through the web app.
-- **CI has not run Phase 2 on GitHub** (nothing pushed). The CI file is unchanged; the e2e step now also starts the built API. Locally, the same commands pass.
+- **GitHub CI is red on the merged Phase 2 commit** (`b06226b`). A timing race in the test `identity.int.test.ts` "stamps updated_at" failed on the Ubuntu runner; build and e2e were skipped. Production code is not affected. The fix is in PR #4 (`fix/p2-updated-at-test-timing`). CI runs on PRs and on pushes to `main` only, not on pushes to `develop`.
 - **Graceful shutdown on Windows:** unchanged from Phase 1 (see below).
 
 ## Open decisions (Revision 2 Part G, still unresolved)
@@ -201,7 +202,7 @@ O1–O6 and O18 were approved by the owner on 2026-09-21. They are recorded in A
 
 ## Next task
 
-**Stop for owner review of Phase 2.** Phase 3 (draws) starts only on explicit instruction. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+Phase 2 is merged into `develop`. **Phase 3 (draws) starts only on explicit owner approval.** Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

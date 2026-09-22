@@ -56,22 +56,26 @@ The full rules are in the Initialization Report (Parts B and B21) and the ADRs. 
 
 ## 4. Branches
 
-| Branch       | Purpose                                               | Example                          |
-| ------------ | ----------------------------------------------------- | -------------------------------- |
-| `main`       | Protected integration branch. Always green.           | —                                |
-| `feature/*`  | New functionality for a task                          | `feature/ticket-engine`          |
-| `fix/*`      | Bug fixes                                             | `fix/reservation-expiry-race`    |
-| `refactor/*` | Behaviour-preserving restructuring, with its own task | `refactor/db-transaction-helper` |
-| `chore/*`    | Tooling, dependencies, CI, configuration              | `chore/bump-vitest`              |
-| `docs/*`     | Documentation only                                    | `docs/adr-0027-refund-policy`    |
+| Branch       | Purpose                                                                    | Example                          |
+| ------------ | -------------------------------------------------------------------------- | -------------------------------- |
+| `main`       | Production / release. Protected. Changes only by release PR from `develop` | —                                |
+| `develop`    | Integration and testing. Protected. Target of every task PR                | —                                |
+| `feature/*`  | New functionality for a task                                               | `feature/ticket-engine`          |
+| `fix/*`      | Bug fixes                                                                  | `fix/reservation-expiry-race`    |
+| `refactor/*` | Behaviour-preserving restructuring, with its own task                      | `refactor/db-transaction-helper` |
+| `chore/*`    | Tooling, dependencies, CI, configuration                                   | `chore/bump-vitest`              |
+| `docs/*`     | Documentation only                                                         | `docs/adr-0027-refund-policy`    |
 
 Rules:
 
-- **No direct pushes to `main`.** Everything reaches `main` through a pull request.
+Flow: `feature/*` (and `fix/*`, `refactor/*`, `chore/*`, `docs/*`) → PR → `develop` → release PR → `main`.
+
+- **No direct pushes to `main` or `develop`.** Task work reaches `develop` only through a pull request. A release reaches `main` only through a pull request from `develop`.
 - One task per branch. Branch names are lowercase and hyphenated, and may include the issue number (`feature/42-ticket-engine`).
-- Branch from an up-to-date `main`. Rebase or merge `main` into your branch regularly, not only at the end.
+- Branch from an up-to-date `develop`. Rebase or merge `develop` into your branch regularly, not only at the end.
 - Delete the branch after merge.
-- A `develop` branch currently exists on `origin`, at the same commit as `main`. Its role (a separate integration branch, or retire it) is an owner decision that has not been made. Until then, pull requests target `main`.
+- Task pull requests target `develop`. Only release pull requests (`develop` → `main`) target `main`, and the owner opens and approves them.
+- A hotfix for production is still a `fix/*` branch and PR into `develop`, followed by a release PR to `main`, unless the owner decides otherwise for that release.
 
 ## 5. Workflow
 
@@ -86,17 +90,19 @@ Claude implementation
  ↓
 Tests
  ↓
-Push branch (open a draft PR early)
+Push branch (open a draft PR into develop early)
  ↓
-Pull Request (ready for review)
+Pull Request → develop (ready for review)
  ↓
 CI
  ↓
 Code review
  ↓
-Merge
+Merge into develop
  ↓
 Task = DONE
+ ↓
+Release PR develop → main (owner, when a release is ready)
 ```
 
 ## 6. Commits
@@ -113,7 +119,7 @@ Task = DONE
 - CI (`.github/workflows/ci.yml`) runs on every pull request. A PR is not mergeable while CI is red.
 - At least one review from someone other than the author before merge. Changes in sensitive areas (see [CODEOWNERS](../.github/CODEOWNERS)) need owner review.
 - The author states what was actually tested, including exactly what Claude ran. "Claude said it works" is not verification.
-- Prefer squash merges so `main` reads as one commit per task.
+- Prefer squash merges so `develop` reads as one commit per task.
 
 ## 8. Task ownership
 
@@ -171,11 +177,11 @@ Commands for steps 7, 8 and 10 (they work in both Bash and PowerShell):
 git fetch --all --prune
 git branch --show-current
 git status
-git log --oneline -10 origin/main
+git log --oneline -10 origin/develop
 
 # Other developers' unmerged work, and which files each branch touches:
-git branch -r --no-merged origin/main
-git diff --stat origin/main...origin/<branch>
+git branch -r --no-merged origin/develop
+git diff --stat origin/develop...origin/<branch>
 
 # Another branch's view of the shared state (it may be newer than main's):
 git show origin/<branch>:docs/collaboration/ACTIVE_WORK.md
@@ -186,7 +192,7 @@ gh pr list --state open
 gh pr view <number>
 ```
 
-`git diff --stat origin/main...origin/<branch>` is the most reliable overlap check. It shows what another branch has really changed, whether or not its ACTIVE_WORK entry is up to date.
+`git diff --stat origin/develop...origin/<branch>` is the most reliable overlap check. It shows what another branch has really changed, whether or not its ACTIVE_WORK entry is up to date.
 
 Then report to the developer, briefly: current phase, the assigned task and its state, other active work that touches the same area, blockers, and the proposed next step. If the task, its owner, or its scope is unclear, **ask**. Do not pick a task yourself.
 
@@ -226,7 +232,7 @@ Claude should:
 6. Prepare the PR.
 7. Report exactly what changed and what was verified.
 
-Claude commits, pushes, or opens a PR only when the developer asks. Claude never pushes to `main`, never force-pushes a shared branch, and never changes GitHub repository settings.
+Claude commits, pushes, or opens a PR only when the developer asks. Claude never pushes to `main` or `develop`, never force-pushes a shared branch, and never changes GitHub repository settings.
 
 ## 11. Multi-developer operating model
 
@@ -244,7 +250,7 @@ Each developer's Claude reads the same repository documents and the same GitHub 
 
 ## 12. Code conflicts
 
-- **Prevention:** claim tasks visibly, keep branches short-lived, sync with `main` often, and check other branches' `git diff --stat` before touching a shared area.
+- **Prevention:** claim tasks visibly, keep branches short-lived, sync with `develop` often, and check other branches' `git diff --stat` before touching a shared area.
 - **Detection:** Git and GitHub detect real conflicts on rebase, merge, and in the PR.
 - **Resolution:** the developer whose branch conflicts resolves it locally, re-runs the tests, and pushes. If a resolution changes behaviour in another developer's area, involve that developer.
 - **Migrations:** migration files are numbered and applied in order, and applied migrations are never edited. If two branches add the same migration number, the branch that merges second renumbers its migration before merging.
@@ -256,6 +262,6 @@ The system is deliberately lightweight. People are responsible for:
 
 - creating and assigning GitHub issues, and (optionally) a GitHub Project board;
 - keeping ACTIVE_WORK and TASK_BOARD entries honest;
-- configuring GitHub settings. Branch protection on `main`, required status checks, required code-owner review, and the default branch are owner decisions. They are **not** configured by this repository or by Claude;
+- configuring GitHub settings. Branch protection on `main` and `develop`, required status checks, required code-owner review, and the default branch are owner decisions. They are **not** configured by this repository or by Claude;
 - replacing the placeholder username in `.github/CODEOWNERS` and enabling its rules;
 - reviewing and merging pull requests.
