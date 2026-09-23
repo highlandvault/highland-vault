@@ -43,7 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-_None._
+| ID   | Task                                | Owner             | Branch                         | Dependencies | Area                           | Issue / PR | Notes                                                                                                  |
+| ---- | ----------------------------------- | ----------------- | ------------------------------ | ------------ | ------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------ |
+| P5-0 | NB-1 structural reservation-end fix | Divyanshu (owner) | `fix/p5-0-reservation-end-cap` | P4           | `packages/db` (migration 0010) | none yet   | First task of Phase 5 (Option A). Cap decrement follows rows actually freed. Next free migration: 0011 |
 
 ## BLOCKED
 
@@ -63,19 +65,19 @@ _None._
 
 Phase-level tasks from the Initialization Report, Part F. Dependencies come from Part E. Scope and exit criteria are in Part F and are not repeated here.
 
-| ID  | Task                                      | Owner      | Branch | Dependencies          | Area                          | Issue / PR | Notes                                        |
-| --- | ----------------------------------------- | ---------- | ------ | --------------------- | ----------------------------- | ---------- | -------------------------------------------- |
-| P5  | Cart + Checkout                           | unassigned | —      | P4                    | checkout, orders, outbox      | —          | O12 skill-answer behaviour needed            |
-| P6  | Payments                                  | unassigned | —      | P5                    | `packages/payments`, webhooks | —          | Gate 4. Fake provider; O13 before production |
-| P7  | Wallet                                    | unassigned | —      | P6                    | wallet                        | —          | Gate 3. O7 affects refunds                   |
-| P8  | Instant wins                              | unassigned | —      | P7                    | instant wins                  | —          | Gate 6. O16 affects physical prizes          |
-| P9  | Settlement                                | unassigned | —      | P4, P6                | settlement                    | —          | Gate 5. O6 (part) needed                     |
-| P10 | Admin ops · postal · fulfilment · reports | unassigned | —      | P3–P9                 | admin, postal, reports        | —          | O7, O9, O10 needed                           |
-| P11 | Referrals + Vault Meter                   | unassigned | —      | P7                    | referrals                     | —          | Gate 7. Blocked by O11 when started          |
-| P12 | Markets · Emails · Compliance             | unassigned | —      | P2, P3, P5            | compliance, email             | —          | Gate 8. O12 values needed                    |
-| P13 | Migration test import + QA                | unassigned | —      | P2–P11, MIG-DISCOVERY | `tools/migration/`, QA        | —          | O14, O17 needed                              |
-| P14 | UAT + release candidate                   | unassigned | —      | P13                   | all                           | —          | O13 needed                                   |
-| P15 | Cutover                                   | unassigned | —      | P14                   | all                           | —          |                                              |
+| ID  | Task                                      | Owner             | Branch | Dependencies          | Area                          | Issue / PR | Notes                                                                                                                                 |
+| --- | ----------------------------------------- | ----------------- | ------ | --------------------- | ----------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| P5  | Cart + Checkout                           | Divyanshu (owner) | —      | P4                    | checkout, orders, outbox      | —          | **Option A approved**: ends at `pending_payment`; payments/webhooks/SOLD stay in P6. O12 decided. Tasks P5-0…P5-12; only P5-0 started |
+| P6  | Payments                                  | unassigned        | —      | P5                    | `packages/payments`, webhooks | —          | Gate 4. Fake provider; O13 before production                                                                                          |
+| P7  | Wallet                                    | unassigned        | —      | P6                    | wallet                        | —          | Gate 3. O7 affects refunds                                                                                                            |
+| P8  | Instant wins                              | unassigned        | —      | P7                    | instant wins                  | —          | Gate 6. O16 affects physical prizes                                                                                                   |
+| P9  | Settlement                                | unassigned        | —      | P4, P6                | settlement                    | —          | Gate 5. O6 (part) needed                                                                                                              |
+| P10 | Admin ops · postal · fulfilment · reports | unassigned        | —      | P3–P9                 | admin, postal, reports        | —          | O7, O9, O10 needed                                                                                                                    |
+| P11 | Referrals + Vault Meter                   | unassigned        | —      | P7                    | referrals                     | —          | Gate 7. Blocked by O11 when started                                                                                                   |
+| P12 | Markets · Emails · Compliance             | unassigned        | —      | P2, P3, P5            | compliance, email             | —          | Gate 8. O12 values needed                                                                                                             |
+| P13 | Migration test import + QA                | unassigned        | —      | P2–P11, MIG-DISCOVERY | `tools/migration/`, QA        | —          | O14, O17 needed                                                                                                                       |
+| P14 | UAT + release candidate                   | unassigned        | —      | P13                   | all                           | —          | O13 needed                                                                                                                            |
+| P15 | Cutover                                   | unassigned        | —      | P14                   | all                           | —          |                                                                                                                                       |
 
 Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.md#open-decisions-revision-2-part-g-still-unresolved), not here.
 

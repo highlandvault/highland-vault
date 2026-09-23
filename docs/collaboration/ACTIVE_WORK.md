@@ -44,8 +44,33 @@ Next:
 
 - **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
 - **Phase 4 (Day 4):** DONE. Merged into `develop` via **PR #8** (`49e3903`) and released to `main` via **PR #9** (`c284825`) on 2026-09-23. O15 decided: sequential ticket numbers (ADR-0027). Review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `49e3903`.
+- **Phase 5 (Day 5):** begun, **task P5-0 only**. Scope is Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). O12 decided (incorrect skill answer rejects the checkout). No later P5 task is approved to start.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `aec2aa9`.
 
 ## Active entries
 
-_No active task. Phase 4 is merged; Phase 5 has not started and needs explicit owner approval._
+### P5-0 — NB-1 structural reservation-end fix
+
+Developer: Divyanshu (repository owner), working with Claude
+Branch: `fix/p5-0-reservation-end-cap` (from `origin/develop` `aec2aa9`)
+Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
+PR: none yet
+Status: IN PROGRESS
+
+Current task:
+Make the entrant-cap decrement in `hv_end_reservation` follow the ticket rows actually freed rather than the reservation quantity, so the invariant is structural before Phase 6 introduces RESERVED → SOLD. New migration `0010_reservation_end_fix`; migration `0009` is untouched.
+
+Affected areas:
+`packages/db/migrations/0010_reservation_end_fix.sql` (new), `packages/db/test/tickets.int.test.ts` (regression tests), docs.
+
+Avoid modifying:
+`packages/db/migrations/` (0010 is taken by this branch; the next free number is 0011), `hv_end_reservation`.
+
+Blockers:
+None. NB-1 is unreachable in Phase 4 and Phase 5 because nothing writes `sold`; this lands first because Phase 6 depends on it.
+
+Last update:
+2026-09-23 — Migration written, four regression tests added. The defect was reproduced against the original 0009 function on a scratch database (cap returned to 0 while a sold ticket was still held) and the same scenario returns 1 under 0010. `pnpm verify` exit 0; integration 259/259; e2e 38/38; clean-database sequence green.
+
+Next:
+Owner review of the P5-0 PR. P5-1 does not start until this merges and the owner approves it.

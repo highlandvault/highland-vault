@@ -17,6 +17,8 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
+- **P5-0:** Migration `0010_reservation_end_fix`: `hv_end_reservation` now returns the entrant-cap allowance for the ticket rows it actually freed (`GET DIAGNOSTICS`), not the reservation quantity, so tickets that are already sold keep counting against the cap (NB-1). Behaviour is unchanged for Phase 4 and Phase 5, where nothing writes `sold`. Run `pnpm db:migrate up`. Next free migration number: `0011`.
+
 - **P4:** Merged into `develop` via PR #8 (`49e3903`) and released to `main` via PR #9 (`c284825`) on 2026-09-23. Phase 4 is DONE; review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md) and [HANDOFFS.md](HANDOFFS.md).
 
 - **P4:** O15 decided: sequential ticket numbers (ADR-0027).
