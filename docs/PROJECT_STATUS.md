@@ -11,7 +11,7 @@ _Last updated: 2026-09-23_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- Phase 5 (checkout) has not started and will not start without explicit owner approval.
+- **Phase 5 (cart + checkout) has begun, task P5-0 only** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. No later P5 task is approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -124,7 +124,7 @@ Anyone else's reservation, another market's reservation and malformed IDs are al
 
 - **Not built (later phases, as instructed):** orders, checkout, payment, webhooks, wallet, refunds, settlement, instant wins, referrals, production migration.
 - **Guest entry:** the engine and the cap support the verified-email key, but the API accepts signed-in customers only. Guests need email verification first (ADR-0020), which arrives with checkout (Phase 5).
-- **`sold`:** nothing in Phase 4 sets it. Phase 5 turns a reservation's tickets into `sold` when the order is paid; the trigger already allows only `reserved → sold` for the same reservation.
+- **`sold`:** nothing in Phase 4 sets it, and nothing in Phase 5 does either (Option A). **Phase 6** turns a reservation's tickets into `sold` when the payment webhook confirms the order; the trigger already allows only `reserved → sold` for the same reservation.
 
 ## Implementation choices made in Phase 4 (for review)
 
@@ -187,7 +187,7 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 These came out of the final review of PR #8. **None of them is reachable in Phase 4**; they are obligations and known issues for the phase that introduces orders.
 
-1. **NB-1 — `hv_end_reservation` returns the wrong allowance once sold tickets exist. Phase 5 must fix this structurally before adding the reservation → sold/order transition.** The function frees only `reserved` tickets (correct, sold ones are untouched) but then decrements `draw_entrant_counts.count` by the reservation's **quantity** rather than by the number of tickets it actually released. A reservation holding a sold ticket that later expires or is released would therefore give the entrant their cap allowance back while they keep the sold ticket — a cap bypass. Unreachable in Phase 4 because nothing writes `sold`. The fix is to decrement by the actual row count freed (`GET DIAGNOSTICS`), making the invariant structural instead of a rule Phase 5 has to remember.
+1. **NB-1 — `hv_end_reservation` returns the wrong allowance once sold tickets exist. Phase 5 must fix this structurally before adding the reservation → sold/order transition.** The function frees only `reserved` tickets (correct, sold ones are untouched) but then decrements `draw_entrant_counts.count` by the reservation's **quantity** rather than by the number of tickets it actually released. A reservation holding a sold ticket that later expires or is released would therefore give the entrant their cap allowance back while they keep the sold ticket — a cap bypass. Unreachable in Phase 4 because nothing writes `sold`. The fix is to decrement by the actual row count freed (`GET DIAGNOSTICS`), making the invariant structural instead of a rule Phase 5 has to remember. **Addressed by task P5-0, migration `0010_reservation_end_fix`** (in review).
 2. **NB-2 — a temporary "the last tickets are being taken right now" refusal.** When a shortfall is caused by reservations that are overdue but not yet swept, `countAvailable` counts their tickets as free, so the allocator raises `AllocationContended` and retries; the inline sweep runs once before allocation (limit 200), not between retries, so all five attempts reach the same conclusion. The customer gets a correct refusal with a slightly misleading message. **No data corruption.** Low severity; leave it unless Phase 5 changes the reservation flow, in which case re-sweep before the final retry or reword the refusal.
 3. **NB-3 — a flaky integration assertion on CI.** See the Phase 4 CI record above. Test-only; needs its own `fix/*` branch.
 4. **Large ticket-pool publication is acceptable for V1. Do not change it now.** The pool is one set-based insert inside the publish transaction: ~6.2 s for 50,000 tickets on the development machine, whose Docker VM is roughly 10× slower than a normal server. The scale assumption is that draws are published rarely, by staff, at sizes in the thousands to tens of thousands; `draws_total_tickets_max` (1,000,000) bounds the worst case. Revisit only if pools beyond ~100,000 become real.
@@ -196,7 +196,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) has not started and starts only on explicit owner approval.** It needs O12 (wrong skill-answer behaviour) and the email-verification timing decision for guests, and it must honour the carried items above. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way: task P5-0 only.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

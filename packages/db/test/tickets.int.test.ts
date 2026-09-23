@@ -477,6 +477,133 @@ describe('ticket engine (database layer)', () => {
       expect(await count(id, userId)).toBe(0);
     });
 
+    /**
+     * NB-1 (migration 0010). The allowance given back is the number of ticket
+     * rows the call actually moved back to 'available', not the reservation's
+     * quantity. The two only differ once a ticket leaves 'reserved', which
+     * nothing does before Phase 6 — so these tests set 'sold' by hand to prove
+     * the invariant holds structurally rather than by luck.
+     */
+    describe('cap allowance follows the tickets actually freed (NB-1)', () => {
+      it('returns allowance for freed tickets only, keeping sold ones counted', async () => {
+        const userId = await insertFixtureUser(client, 'nb1-partial@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 10,
+          maxPerPerson: 5,
+        });
+        const r = await heldReservation(id, userId, [1, 2, 3]);
+        // One of the three is sold; the reservation's quantity is still 3.
+        await client.query(
+          `UPDATE tickets SET status = 'sold' WHERE draw_id = $1 AND ticket_number = 1`,
+          [id],
+        );
+        expect(await count(id, userId)).toBe(3);
+
+        expect(
+          (
+            await client.query<{ ended: boolean }>(
+              `SELECT hv_end_reservation($1, 'expired') AS ended`,
+              [r],
+            )
+          ).rows[0]!.ended,
+        ).toBe(true);
+
+        // Two rows were freed, so two entries of allowance come back — not the
+        // reservation's quantity of three. The sold ticket still counts.
+        expect(await count(id, userId)).toBe(1);
+        expect((await tickets(id)).slice(0, 3).map((t) => t.status)).toEqual([
+          'sold',
+          'available',
+          'available',
+        ]);
+        // The sold ticket keeps its holder; only freed tickets lose it.
+        expect((await tickets(id))[0]!.reservation_id).toBe(r);
+      });
+
+      it('returns no allowance at all when every ticket is already sold', async () => {
+        const userId = await insertFixtureUser(client, 'nb1-allsold@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 10,
+          maxPerPerson: 5,
+        });
+        const r = await heldReservation(id, userId, [1, 2]);
+        await client.query(
+          `UPDATE tickets SET status = 'sold' WHERE draw_id = $1 AND ticket_number = ANY('{1,2}'::int[])`,
+          [id],
+        );
+
+        expect(
+          (
+            await client.query<{ ended: boolean }>(
+              `SELECT hv_end_reservation($1, 'released') AS ended`,
+              [r],
+            )
+          ).rows[0]!.ended,
+        ).toBe(true);
+
+        // Before 0010 this decremented by the quantity (2) and handed the
+        // entrant their whole cap back while they kept both sold tickets.
+        expect(await count(id, userId)).toBe(2);
+        expect((await tickets(id)).slice(0, 2).every((t) => t.status === 'sold')).toBe(true);
+      });
+
+      it('never drives the counter below zero when tickets were freed elsewhere', async () => {
+        const userId = await insertFixtureUser(client, 'nb1-freed@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 10,
+        });
+        const r = await heldReservation(id, userId, [1, 2]);
+        // Both tickets released by hand: the reservation now holds nothing.
+        await client.query(
+          `UPDATE tickets SET status = 'available', reservation_id = NULL WHERE reservation_id = $1`,
+          [r],
+        );
+
+        expect(
+          (
+            await client.query<{ ended: boolean }>(
+              `SELECT hv_end_reservation($1, 'expired') AS ended`,
+              [r],
+            )
+          ).rows[0]!.ended,
+        ).toBe(true);
+        // Nothing was freed by this call, so nothing is given back. Decrementing
+        // by the quantity here would have hit draw_entrant_counts_non_negative.
+        expect(await count(id, userId)).toBe(2);
+      });
+
+      it('is still idempotent: a second call frees nothing and returns no allowance', async () => {
+        const userId = await insertFixtureUser(client, 'nb1-idempotent@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 10,
+        });
+        const r = await heldReservation(id, userId, [1, 2, 3]);
+        const first = await client.query<{ ended: boolean }>(
+          `SELECT hv_end_reservation($1, 'released') AS ended`,
+          [r],
+        );
+        const second = await client.query<{ ended: boolean }>(
+          `SELECT hv_end_reservation($1, 'expired') AS ended`,
+          [r],
+        );
+        expect([first.rows[0]!.ended, second.rows[0]!.ended]).toEqual([true, false]);
+        expect(await count(id, userId)).toBe(0);
+        expect((await tickets(id)).filter((t) => t.status !== 'available')).toEqual([]);
+      });
+    });
+
     it('expires only reservations past their expiry, and never touches sold tickets', async () => {
       const userId = await insertFixtureUser(client, 'expire@example.com');
       const id = await insertFixtureDraw(client, {
