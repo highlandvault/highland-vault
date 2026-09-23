@@ -43,9 +43,7 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID  | Task                                | Owner             | Branch                     | Dependencies | Area                                    | Issue / PR | Notes                                                                                          |
-| --- | ----------------------------------- | ----------------- | -------------------------- | ------------ | --------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| P4  | Ticket engine + customer entry flow | Divyanshu (owner) | `feature/p4-ticket-engine` | P3           | tickets, reservations, API, worker, web | none yet   | O15 = sequential (ADR-0027). Gates 1 and 2 pass. Verified locally; uncommitted, no PR open yet |
+_None._
 
 ## BLOCKED
 
@@ -83,9 +81,10 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 
 ## DONE
 
-| ID    | Task                                               | Owner             | Branch                                         | Dependencies | Area                                  | Issue / PR | Notes                                                                                      |
-| ----- | -------------------------------------------------- | ----------------- | ---------------------------------------------- | ------------ | ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------ |
-| P1    | Foundation                                         | owner             | committed as `a16ca35` on `main` and `develop` | —            | everything                            | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md) |
-| T-001 | Collaboration and synchronization layer            | Divyanshu (owner) | `docs/collaboration-layer`                     | P1           | `docs/`, `.github/`, `CLAUDE.md`      | PR #2      | Merged into `develop` (`e05f270`) on 2026-09-22                                            |
-| P2    | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth`                | P1           | db, auth, RBAC, `/admin`, `/[market]` | PR #3      | Merged into `develop` (`6b0ea82`) on 2026-09-22. Decisions still open: PROJECT_STATUS.md   |
-| P3    | Draws foundation + first customer vertical slice   | Divyanshu (owner) | `feature/p3-draws`                             | P2           | draws, API, worker, web               | PR #7      | Merged into `develop` (`3eb551e`) on 2026-09-22                                            |
+| ID    | Task                                               | Owner             | Branch                                         | Dependencies | Area                                    | Issue / PR | Notes                                                                                                                                                               |
+| ----- | -------------------------------------------------- | ----------------- | ---------------------------------------------- | ------------ | --------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1    | Foundation                                         | owner             | committed as `a16ca35` on `main` and `develop` | —            | everything                              | —          | Approved by the owner on 2026-09-22. Evidence in [PROJECT_STATUS.md](../PROJECT_STATUS.md)                                                                          |
+| T-001 | Collaboration and synchronization layer            | Divyanshu (owner) | `docs/collaboration-layer`                     | P1           | `docs/`, `.github/`, `CLAUDE.md`        | PR #2      | Merged into `develop` (`e05f270`) on 2026-09-22                                                                                                                     |
+| P2    | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth`                | P1           | db, auth, RBAC, `/admin`, `/[market]`   | PR #3      | Merged into `develop` (`6b0ea82`) on 2026-09-22. Decisions still open: PROJECT_STATUS.md                                                                            |
+| P3    | Draws foundation + first customer vertical slice   | Divyanshu (owner) | `feature/p3-draws`                             | P2           | draws, API, worker, web                 | PR #7      | Merged into `develop` (`3eb551e`) on 2026-09-22                                                                                                                     |
+| P4    | Ticket engine + customer entry flow                | Divyanshu (owner) | `feature/p4-ticket-engine`                     | P3           | tickets, reservations, API, worker, web | PR #8      | Merged into `develop` (`49e3903`) on 2026-09-23; released to `main` via PR #9 (`c284825`). O15 = sequential (ADR-0027). Phase 5 carry-over items: PROJECT_STATUS.md |

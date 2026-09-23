@@ -1,6 +1,6 @@
 # Handoffs
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 A handoff is written when another developer (or another developer's Claude session) needs to continue, integrate with, or depend on your work. It carries what the code and the commit messages don't: the decisions, traps, and state that someone continuing the work needs.
 
@@ -65,10 +65,10 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 Status: OPEN
 
-Task: P4 (no GitHub issue; no PR open yet)
+Task: P4 (no GitHub issue; PR #8)
 Developer: Divyanshu (owner), with Claude
-Branch: `feature/p4-ticket-engine` (implementation still uncommitted in the working tree; no PR, not merged)
-Status of the work: DONE and verified locally; waiting to be committed and reviewed
+Branch: `feature/p4-ticket-engine` — merged into `develop` via PR #8 (`49e3903`), released to `main` via PR #9 (`c284825`)
+Status of the work: DONE, reviewed and merged
 
 What was completed:
 
@@ -81,7 +81,7 @@ Important implementation details:
 
 - **Allocation (one transaction):** create and lock the entrant's counter row → check the cap → insert the reservation → `SELECT … WHERE status = 'available' ORDER BY ticket_number LIMIT n FOR UPDATE SKIP LOCKED` → mark the tickets reserved → increment the counter. A short result rolls everything back. `AllocationContended` means "retry"; any other refusal is final.
 - **Lock order** is always entrant counter → tickets. `hv_expire_reservations` processes reservations in entrant order with SKIP LOCKED, so sweeps and allocations cannot deadlock. Keep this order in checkout.
-- **Cap:** `draw_entrant_counts.count` = tickets held in active reservations. **Phase 5 must not decrement it when a reservation becomes an order**: sold tickets keep counting. Guests use the `email` key with the normalized verified email (ADR-0020); the API does not accept guests yet.
+- **Cap:** `draw_entrant_counts.count` = tickets held in active reservations. **Phase 5 must not decrement it when a reservation becomes an order**: sold tickets keep counting. See **NB-1** below — the database function does not currently enforce this, so Phase 5 has to make it structural. Guests use the `email` key with the normalized verified email (ADR-0020); the API does not accept guests yet.
 - **Selling:** Phase 5 marks the reservation's tickets `reserved → sold` (the trigger allows only this, for the same reservation) and ends the reservation. A new reservation status (for example `converted`) needs a migration that extends `reservations_status_valid` and `hv_reservations_guard`. Check `expires_at > now()` in the same transaction: an expired reservation must never become an order.
 - **Order lines** can reference `reservations (id, draw_id)` and `draws (id, market_id)` with composite FKs.
 - **Reads use the effective state:** an active reservation past `expires_at` is shown as expired, and availability, allowance and inventory count its tickets as free before any sweep runs.
@@ -114,9 +114,18 @@ Integration points:
 - **API:** `TicketsRepository`, `TicketAllocator` (the only place that allocates), `ReservationsService`.
 - **Infrastructure:** worker queue `reservations` (job `expire`, every 30 s); env `RESERVATION_TTL_SECONDS`.
 
+Review findings carried into Phase 5 (from the final review of PR #8):
+
+- **NB-1 — must be fixed structurally before the reservation → sold/order transition exists.** `hv_end_reservation` (migration 0009) frees only `reserved` tickets, correctly leaving sold ones alone, but then decrements `draw_entrant_counts.count` by the reservation's **quantity** rather than by the number of tickets actually released. Once sold tickets exist, a reservation holding one that later expires or is released hands the entrant their cap allowance back while they keep the sold ticket — a cap bypass. **Phase 4 cannot reach it: nothing writes `sold`.** Fix by decrementing the actual row count freed (`GET DIAGNOSTICS`) in the Phase 5 migration, so the invariant is enforced by construction rather than by remembering this note. Do not simply rely on "Phase 5 must not decrement it".
+- **NB-2 — known low-severity issue, no action needed.** A shortfall caused by overdue-but-unswept reservations makes `countAvailable` report their tickets as free, so the allocator retries five times and refuses with "The last tickets are being taken right now". The refusal is correct and **nothing is corrupted**; the next attempt or the 30 s worker sweep clears it. Only revisit if Phase 5 changes the reservation flow.
+- **NB-3 — flaky integration assertion on CI (test-only).** The release PR #9 run failed at the integration step on the same commit that passed on the `develop` push. Likely `expect(r.status).toBe('active')` on the creation response in `reservations.int.test.ts` under `RESERVATION_TTL_SECONDS=2`. Needs its own `fix/*` branch. Details in PROJECT_STATUS.md, "Phase 4 CI record".
+- **Large ticket-pool publication stays as it is for V1.** One set-based insert in the publish transaction; ~6.2 s for 50,000 tickets on the development machine. Assumes draws are published rarely, by staff, at thousands-to-tens-of-thousands scale, with the 1,000,000 CHECK as the bound. Do not change it now.
+- **`maxWorkers: 4` does not reduce concurrency coverage.** It caps how many integration _files_ run at once; the races the gates exercise live inside each test and are unaffected, as is `ROUNDS = 3`.
+- **O15 = sequential ticket numbering** (ADR-0027), lowest numbers first; zero padding is display only.
+
 Next developer action:
 
-- After P4 is reviewed and merged, P5 (cart and checkout) starts only on explicit owner approval. It needs O12 (wrong skill answer behaviour) and the email-verification timing decision for guests.
+- P5 (cart and checkout) starts only on explicit owner approval. It needs O12 (wrong skill answer behaviour) and the email-verification timing decision for guests, and it must address NB-1 in its database design before any order can mark tickets sold.
 
 ### 2026-09-22 — P3 — Draws foundation (for Phase 4, the ticket engine)
 

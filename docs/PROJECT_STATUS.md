@@ -4,11 +4,12 @@ _Last updated: 2026-09-23_
 
 ## Current phase
 
-**Phase 4 (Day 4): Ticket engine + customer entry flow — implementation complete and verified locally; not yet committed, pushed or in review.**
+**Phase 4 (Day 4): Ticket engine + customer entry flow — DONE. Merged into `develop` and released to `main`.**
 
-- Branch `feature/p4-ticket-engine` (from `develop` `3eb551e`). Not merged.
-- **Phase 4 state (2026-09-23):** the whole implementation is still in the working tree. The branch's last commit is `af8645a`, which only claims the phase and records ADR-0027. **No implementation commit has been pushed and no PR is open** — an earlier revision of this file said "PR #8", which was never true. The full verification below was run on the working tree; the work is ready to commit on the owner's instruction.
-- Phases 1–3 are complete and merged into `develop` (Phase 3: PR #7). Their records are below.
+- **PR #8** (`feature/p4-ticket-engine` → `develop`), merged as **`49e3903`** on 2026-09-23. The implementation commit is `ba5e871`.
+- **Release PR #9** (`develop` → `main`), merged as **`c284825`**. `main` now contains Phase 4.
+- Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
+- Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
 - Phase 5 (checkout) has not started and will not start without explicit owner approval.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
@@ -33,7 +34,24 @@ _Last updated: 2026-09-23_
 | Market isolation, Germany blocked            | ✅     | Every query is scoped by market; another market's reservation or draw is 404; `/de/...` is 404 and the DB refuses reservations in a disabled market                          |
 | Unit / integration / e2e                     | ✅     | 139/139 (12 files) · 255/255 (17 files) · 38/38 (desktop + mobile)                                                                                                           |
 | `pnpm verify`                                | ✅     | exit 0                                                                                                                                                                       |
-| GitHub CI on the PR                          | ⏳     | Not yet run: no implementation commit is pushed and no PR is open                                                                                                            |
+| GitHub CI on the PR                          | ✅     | Green on PR #8 (`ba5e871`) and on the `develop` merge commit `49e3903` (push event). One caveat in the CI note below                                                         |
+
+## Phase 4 CI record (and one flaky run)
+
+Three CI runs touch the Phase 4 merge. Two are green; one is red on the **same commit** as a green one.
+
+| Run             | Event          | Commit    | Result                                         |
+| --------------- | -------------- | --------- | ---------------------------------------------- |
+| PR #8           | `pull_request` | `ba5e871` | ✅ success                                     |
+| `develop` merge | `push`         | `49e3903` | ✅ success — this is the merge commit's own CI |
+| Release PR #9   | `pull_request` | `49e3903` | ❌ **failure** at the "Integration tests" step |
+| `main` merge    | `push`         | `c284825` | ✅ success                                     |
+
+The same tree passed integration twice and failed once, so this is a **flaky integration test on CI hardware, not a product defect** — no code differs between the green and red runs. The job log needs repository authentication to read, so the specific failing test has not been identified.
+
+**Most likely cause (unconfirmed):** `apps/api/test/reservations.int.test.ts`, the assertion `expect(r.status).toBe('active')` on the reservation-creation response in _"reports an expired reservation as expired…"_. That instance runs with `RESERVATION_TTL_SECONDS=2`, so if the POST itself takes longer than two seconds the reservation is legitimately already expired when the response is serialised and the assertion fails. This is the same failure mode that was observed and fixed in two neighbouring tests before the merge (choices 11); this third occurrence was not hardened because it never failed locally. A GitHub runner has fewer cores than the development machine, so four integration files in parallel contend harder there.
+
+Tracked as **NB-3** in the Phase 5 handoff. It is a test-only fix and needs its own `fix/*` branch and PR.
 
 ## Database (migration 0009_tickets)
 
@@ -165,9 +183,20 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 - **Phase 4:** none for the implementation. Reservations stay impossible on real databases until O12 lets a market be enabled.
 - **Migration discovery:** O17, legacy system access.
 
+## Carried into Phase 5 (from the Phase 4 review)
+
+These came out of the final review of PR #8. **None of them is reachable in Phase 4**; they are obligations and known issues for the phase that introduces orders.
+
+1. **NB-1 — `hv_end_reservation` returns the wrong allowance once sold tickets exist. Phase 5 must fix this structurally before adding the reservation → sold/order transition.** The function frees only `reserved` tickets (correct, sold ones are untouched) but then decrements `draw_entrant_counts.count` by the reservation's **quantity** rather than by the number of tickets it actually released. A reservation holding a sold ticket that later expires or is released would therefore give the entrant their cap allowance back while they keep the sold ticket — a cap bypass. Unreachable in Phase 4 because nothing writes `sold`. The fix is to decrement by the actual row count freed (`GET DIAGNOSTICS`), making the invariant structural instead of a rule Phase 5 has to remember.
+2. **NB-2 — a temporary "the last tickets are being taken right now" refusal.** When a shortfall is caused by reservations that are overdue but not yet swept, `countAvailable` counts their tickets as free, so the allocator raises `AllocationContended` and retries; the inline sweep runs once before allocation (limit 200), not between retries, so all five attempts reach the same conclusion. The customer gets a correct refusal with a slightly misleading message. **No data corruption.** Low severity; leave it unless Phase 5 changes the reservation flow, in which case re-sweep before the final retry or reword the refusal.
+3. **NB-3 — a flaky integration assertion on CI.** See the Phase 4 CI record above. Test-only; needs its own `fix/*` branch.
+4. **Large ticket-pool publication is acceptable for V1. Do not change it now.** The pool is one set-based insert inside the publish transaction: ~6.2 s for 50,000 tickets on the development machine, whose Docker VM is roughly 10× slower than a normal server. The scale assumption is that draws are published rarely, by staff, at sizes in the thousands to tens of thousands; `draws_total_tickets_max` (1,000,000) bounds the worst case. Revisit only if pools beyond ~100,000 become real.
+5. **`maxWorkers: 4` is resource management, not reduced coverage.** It caps how many integration **files** run at once. The concurrency the gates actually exercise lives inside each test (`Promise.all` over dozens of simultaneous transactions against a 60-connection pool) and is untouched by it, as is `ROUNDS = 3`.
+6. **O15 = sequential ticket numbering** (ADR-0027). Numbers are taken lowest first; zero padding is display only.
+
 ## Next task
 
-**Stop for owner review of Phase 4.** The branch must be committed and pushed and a PR opened first (owner instruction required; DEVELOPMENT_RULES §10). Phase 5 (cart and checkout) starts only on explicit owner approval. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) has not started and starts only on explicit owner approval.** It needs O12 (wrong skill-answer behaviour) and the email-verification timing decision for guests, and it must honour the carried items above. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 
