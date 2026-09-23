@@ -50,6 +50,11 @@ export const ApiEnvSchema = z
       ),
 
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
+
+    // Ticket reservation lifetime. D11 fixes it at 10 minutes (600 s); shorter
+    // values exist only so automated tests can observe expiry, and are refused
+    // in production.
+    RESERVATION_TTL_SECONDS: z.coerce.number().int().min(2).max(600).default(600),
     SESSION_COOKIE_SECURE: booleanString.default(true),
 
     // AES-256-GCM key for TOTP secrets: 64 hex characters (32 bytes).
@@ -77,6 +82,13 @@ export const ApiEnvSchema = z
         code: 'custom',
         path: ['WEB_ORIGINS'],
         message: 'must all be https:// in production',
+      });
+    }
+    if (env.RESERVATION_TTL_SECONDS !== 600) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RESERVATION_TTL_SECONDS'],
+        message: 'must be 600 (10 minutes, D11) in production',
       });
     }
     const key = env.MFA_ENCRYPTION_KEY.toLowerCase();

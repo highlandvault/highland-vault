@@ -15,6 +15,7 @@ const required = (name: string) => {
 // Dedicated ports so a running `pnpm dev` (3000/4000) is never reused by mistake.
 export const E2E_WEB_ORIGIN = 'http://127.0.0.1:3100';
 export const E2E_API_URL = 'http://127.0.0.1:4100';
+export const E2E_RESERVATION_TTL_SECONDS = 60;
 
 function e2eDatabaseUrl(): string {
   const url = new URL(required('TEST_DATABASE_ADMIN_URL'));
@@ -32,6 +33,8 @@ function e2eRedisUrl(): string {
 /**
  * The e2e API env, shared with the setup project (which runs the operator CLI).
  * DE is listed in ENABLED_MARKETS on purpose: the database gate alone must keep it closed.
+ * TEST CONFIGURATION: reservations last 60 seconds instead of 10 minutes, so the
+ * suite can watch one expire (production refuses any value but 600).
  */
 export const E2E_API_ENV = {
   NODE_ENV: 'test',
@@ -44,6 +47,7 @@ export const E2E_API_ENV = {
   WEB_ORIGINS: E2E_WEB_ORIGIN,
   SESSION_COOKIE_SECURE: 'false',
   MFA_ENCRYPTION_KEY: '0'.repeat(64),
+  RESERVATION_TTL_SECONDS: String(E2E_RESERVATION_TTL_SECONDS),
 } as const;
 
 // Smoke tests run against the production builds (`pnpm build` must have run first).

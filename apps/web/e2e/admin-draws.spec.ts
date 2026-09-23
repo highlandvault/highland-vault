@@ -51,6 +51,13 @@ test('an admin creates, completes and publishes a draw; customers then see it', 
 
   await page.getByRole('button', { name: 'Publish draw' }).click();
   await expect(page.getByTestId('admin-draw-status')).toHaveText('stored status: scheduled');
+  // Publishing created the numbered pool; the inventory is visible and read-only.
+  const inventory = page.getByTestId('inventory');
+  await expect(inventory.getByTestId('inventory-total')).toHaveText('100');
+  await expect(inventory.getByTestId('inventory-available')).toHaveText('100');
+  await expect(inventory.getByTestId('inventory-reserved')).toHaveText('0');
+  await expect(inventory.getByTestId('inventory-sold')).toHaveText('0');
+  await expect(inventory.getByRole('button')).toHaveCount(0);
 
   expect((await hidden.goto(`/uk/draws/${slug}`))?.status()).toBe(200);
   await expect(hidden.getByTestId('draw-title')).toHaveText('E2E test draw');

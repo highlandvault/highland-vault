@@ -2,7 +2,7 @@
  * Prepares the throwaway database used by the Playwright smoke tests:
  * recreate `hv_e2e`, apply the real migrations, then enable UK and IE with the
  * TEST FIXTURE compliance values (see fixtures.ts — not compliance decisions),
- * and seed test draws. Germany stays exactly as the migrations leave it:
+ * and seed test draws (including a four-ticket draw for running out of tickets). Germany stays exactly as the migrations leave it:
  * disabled, no approval — although a published DE draw exists, to prove it
  * stays hidden. Ireland has no draws, for the empty state.
  *
@@ -47,6 +47,17 @@ async function main(): Promise<void> {
       totalTickets: 4000,
       maxPerPerson: 50,
       prizes: ['A week in a Highland lodge', 'Weekend spa break'],
+    });
+    // A tiny pool, for running out of tickets.
+    await insertFixtureDraw(client, {
+      market: 'uk',
+      slug: 'last-tickets',
+      title: 'Last tickets',
+      state: 'live',
+      ticketPriceMinor: 500,
+      totalTickets: 4,
+      maxPerPerson: 4,
+      prizes: ['A hamper of Highland produce'],
     });
     await insertFixtureDraw(client, {
       market: 'uk',

@@ -82,6 +82,9 @@ export function effectiveStatus(draw: DrawTiming, now: Date): DrawStatus {
   return draw.status;
 }
 
+/** Engineering limit: the pool is generated in one statement at publish (migration 0009). */
+export const MAX_TOTAL_TICKETS = 1_000_000;
+
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const SLUG_MAX_LENGTH = 80;
 
@@ -121,8 +124,11 @@ export function validateDrawConfig(config: DrawConfig): RuleViolation[] {
       message: 'must be a positive whole number of minor units',
     });
   }
-  if (!positiveInt(config.totalTickets) || config.totalTickets > 2_147_483_647) {
-    problems.push({ field: 'totalTickets', message: 'must be a positive whole number' });
+  if (!positiveInt(config.totalTickets) || config.totalTickets > MAX_TOTAL_TICKETS) {
+    problems.push({
+      field: 'totalTickets',
+      message: `must be a whole number from 1 to ${MAX_TOTAL_TICKETS}`,
+    });
   }
   if (!positiveInt(config.maxPerPerson) || config.maxPerPerson > config.totalTickets) {
     problems.push({

@@ -50,7 +50,14 @@ export class AccessGuard implements CanActivate {
       this.logger.error(`route ${request.method} ${request.url} has no access policy — denied`);
       throw Errors.forbidden();
     }
-    if (policy.kind === 'public') return true;
+    if (policy.kind === 'public') {
+      if (policy.identify) {
+        const auth = await this.sessions.authenticate(request);
+        // A half-signed-in session (MFA pending) stays anonymous.
+        if (auth && !(auth.mfaRequired && auth.mfaVerifiedAt === null)) request.hvAuth = auth;
+      }
+      return true;
+    }
 
     const auth = await this.sessions.authenticate(request);
     if (!auth) throw Errors.unauthenticated();

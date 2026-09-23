@@ -20,6 +20,6 @@ import { SessionsService } from './sessions.service';
     SessionsService,
     UsersRepository,
   ],
-  exports: [SessionsService],
+  exports: [SessionsService, RateLimiter],
 })
 export class AuthModule {}

@@ -123,7 +123,7 @@ export const DrawConfigRequestSchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
   description: z.string().max(10_000).default(''),
   ticketPriceMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  totalTickets: z.number().int().positive().max(2_147_483_647),
+  totalTickets: z.number().int().positive().max(1_000_000),
   maxPerPerson: z.number().int().positive(),
   winnerPositions: z.number().int().positive().max(32_767),
   opensAt: z.iso.datetime(),

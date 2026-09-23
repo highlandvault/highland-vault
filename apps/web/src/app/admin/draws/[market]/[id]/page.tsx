@@ -1,10 +1,10 @@
-import { AdminDrawResponseSchema } from '@hv/contracts';
+import { AdminDrawResponseSchema, InventoryResponseSchema } from '@hv/contracts';
 import { isMarketCode } from '@hv/domain';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { StatusBadge } from '@/components/status-badge';
 import { apiFetch } from '@/lib/api';
-import { formatDateTime, formatPrice, ordinal } from '@/lib/format';
+import { formatCount, formatDateTime, formatPrice, ordinal } from '@/lib/format';
 import { requireSession } from '@/lib/session';
 import { cancelDraw, publishDraw, savePrizes, saveSkillQuestion, updateDraw } from '../../actions';
 import { DrawForm } from '../../draw-form';
@@ -38,6 +38,13 @@ export default async function AdminDrawPage({
     throw new Error(`Draw unavailable: ${result.code}`);
   }
   const draw = result.data;
+  // Tickets exist from publication on (ADR-0027). Read-only: there are no inventory controls.
+  const inventory =
+    draw.status === 'draft'
+      ? null
+      : await apiFetch(`/admin/markets/${market}/draws/${draw.id}/inventory`, {
+          parse: (json) => InventoryResponseSchema.parse(json).inventory,
+        }).then((r) => (r.ok ? r.data : null));
   const locale = LOCALES[market];
   const canWrite = canInMarket(me, 'draws.write', market);
   const isDraft = draw.status === 'draft';
@@ -99,6 +106,33 @@ export default async function AdminDrawPage({
           </div>
         </dl>
       </section>
+
+      {inventory && (
+        <section className="panel" aria-labelledby="inventory" data-testid="inventory">
+          <h2 id="inventory">Ticket inventory</h2>
+          <dl className="facts">
+            {(
+              [
+                ['Total', inventory.total, 'inventory-total'],
+                ['Available', inventory.available, 'inventory-available'],
+                ['Reserved', inventory.reserved, 'inventory-reserved'],
+                ['Purchased', inventory.sold, 'inventory-sold'],
+              ] as const
+            ).map(([label, value, testId]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd data-testid={testId}>{formatCount(value, locale)}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="hint" data-testid="inventory-reservations">
+            Reservations: {formatCount(inventory.reservations.active, locale)} active,{' '}
+            {formatCount(inventory.reservations.released, locale)} released,{' '}
+            {formatCount(inventory.reservations.expired, locale)} expired. Reservations expire
+            automatically; tickets cannot be changed by hand.
+          </p>
+        </section>
+      )}
 
       {isDraft && canWrite && (
         <>
