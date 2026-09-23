@@ -18,7 +18,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "migrate": "node --env-file-if-exists=../../.env --import tsx src/migrate/cli.ts",
     "codegen": "node --env-file-if-exists=../../.env node_modules/kysely-codegen/dist/cli/bin.js",
-    "codegen:verify": "node --env-file-if-exists=../../.env node_modules/kysely-codegen/dist/cli/bin.js --verify"
+    "codegen:verify": "node --env-file-if-exists=../../.env node_modules/kysely-codegen/dist/cli/bin.js --verify",
+    "e2e:prepare": "node --env-file-if-exists=../../.env --import tsx src/testing/e2e-database.ts"
   },
   "dependencies": {
     "kysely": "0.28.17",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@hv/config": "workspace:*",
     "@types/pg": "8.23.1",
+    "ioredis": "5.11.1",
     "kysely-codegen": "0.19.0",
     "tsx": "4.23.15"
   }

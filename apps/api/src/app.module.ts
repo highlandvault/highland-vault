@@ -1,9 +1,18 @@
 import { type DynamicModule, Global, Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { AuditModule } from './audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { ApiExceptionFilter } from './common/exception.filter';
 import { API_ENV, type ApiEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
+import { DrawsModule } from './draws/draws.module';
 import { HealthController } from './health/health.controller';
+import { MarketsModule } from './markets/markets.module';
+import { AccessGuard } from './rbac/access.guard';
+import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Global()
 @Module({})
@@ -40,8 +49,20 @@ export class AppModule {
         }),
         DatabaseModule,
         RedisModule,
+        AuditModule,
+        RbacModule,
+        MarketsModule,
+        AuthModule,
+        DrawsModule,
+        TicketsModule,
       ],
       controllers: [HealthController],
+      providers: [
+        // Deny-by-default access control for every route (ADR-0010).
+        { provide: APP_GUARD, useClass: AccessGuard },
+        // Uniform error bodies for every failure.
+        { provide: APP_FILTER, useClass: ApiExceptionFilter },
+      ],
     };
   }
 }

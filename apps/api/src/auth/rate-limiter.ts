@@ -1,0 +1,62 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import type { Redis } from 'ioredis';
+import { Errors } from '../common/errors';
+import { REDIS } from '../redis/redis.module';
+
+export interface RateLimit {
+  /** Stable name, part of the Redis key. */
+  readonly name: string;
+  readonly limit: number;
+  readonly windowSeconds: number;
+}
+
+/**
+ * Limits for authentication endpoints (Revision 2 B19). These are security
+ * engineering values, not business rules; they are tuned here.
+ */
+export const RATE_LIMITS = {
+  loginPerIp: { name: 'login-ip', limit: 100, windowSeconds: 15 * 60 },
+  loginPerEmail: { name: 'login-email', limit: 10, windowSeconds: 15 * 60 },
+  registerPerIp: { name: 'register-ip', limit: 20, windowSeconds: 60 * 60 },
+  mfaPerUser: { name: 'mfa-user', limit: 5, windowSeconds: 15 * 60 },
+  reservePerUser: { name: 'reserve-user', limit: 30, windowSeconds: 10 * 60 },
+} as const satisfies Record<string, RateLimit>;
+
+/**
+ * Fixed-window counters in Redis. Identifiers are hashed, so Redis never holds
+ * email addresses or IPs in clear text.
+ *
+ * Fails CLOSED: if Redis cannot be reached, authentication is refused with 503
+ * rather than running without brute-force protection.
+ */
+@Injectable()
+export class RateLimiter {
+  private readonly logger = new Logger(RateLimiter.name);
+
+  constructor(@Inject(REDIS) private readonly redis: Redis) {}
+
+  async consume(rule: RateLimit, identifier: string): Promise<void> {
+    const digest = createHash('sha256').update(identifier).digest('hex').slice(0, 32);
+    const key = `hv:rl:${rule.name}:${digest}`;
+    let count: number;
+    let ttl: number;
+    try {
+      const results = await this.redis
+        .multi()
+        .incr(key)
+        .expire(key, rule.windowSeconds, 'NX')
+        .ttl(key)
+        .exec();
+      if (!results || results.some(([error]) => error)) throw new Error('transaction failed');
+      count = Number(results[0]![1]);
+      ttl = Number(results[2]![1]);
+    } catch (error) {
+      this.logger.warn(`rate limiter unavailable: ${(error as Error).message}`);
+      throw Errors.serviceUnavailable();
+    }
+    if (count > rule.limit) {
+      throw Errors.rateLimited(ttl > 0 ? ttl : rule.windowSeconds);
+    }
+  }
+}

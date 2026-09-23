@@ -23,7 +23,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@hv/contracts": ["../../packages/contracts/src/index.ts"]
+      "@hv/contracts": ["../../packages/contracts/src/index.ts"],
+      "@hv/domain": ["../../packages/domain/src/index.ts"]
     }
   },
   "include": [

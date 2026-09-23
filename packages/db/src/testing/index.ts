@@ -64,11 +64,28 @@ export async function createTestDatabase(
   return {
     name,
     url: databaseUrl(testAdminUrl(), name),
-    drop: () =>
-      withAdminClient(async (client) => {
-        await client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-      }),
+    drop: () => dropDatabase(name),
   };
+}
+
+/**
+ * DROP … WITH (FORCE) cannot terminate an autovacuum worker (it runs as the
+ * bootstrap superuser, and the test role may not signal it), so a drop that
+ * races autovacuum fails with 42501. The worker finishes quickly: retry.
+ */
+async function dropDatabase(name: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await withAdminClient((client) =>
+        client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`),
+      );
+      return;
+    } catch (error) {
+      const code = (error as { code?: unknown }).code;
+      if (code !== '42501' || attempt >= 40) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
 }
 
 /** Opens `count` independent physical connections (not a pool) and checks they are distinct backends. */
@@ -116,3 +133,13 @@ export function createBarrier(parties: number, timeoutMs = 10_000): () => Promis
     return allArrived;
   };
 }
+
+export {
+  FIXTURE_PASSWORD_HASH,
+  TEST_FIXTURE_COMPLIANCE,
+  enableGermanyForTesting,
+  enableMarketsForTesting,
+  insertFixtureDraw,
+  insertFixtureUser,
+  type FixtureDrawOptions,
+} from './fixtures';

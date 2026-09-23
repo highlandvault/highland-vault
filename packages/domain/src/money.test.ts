@@ -5,6 +5,7 @@ import {
   formatMoney,
   isCurrency,
   money,
+  parseDecimalMoney,
   subtractMoney,
   toDecimalString,
 } from './money';
@@ -61,5 +62,20 @@ describe('money', () => {
     expect(formatMoney(money(Number.MAX_SAFE_INTEGER, 'GBP'), 'en-GB')).toBe(
       '£90,071,992,547,409.91',
     );
+  });
+});
+
+describe('parseDecimalMoney', () => {
+  it('reads typed amounts exactly, without float arithmetic', () => {
+    expect(parseDecimalMoney('2.50', 'GBP')).toEqual({ amountMinor: 250, currency: 'GBP' });
+    expect(parseDecimalMoney('0.99', 'EUR')).toEqual({ amountMinor: 99, currency: 'EUR' });
+    expect(parseDecimalMoney('12', 'GBP')).toEqual({ amountMinor: 1200, currency: 'GBP' });
+    expect(parseDecimalMoney(' 1.5 ', 'GBP')).toEqual({ amountMinor: 150, currency: 'GBP' });
+    // 0.1 + 0.2 style inputs stay exact.
+    expect(parseDecimalMoney('0.30', 'GBP').amountMinor).toBe(30);
+  });
+
+  it.each(['', '-1.00', '1.234', '1,50', '1e3', '£2.50', '.50', '2.'])('rejects %j', (input) => {
+    expect(() => parseDecimalMoney(input, 'GBP')).toThrow(MoneyError);
   });
 });
