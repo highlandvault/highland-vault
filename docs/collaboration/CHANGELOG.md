@@ -17,6 +17,15 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
+- **P4:** O15 decided: sequential ticket numbers (ADR-0027).
+- **P4:** Migration `0009_tickets`: `tickets`, `reservations`, `draw_entrant_counts`. Publishing a draw now creates its ticket pool (1..N) in the same transaction; at most 1,000,000 tickets per draw. Run `pnpm db:migrate up`. Next free migration number: `0010`.
+- **P4:** Customer API: `GET /markets/:market/draws/:slug/availability`, `POST …/draws/:slug/reservations`, `GET /markets/:market/reservations[/:reservation]`, `POST …/reservations/:reservation/release`. Admin: `GET /admin/markets/:market/draws/:draw/inventory` (read-only).
+- **P4:** New optional env variable `RESERVATION_TTL_SECONDS` (default 600; production refuses any other value; tests use short values).
+- **P4:** New access policy `@Public({ identify: true })` for public routes that may recognise a signed-in caller, and the param decorator `@OptionalAuth()`.
+- **P4:** The worker also runs the `reservations` expiry sweep every 30 s.
+- **P4:** Web: draws take real reservations (signed-in customers); new page `/{market}/reservations/{id}`; the admin draw page shows the ticket inventory. The skill question is now shown as information (answered at checkout, Phase 5). e2e reservations last 60 s (test configuration).
+- **P4:** The integration test project now runs on at most 4 workers. Each file starts its own database and NestJS app, and the new contention tests made a worker-per-core run fail on timeouts rather than on behaviour; capped, the suite is green and ~5x faster.
+
 - **P3:** Migration `0008_draws`: draws, prizes (one per winner position) and skill questions. Run `pnpm db:migrate up`. Next free migration number: `0009`.
 - **P3:** Customer API `GET /markets/:market/draws` and `/:slug`; admin draw API under `/admin/markets/:market/draws` (`draws.write`, scoped to the market). Correct skill answers never leave the admin API.
 - **P3:** The worker now also runs the `draw-lifecycle` sweep every minute (scheduled → live → closed, audited).

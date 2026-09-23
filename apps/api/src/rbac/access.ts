@@ -6,7 +6,8 @@ import { SetMetadata } from '@nestjs/common';
  * can never expose an endpoint.
  */
 export type AccessPolicy =
-  | { kind: 'public' }
+  /** identify: attach the caller's session when there is a valid one, never require it. */
+  | { kind: 'public'; identify?: boolean }
   | { kind: 'authenticated'; allowMfaPending: boolean }
   | {
       kind: 'permission';
@@ -30,7 +31,11 @@ export const ACCESS_POLICY = 'hv:access-policy';
 /** Sensitive operations need a second factor verified within the last 15 minutes (Revision 2 B7). */
 export const STEP_UP_WINDOW_MS = 15 * 60 * 1000;
 
-export const Public = () => SetMetadata(ACCESS_POLICY, { kind: 'public' } satisfies AccessPolicy);
+export const Public = (options: { identify?: boolean } = {}) =>
+  SetMetadata(ACCESS_POLICY, {
+    kind: 'public',
+    ...(options.identify ? { identify: true } : {}),
+  } satisfies AccessPolicy);
 
 export const Authenticated = (options: { allowMfaPending?: boolean } = {}) =>
   SetMetadata(ACCESS_POLICY, {

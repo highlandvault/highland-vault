@@ -195,3 +195,14 @@ describe('publish blockers', () => {
     ).toEqual(['closes_at_in_past']);
   });
 });
+
+describe('pool size limit', () => {
+  it('caps a draw at 1,000,000 tickets (the pool is created in one statement)', () => {
+    expect(validateDrawConfig({ ...valid, totalTickets: 1_000_000 }).map((p) => p.field)).toEqual(
+      [],
+    );
+    expect(validateDrawConfig({ ...valid, totalTickets: 1_000_001 }).map((p) => p.field)).toEqual([
+      'totalTickets',
+    ]);
+  });
+});

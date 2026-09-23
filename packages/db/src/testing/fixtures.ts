@@ -103,7 +103,7 @@ export async function insertFixtureDraw(
       options.title ?? `Test fixture: ${options.slug}`,
       options.ticketPriceMinor ?? 250,
       options.totalTickets ?? 1000,
-      options.maxPerPerson ?? 25,
+      options.maxPerPerson ?? Math.min(25, options.totalTickets ?? 1000),
       prizes.length,
       opensAt,
       closesAt,

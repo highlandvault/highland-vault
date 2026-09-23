@@ -1,6 +1,6 @@
 # Task Board
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 The shared view of every task and its state. It answers the question for a new developer or Claude session: **"What am I supposed to work on?"**
 
@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID  | Task                                | Owner             | Branch                     | Dependencies | Area                                    | Issue / PR | Notes                                                       |
-| --- | ----------------------------------- | ----------------- | -------------------------- | ------------ | --------------------------------------- | ---------- | ----------------------------------------------------------- |
-| P4  | Ticket engine + customer entry flow | Divyanshu (owner) | `feature/p4-ticket-engine` | P3           | tickets, reservations, API, worker, web | draft PR   | Started 2026-09-22. O15 = sequential (ADR-0027). Gates 1, 2 |
+| ID  | Task                                | Owner             | Branch                     | Dependencies | Area                                    | Issue / PR | Notes                                                                                          |
+| --- | ----------------------------------- | ----------------- | -------------------------- | ------------ | --------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| P4  | Ticket engine + customer entry flow | Divyanshu (owner) | `feature/p4-ticket-engine` | P3           | tickets, reservations, API, worker, web | none yet   | O15 = sequential (ADR-0027). Gates 1 and 2 pass. Verified locally; uncommitted, no PR open yet |
 
 ## BLOCKED
 

@@ -1,6 +1,6 @@
 # Active Work
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 Who is working on what **right now**, so that parallel work does not collide. Rules: [DEVELOPMENT_RULES.md](../DEVELOPMENT_RULES.md) §8–§10.
 
@@ -43,7 +43,7 @@ Next:
 ## Current project state
 
 - **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
-- **Phase 4 (Day 4):** IN PROGRESS, started on owner instruction on 2026-09-22. O15 decided: sequential ticket numbers (ADR-0027).
+- **Phase 4 (Day 4):** IN PROGRESS. Implemented and fully verified locally, but **not committed or pushed, and no PR is open** — the branch is still at `af8645a` (the claim commit). O15 decided: sequential ticket numbers (ADR-0027). Phase 5 has not started.
 - **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is still at `a16ca35`.
 
 ## Active entries
@@ -53,23 +53,23 @@ Next:
 Developer: Divyanshu (repository owner), working with Claude
 Branch: `feature/p4-ticket-engine` (from `origin/develop` `3eb551e`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub API)
-PR: draft PR into `develop` (see TASK_BOARD)
+PR: none yet
 Status: IN PROGRESS
 
 Current task:
-Phase 4 (Initialization Report, Part F): sequential ticket pool, allocation with SKIP LOCKED, per-entrant caps, 10-minute reservations and expiry, availability, customer reservation flow, admin inventory. Gates 1 and 2.
+Phase 4 is implemented and fully verified locally, and is waiting to be committed: sequential ticket pool, allocation with SKIP LOCKED, per-entrant caps, 10-minute reservations and expiry, availability, customer reservation flow, admin inventory. Gates 1 and 2 pass. The work is uncommitted in the working tree; it needs an owner instruction to commit, push and open the PR.
 
 Affected areas:
-`packages/db/migrations/` (0009 onwards), `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/tickets/` (new), `apps/api/src/draws/` (publish creates the pool), `apps/worker/src/tickets/` (new), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/draws/`, `apps/web/e2e/`, docs.
+`packages/db/migrations/` (0009 onwards), `packages/domain/src/`, `packages/contracts/src/`, `apps/api/src/tickets/` (new), `apps/api/src/rbac/` (`@Public({ identify: true })`), `apps/worker/src/tickets/` (new), `apps/web/src/app/[market]/`, `apps/web/src/app/admin/draws/`, `apps/web/e2e/`, `vitest.config.mts` (integration worker cap), docs.
 
 Avoid modifying:
-`packages/db/migrations/` (0009+ are taken by this branch), the draw publish path, `apps/web/src/app/[market]/draws/[slug]/`.
+`packages/db/migrations/` (0009 is taken by this branch; the next free number is 0010), `apps/api/src/tickets/`, `apps/web/src/app/[market]/draws/[slug]/`, `apps/web/src/app/[market]/reservations/`.
 
 Blockers:
 None. Guest reservations depend on guest email verification (ADR-0020, Phase 5); the engine supports the email entrant key already.
 
 Last update:
-2026-09-22 — Task claimed, branch created, ADR-0027 recorded.
+2026-09-23 — Full verification run: unit 139/139, integration 255/255, e2e 38/38, concurrency 3/3 rounds, clean-DB migrations, secret scan, `pnpm verify` exit 0. Capped integration workers at 4 and removed two thin-margin timing assumptions in the reservation expiry tests (details in PROJECT_STATUS.md, choices 10).
 
 Next:
-Ticket schema, allocation, expiry, API, worker, web, tests.
+Owner instruction to commit and push the branch and open the PR into `develop`. Remove this entry when it merges.

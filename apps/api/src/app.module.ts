@@ -12,6 +12,7 @@ import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
 import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Global()
 @Module({})
@@ -53,6 +54,7 @@ export class AppModule {
         MarketsModule,
         AuthModule,
         DrawsModule,
+        TicketsModule,
       ],
       controllers: [HealthController],
       providers: [

@@ -5,8 +5,10 @@ import { EntryPanel } from '@/components/entry-panel';
 import { PrizeArt } from '@/components/prize-art';
 import { StatusBadge } from '@/components/status-badge';
 import { fetchDraw } from '@/lib/draws';
+import { entryErrorMessage, fetchAvailability } from '@/lib/reservations';
 import { formatCount, formatDateTime, formatPrice, formatRelative, ordinal } from '@/lib/format';
 import { fetchMarket } from '@/markets';
+import { reserveTickets } from '../../reservation-actions';
 
 type Params = Promise<{ market: string; slug: string }>;
 
@@ -16,13 +18,22 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return { title: draw?.title ?? 'Draw' };
 }
 
-export default async function DrawDetailPage({ params }: { params: Params }) {
+export default async function DrawDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { market: code, slug } = await params;
+  const { error } = await searchParams;
   const market = await fetchMarket(code);
   if (!market) notFound();
   // Unknown, unpublished, cancelled or another market's draw: all 404.
   const draw = await fetchDraw(market.code, slug);
   if (!draw) notFound();
+  const availability = await fetchAvailability(market.code, draw.slug);
+  const drawPath = `/${market.code}/draws/${draw.slug}`;
 
   const when = (iso: string) => formatDateTime(iso, market.locale, market.code);
   const price = formatPrice(draw.ticketPriceMinor, draw.currency, market.locale);
@@ -62,6 +73,19 @@ export default async function DrawDetailPage({ params }: { params: Params }) {
                 </li>
               ))}
             </ol>
+          </section>
+
+          <section className="panel" aria-labelledby="skill" data-testid="skill-question">
+            <h2 id="skill">The skill question</h2>
+            <p>
+              <strong>{draw.skillQuestion.prompt}</strong>
+            </p>
+            <ul className="answer-list">
+              {draw.skillQuestion.options.map((option) => (
+                <li key={option.id}>{option.label}</li>
+              ))}
+            </ul>
+            <p className="hint">Every entry answers this question when you check out.</p>
           </section>
         </div>
 
@@ -118,7 +142,12 @@ export default async function DrawDetailPage({ params }: { params: Params }) {
               locale={market.locale}
               ticketPriceMinor={draw.ticketPriceMinor}
               maxPerPerson={draw.maxPerPerson}
-              skillQuestion={draw.skillQuestion}
+              available={availability?.available ?? null}
+              totalTickets={draw.totalTickets}
+              allowance={availability?.allowance ?? null}
+              loginHref={`/login?next=${encodeURIComponent(drawPath)}`}
+              error={entryErrorMessage(error)}
+              action={reserveTickets.bind(null, market.code, draw.slug)}
             />
           </div>
         </aside>

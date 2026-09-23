@@ -11,5 +11,6 @@ import { DrawsService } from './draws.service';
   imports: [AuditModule, MarketsModule],
   controllers: [DrawsController, AdminDrawsController],
   providers: [DrawsRepository, DrawsService, AdminDrawsService],
+  exports: [DrawsRepository],
 })
 export class DrawsModule {}

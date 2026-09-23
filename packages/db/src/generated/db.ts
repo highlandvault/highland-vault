@@ -39,6 +39,13 @@ export interface AuditLog {
   request_id: string | null;
 }
 
+export interface DrawEntrantCounts {
+  count: Generated<number>;
+  draw_id: string;
+  entrant_ref: string;
+  entrant_type: string;
+}
+
 export interface DrawPrizes {
   created_at: Generated<Timestamp>;
   description: Generated<string>;
@@ -108,6 +115,23 @@ export interface Permissions {
   description: string;
 }
 
+export interface Reservations {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  draw_id: string;
+  ended_at: Timestamp | null;
+  entrant_ref: string;
+  entrant_type: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  market_id: string;
+  quantity: number;
+  status: Generated<string>;
+  total_minor: number;
+  unit_price_minor: number;
+  user_id: string | null;
+}
+
 export interface RolePermissions {
   permission_code: string;
   role_code: string;
@@ -149,6 +173,16 @@ export interface SkillQuestions {
   updated_at: Generated<Timestamp>;
 }
 
+export interface Tickets {
+  created_at: Generated<Timestamp>;
+  draw_id: string;
+  id: Generated<number>;
+  reservation_id: string | null;
+  status: Generated<string>;
+  ticket_number: number;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface UserMfa {
   confirmed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -183,17 +217,20 @@ export interface Users {
 
 export interface DB {
   audit_log: AuditLog;
+  draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
   permissions: Permissions;
+  reservations: Reservations;
   role_permissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
   skill_question_options: SkillQuestionOptions;
   skill_questions: SkillQuestions;
+  tickets: Tickets;
   user_mfa: UserMfa;
   user_roles: UserRoles;
   users: Users;

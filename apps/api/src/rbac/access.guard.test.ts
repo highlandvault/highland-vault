@@ -9,6 +9,8 @@ import { DrawsController } from '../draws/draws.controller';
 import { HealthController } from '../health/health.controller';
 import { AdminMarketsController } from '../markets/admin-markets.controller';
 import { MarketsController } from '../markets/markets.controller';
+import { InventoryController } from '../tickets/inventory.controller';
+import { ReservationsController } from '../tickets/reservations.controller';
 import { ACCESS_POLICY, type AccessPolicy, Public } from './access';
 import { AccessGuard } from './access.guard';
 
@@ -62,6 +64,8 @@ describe('route conformance', () => {
     AuthController,
     DrawsController,
     AdminDrawsController,
+    ReservationsController,
+    InventoryController,
   ];
 
   const routes = controllers.flatMap((controller) =>
@@ -78,7 +82,7 @@ describe('route conformance', () => {
   );
 
   it('finds the routes', () => {
-    expect(routes.length).toBeGreaterThanOrEqual(24);
+    expect(routes.length).toBeGreaterThanOrEqual(30);
   });
 
   it('declares an access policy on every route', () => {
@@ -129,6 +133,21 @@ describe('route conformance', () => {
     }
   });
 
+  it('requires a signed-in customer for every reservation route', () => {
+    const reservationRoutes = routes.filter(
+      ({ controller, name }) => controller === ReservationsController && name !== 'availability',
+    );
+    expect(reservationRoutes.length).toBe(4);
+    for (const { handler, controller } of reservationRoutes) {
+      expect(
+        reflector.getAllAndOverride<AccessPolicy>(ACCESS_POLICY, [handler, controller]),
+      ).toMatchObject({
+        kind: 'authenticated',
+        allowMfaPending: false,
+      });
+    }
+  });
+
   it('exposes only health, market, draw and sign-in routes publicly', () => {
     const publicRoutes = routes
       .filter(
@@ -154,6 +173,7 @@ describe('route conformance', () => {
       'markets/:market',
       'markets/:market/draws',
       'markets/:market/draws/:slug',
+      'markets/:market/draws/:slug/availability',
     ]);
   });
 });

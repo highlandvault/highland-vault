@@ -20,6 +20,7 @@ export const RATE_LIMITS = {
   loginPerEmail: { name: 'login-email', limit: 10, windowSeconds: 15 * 60 },
   registerPerIp: { name: 'register-ip', limit: 20, windowSeconds: 60 * 60 },
   mfaPerUser: { name: 'mfa-user', limit: 5, windowSeconds: 15 * 60 },
+  reservePerUser: { name: 'reserve-user', limit: 30, windowSeconds: 10 * 60 },
 } as const satisfies Record<string, RateLimit>;
 
 /**

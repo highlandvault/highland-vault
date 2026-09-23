@@ -423,6 +423,18 @@ describe('runtime role privileges (production-style provisioning)', () => {
     }
   });
 
+  it('can hold and free tickets, but never delete tickets, reservations or entry counts', async () => {
+    for (const table of ['tickets', 'reservations', 'draw_entrant_counts']) {
+      expect(await privileges(table)).toEqual({
+        SELECT: true,
+        INSERT: true,
+        UPDATE: true,
+        DELETE: false,
+        TRUNCATE: false,
+      });
+    }
+  });
+
   it('has ordinary DML on identity tables', async () => {
     for (const table of ['users', 'sessions', 'user_mfa', 'mfa_recovery_codes', 'user_roles']) {
       expect(await privileges(table)).toMatchObject({ SELECT: true, INSERT: true, UPDATE: true });

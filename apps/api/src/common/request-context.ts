@@ -51,6 +51,12 @@ export const CurrentAuth = createParamDecorator((_: unknown, ctx: ExecutionConte
   return auth;
 });
 
+/** The signed-in caller if there is one (routes declared with @Public({ identify: true })). */
+export const OptionalAuth = createParamDecorator(
+  (_: unknown, ctx: ExecutionContext) =>
+    ctx.switchToHttp().getRequest<FastifyRequest>().hvAuth ?? null,
+);
+
 export const CurrentMarket = createParamDecorator((_: unknown, ctx: ExecutionContext) => {
   const market = ctx.switchToHttp().getRequest<FastifyRequest>().hvMarket;
   // Only reachable if a handler forgot @UseGuards(MarketGuard): fail closed.

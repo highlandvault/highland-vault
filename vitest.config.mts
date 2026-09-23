@@ -51,6 +51,12 @@ export default defineConfig({
           globalSetup: ['packages/db/src/testing/global-setup.ts'],
           testTimeout: 30_000,
           hookTimeout: 30_000,
+          // Each file starts its own database and NestJS app, and the ticket
+          // tests drive real contention. One worker per core starves PostgreSQL
+          // and the timing-sensitive tests, which then fail on load rather than
+          // on behaviour. Capped, the suite is both green and ~5x faster.
+          maxWorkers: 4,
+          minWorkers: 1,
         },
       },
     ],

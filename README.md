@@ -10,14 +10,14 @@ This is the native Highland Vault competition platform, replacing the WordPress/
 
 ```
 apps/
-  api/        NestJS (Fastify) HTTP API — health, markets (gate), draws, auth + MFA, RBAC, audit, admin APIs
-  worker/     NestJS standalone + BullMQ background worker — heartbeat, draw lifecycle sweep
-  web/        Next.js App Router — /[market] customer site (draw list/detail), sign-in, /admin (markets, draws)
+  api/        NestJS (Fastify) HTTP API — health, markets (gate), draws, tickets + reservations, auth + MFA, RBAC, audit, admin APIs
+  worker/     NestJS standalone + BullMQ background worker — heartbeat, draw lifecycle sweep, reservation expiry
+  web/        Next.js App Router — /[market] customer site (draws, ticket reservations), sign-in, /admin (markets, draws)
 packages/
   config/     shared tsconfig, ESLint and Prettier presets
   contracts/  Zod schemas shared by api and web
   db/         Kysely client, plain-SQL migration tool, migrations, real-PostgreSQL test harness
-  domain/     pure business rules (Money, email identity, markets, draw lifecycle, market time zones)
+  domain/     pure business rules (Money, email identity, markets, draw lifecycle, tickets, market time zones)
 tools/
   migration/  legacy data migration (Phase 13; placeholder)
 infra/docker/ local-only PostgreSQL bootstrap (roles + database)

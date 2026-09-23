@@ -27,6 +27,7 @@ describe('parseApiEnv', () => {
       API_HOST: '127.0.0.1',
       API_PORT: 4000,
       SESSION_TTL_HOURS: 168,
+      RESERVATION_TTL_SECONDS: 600,
       SESSION_COOKIE_SECURE: true,
       MFA_ENCRYPTION_KEY_ID: 'k1',
       TRUST_PROXY: [],
@@ -92,6 +93,12 @@ describe('parseApiEnv', () => {
     it('refuses insecure session cookies', () => {
       expect(() => parseApiEnv({ ...production, SESSION_COOKIE_SECURE: 'false' })).toThrow(
         /SESSION_COOKIE_SECURE: must be true in production/,
+      );
+    });
+
+    it('refuses a reservation lifetime other than 10 minutes', () => {
+      expect(() => parseApiEnv({ ...production, RESERVATION_TTL_SECONDS: '60' })).toThrow(
+        /RESERVATION_TTL_SECONDS: must be 600/,
       );
     });
 

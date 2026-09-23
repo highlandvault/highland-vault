@@ -1,19 +1,181 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 ## Current phase
 
-**Phase 3 (Day 3): Draws foundation + first customer vertical slice — implementation complete, in review (draft PR #7 → `develop`).**
+**Phase 4 (Day 4): Ticket engine + customer entry flow — implementation complete and verified locally; not yet committed, pushed or in review.**
 
-- Branch `feature/p3-draws` (from `develop` `8677781`). Not merged.
-- Phases 1 and 2 are complete. Phase 2 is merged into `develop` (PR #3); its record is below.
-- Phase 4 has not started and will not start without explicit owner approval.
+- Branch `feature/p4-ticket-engine` (from `develop` `3eb551e`). Not merged.
+- **Phase 4 state (2026-09-23):** the whole implementation is still in the working tree. The branch's last commit is `af8645a`, which only claims the phase and records ADR-0027. **No implementation commit has been pushed and no PR is open** — an earlier revision of this file said "PR #8", which was never true. The full verification below was run on the working tree; the work is ready to commit on the owner's instruction.
+- Phases 1–3 are complete and merged into `develop` (Phase 3: PR #7). Their records are below.
+- **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
+- Phase 5 (checkout) has not started and will not start without explicit owner approval.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
-> **Still true: no market can be enabled on a real database.** ADR-0016 blocks enabling a market while its O12 compliance values (`min_age`, `self_exclusion_required`) are unset. So the new customer draw pages are unreachable outside tests until the owner supplies those values. Tests use throwaway databases where UK and IE are enabled with labelled fixture values.
+> **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
 
-## Phase 3 Definition of Done
+## Phase 4 Definition of Done
+
+| Item                                         | Status | Evidence                                                                                                                                                                     |
+| -------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ticket pool from the draw configuration      | ✅     | Publishing (`draft → scheduled`) creates tickets 1..N in the same transaction (DB trigger). `UNIQUE(draw_id, ticket_number)`                                                 |
+| States available / reserved / purchased      | ✅     | `available`, `reserved`, `sold` (the specification's word for purchased). Only the allowed transitions pass the `hv_tickets_guard` trigger                                   |
+| Atomic reservation, no partial reservations  | ✅     | One transaction: cap check → reservation → `FOR UPDATE SKIP LOCKED` → tickets reserved. Short results roll back the whole attempt                                            |
+| 10-minute expiry, idempotent                 | ✅     | DB CHECK caps a reservation at 10 minutes. Worker sweep every 30 s, plus an inline sweep before each allocation, plus effective status on every read                         |
+| Reservation identity for Phase 5             | ✅     | `reservations.id` (UUIDv7), `UNIQUE(id, draw_id)` for a composite FK from order lines; tickets carry `reservation_id`                                                        |
+| Per-entrant cap, transactional               | ✅     | `draw_entrant_counts` row locked per entrant; key = user id, or normalized verified email for guests; DB trigger backstop. No fingerprinting                                 |
+| Concurrency tests                            | ✅     | Gate 1 (200 buyers / 100 tickets), 100×10, near exhaustion, Gate 2 (user and email keys), expiry vs reservation, 50,000-ticket pool. Each 3 rounds per run; 3/3 rounds green |
+| API routes                                   | ✅     | Reserve, get, list, release, availability (below). No internal ticket ids or entrant keys in responses                                                                       |
+| Customer UI                                  | ✅     | Quantity → exact total → Reserve → confirmation with real numbers (`#0021`) → server-timed countdown → Continue (disabled: no checkout)                                      |
+| Countdown survives refresh, sleep and expiry | ✅     | Computed from the server's `expiresAt` and `serverTime`; recomputed from the clock every tick; refreshes at zero and when the tab becomes visible. e2e covers both           |
+| Admin inventory                              | ✅     | Total, available, reserved, purchased, reservation counts on the admin draw page. Read-only: no ticket controls exist                                                        |
+| Market isolation, Germany blocked            | ✅     | Every query is scoped by market; another market's reservation or draw is 404; `/de/...` is 404 and the DB refuses reservations in a disabled market                          |
+| Unit / integration / e2e                     | ✅     | 139/139 (12 files) · 255/255 (17 files) · 38/38 (desktop + mobile)                                                                                                           |
+| `pnpm verify`                                | ✅     | exit 0                                                                                                                                                                       |
+| GitHub CI on the PR                          | ⏳     | Not yet run: no implementation commit is pushed and no PR is open                                                                                                            |
+
+## Database (migration 0009_tickets)
+
+- **`draws_total_tickets_max`:** at most 1,000,000 tickets per draw (see choices, item 3).
+- **`reservations`**
+  - Draw, market, currency, entrant (`user` + user id, or `email` + normalized verified email), quantity, unit price, exact total (bigint minor units), status (`active` → `released` | `expired`), `expires_at`, `ended_at`.
+  - FKs: `(draw_id, market_id) → draws`, `(market_id, currency) → markets`. `UNIQUE(id, draw_id)` for tickets and future order lines.
+  - CHECKs: total = unit price × quantity; `created_at < expires_at ≤ created_at + 10 minutes`; ended timestamps consistent; entrant fields consistent.
+  - Trigger `hv_reservations_guard`: created active, only for a draw that is open right now (by its times, not only its stored status) in an enabled market, at the draw's price. Terms immutable; ends exactly once.
+- **`tickets`**
+  - `bigint` identity (never exposed), `draw_id`, `ticket_number > 0`, status, `reservation_id`.
+  - `UNIQUE(draw_id, ticket_number)`; composite FK `(reservation_id, draw_id) → reservations(id, draw_id)`, so a ticket can only be held by a reservation of its own draw.
+  - CHECK: a ticket has a holder exactly when it is not available.
+  - Trigger `hv_tickets_guard`: created available; draw and number immutable; only `available → reserved`, `reserved → available`, `reserved → sold` (same reservation); reserving needs an active, unexpired reservation.
+  - Partial index `(draw_id, ticket_number) WHERE status = 'available'`: allocation reads the next free numbers without scanning the pool.
+- **`draw_entrant_counts`:** `(draw_id, entrant_type, entrant_ref) → count`; trigger refuses a count above the draw's `max_per_person` or below zero.
+- **Functions:** `hv_generate_ticket_pool` (one `generate_series` insert, only if the draw has no tickets), `hv_end_reservation` (frees tickets and allowance exactly once), `hv_expire_reservations` (SKIP LOCKED batches, in entrant order so counter locks never deadlock).
+- **Privileges:** `hv_app` cannot DELETE or TRUNCATE tickets, reservations or entry counts.
+
+## Ticket engine: invariants and concurrency
+
+- **No overselling:** a ticket row is taken only under its row lock and only while `available`; the unique constraint and the holder CHECK make a double sale impossible even if application code were wrong.
+- **No global lock:** buyers lock only the tickets they take (SKIP LOCKED) and their own entrant counter. Two buyers never wait on each other unless they are the same entrant.
+- **No partial reservations:** if fewer tickets than requested can be locked, the whole transaction rolls back.
+- **Near exhaustion:** SKIP LOCKED can make two buyers each see part of the last tickets. If committed availability still covers the request, the attempt is retried (up to 5 times, with jitter), so someone gets the tickets instead of nobody. If the tickets are really gone, the answer is `INSUFFICIENT_TICKETS` at once.
+- **Cap:** the entrant's counter row is locked first, so concurrent requests from one entrant are serialized, and the DB trigger refuses an over-cap count regardless.
+- **Expiry:** the worker sweeps every 30 s; the API also expires the draw's overdue reservations (in their own transaction) before each allocation; reads report an overdue reservation as expired. Expiry is idempotent and safe with duplicate sweepers.
+- **Pool size:** generation is one set-based insert. On this machine a 50,000-ticket pool publishes in 6.2 s (the Docker VM here is roughly 10× slower than a normal server; `generate_series` of 5M rows takes 5 s). Allocation cost does not depend on the pool size.
+
+## API (Phase 4)
+
+| Endpoint                                                  | Access                               | Behaviour                                                                                                            |
+| --------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /markets/:market/draws/:slug/availability`           | public (recognises a session if any) | `{available, total, allowance}`; display only, cached 3 s in Redis; `allowance` only when signed in                  |
+| `POST /markets/:market/draws/:slug/reservations`          | signed-in customer, 30 per 10 min    | 201 with the reservation; 409 `DRAW_NOT_OPEN`, `TICKET_CAP_EXCEEDED`, `INSUFFICIENT_TICKETS`; 400 `INVALID_QUANTITY` |
+| `GET /markets/:market/reservations`                       | signed-in customer                   | The caller's active reservations in this market                                                                      |
+| `GET /markets/:market/reservations/:reservation`          | signed-in customer (owner only)      | ID, draw, status, quantity, ticket numbers, currency, unit price, exact total, expiry, `serverTime`                  |
+| `POST /markets/:market/reservations/:reservation/release` | signed-in customer (owner only)      | Idempotent; releasing after expiry records `expired`                                                                 |
+| `GET /admin/markets/:market/draws/:draw/inventory`        | `admin.access` for that market       | Ticket counts by status and reservation counts; read-only                                                            |
+
+Anyone else's reservation, another market's reservation and malformed IDs are all 404. Every route passes `MarketGuard`.
+
+## Worker (Phase 4)
+
+`reservations` queue, job `expire`, repeat scheduler `reservations-expire` every 30 s: `hv_expire_reservations(NULL, 500)` in up to 20 batches per run.
+
+## Web (Phase 4)
+
+- **Draw page:** real availability ("3,997 of 4,000 tickets available"), quantity stepper bounded by the cap, the customer's remaining allowance and availability, exact total, **Reserve tickets** (server action → API). Signed out: **Sign in to reserve**, returning to the draw. Refusals are shown in plain words.
+- **Skill question:** shown on the draw page as information. It is answered at checkout (Phase 5; wrong-answer behaviour is O12).
+- **Reservation page** `/{market}/reservations/{id}`: the numbers (zero-padded to the draw's size), quantity, unit price, total, countdown, **Release these tickets**, and a disabled **Continue** with a notice that checkout is not available yet. Expired and released states say what happened and that nothing was charged.
+- **Admin draw page:** "Ticket inventory" section for published draws.
+
+## Phase 4 verification
+
+| Check                     | Command                                                    | Result                               |
+| ------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| Format / lint / typecheck | `pnpm verify`                                              | ✅                                   |
+| Unit                      | `pnpm test`                                                | ✅ 139/139 (12 files)                |
+| Integration               | `pnpm test:integration`                                    | ✅ 255/255 (17 files)                |
+| Concurrency repeat        | ticket DB + ticket engine + reservations + expiry files    | ✅ 3/3 runs (60 tests each, 5 files) |
+| e2e                       | `pnpm test:e2e` (desktop + mobile)                         | ✅ 38/38                             |
+| Build                     | `pnpm build`                                               | ✅                                   |
+| Migrations (dev DB)       | `pnpm db:migrate up / status / verify`                     | ✅ 9 applied, verify OK              |
+| Migrations (brand-new DB) | `verify`, `up`, `up`, `status`, `verify`, `codegen:verify` | ✅ all six steps                     |
+| Secret scan               | gitleaks `git` + `dir`                                     | ✅ no leaks (257 files)              |
+| Client bundle             | grep `.next/static` for DB URLs, env names, `isCorrect`    | ✅ none                              |
+
+## Phase 4 scope notes
+
+- **Not built (later phases, as instructed):** orders, checkout, payment, webhooks, wallet, refunds, settlement, instant wins, referrals, production migration.
+- **Guest entry:** the engine and the cap support the verified-email key, but the API accepts signed-in customers only. Guests need email verification first (ADR-0020), which arrives with checkout (Phase 5).
+- **`sold`:** nothing in Phase 4 sets it. Phase 5 turns a reservation's tickets into `sold` when the order is paid; the trigger already allows only `reserved → sold` for the same reservation.
+
+## Implementation choices made in Phase 4 (for review)
+
+1. **The pool is created by a database trigger on publish**, so every publish path (API, fixtures, future tools) gets exactly one pool, in the same transaction.
+2. **Numbers are taken lowest first.** With sequential numbering (O15), customers get the next free numbers; zero padding is display only.
+3. **Pool limit: 1,000,000 tickets per draw** (DB CHECK, domain and contract). This is a technical safeguard for the publish transaction, not a business rule; the owner may change it.
+4. **The cap counts tickets held in active reservations** (and, from Phase 5, sold tickets). Released and expired reservations give the allowance back.
+5. **Reservation length is configuration** (`RESERVATION_TTL_SECONDS`): default 600, and production refuses any other value. Tests use 2 s (API integration) and 60 s (e2e), clearly labelled.
+6. **Availability is display-only**, cached 3 s; decisions always use the locked rows.
+7. **Reservations are rate-limited** to 30 per user per 10 minutes (Redis), to stop one account from churning the pool.
+8. **Customer reservations are not written to `audit_log`.** The non-deletable `reservations` table is their record; the audit log stays for staff and system actions.
+9. **New access policy `@Public({ identify: true })`:** a public route that recognises a signed-in caller (to show their allowance) but never refuses anyone. MFA-pending sessions count as signed out.
+10. **The integration suite runs on at most 4 workers** (`vitest.config.mts`). Every integration file starts its own database and NestJS app, and Phase 4 adds files that drive real contention (200 buyers, a 50,000-ticket pool). At one worker per core the machine, not the code, decided the result: the first full run failed 8 files and 3 tests on hook and test timeouts. Capped at 4 the same suite is green and about five times faster (17 files / 255 tests in 73 s, against 365 s failing). Nothing about the engine changed. If CI hardware differs, this is the number to revisit.
+11. **Two reservation-expiry tests no longer depend on a request finishing inside the test TTL.** They were correct about the product but assumed wall-clock margins that a loaded machine erases: one slept 3,300 ms against a 3-second availability cache it had just refilled (300 ms of room), and one asserted ticket numbers from a creation response that, on a 2-second TTL, can legitimately come back already expired and empty. The first now polls until the cache rolls over; the second uses a 6-second TTL instance and waits on the server's own `expiresAt`. Both still fail if the behaviour is wrong.
+12. **Continue is disabled** with an explicit notice, because checkout does not exist yet.
+
+## Decisions needed
+
+| #   | Decision                                                                                                   | Blocks                                    |
+| --- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1   | **O12** `min_age` + self-exclusion for UK and IE; wrong skill answer behaviour                             | Any market going live; checkout (Phase 5) |
+| 2   | Email verification + password reset timing                                                                 | Account recovery; guest entry (Phase 5)   |
+| 3   | **O8** roles that must use MFA                                                                             | Mandatory staff MFA                       |
+| 4   | **O9** major configuration changes                                                                         | Editing published draws                   |
+| 5   | Confirm the seeded RBAC matrix                                                                             | —                                         |
+| 6   | **O6** policy for cancelling a live draw (and what happens to its reservations)                            | Cancelling live draws (refused today)     |
+| 7   | Public page caching approach                                                                               | SPEC §9 performance target                |
+| 8   | Confirm the 1,000,000-ticket pool limit and the 30-per-10-minutes reservation rate limit (choices 3 and 7) | —                                         |
+
+## Phase 4 known issues
+
+- Pool generation is linear in the pool size and runs inside the publish transaction: about 6.2 s for 50,000 tickets on this machine, so a 1,000,000-ticket pool would take around a minute here (much less on server hardware). Publishing is rare and the draw is not yet open, so nothing waits on it.
+- `The destination stream closed early` still appears in the web server log when a test ends mid-stream (known from Phase 3; harmless).
+- The e2e suite is CPU-heavy on this Windows machine (3 workers, as in CI). The expiry test waits for a real 60-second reservation to run out.
+
+## Open decisions (Revision 2 Part G, still unresolved)
+
+| ID        | Question                                                                                                                                      | Needed by                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| O6 (part) | Policy for cancelling a draw that is already live                                                                                             | Phase 9                                                                                                     |
+| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                       | Phases 6/10                                                                                                 |
+| O8        | Which roles are "privileged" for mandatory MFA (not enforced in Phase 2)                                                                      | Phase 2                                                                                                     |
+| O9        | Exact list of "major configuration changes" (market gate changes are treated as sensitive meanwhile)                                          | Phases 2/10                                                                                                 |
+| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                    | Phases 7/10                                                                                                 |
+| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                           | Phase 11                                                                                                    |
+| O12       | Compliance values: minimum age per market, wrong skill answer behaviour, self-exclusion scope, consent wording, retention, masked-name format | **Now** for UK/IE `min_age` + self-exclusion (market enablement); the rest Phase 12 (skill answer: Phase 5) |
+| O13       | Production payment provider(s)                                                                                                                | Before Phase 14                                                                                             |
+| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                  | Before Phase 13                                                                                             |
+| O16       | Cash alternative for physical prizes                                                                                                          | Phases 8/9                                                                                                  |
+| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                | Now (migration discovery)                                                                                   |
+
+O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6 and O18 were approved on 2026-09-21 (ADR-0020 to ADR-0026).
+
+## Blockers
+
+- **Phase 4:** none for the implementation. Reservations stay impossible on real databases until O12 lets a market be enabled.
+- **Migration discovery:** O17, legacy system access.
+
+## Next task
+
+**Stop for owner review of Phase 4.** The branch must be committed and pushed and a PR opened first (owner instruction required; DEVELOPMENT_RULES §10). Phase 5 (cart and checkout) starts only on explicit owner approval. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+
+---
+
+# Phase 3 record (merged into `develop`, PR #7)
+
+Phase 3 (Day 3): draws foundation + first customer vertical slice. Branch `feature/p3-draws`, merged into `develop` as `3eb551e`; CI green on `develop`.
+
+### Phase 3 Definition of Done
 
 | Item                                 | Status | Evidence                                                                                                                                                |
 | ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,7 +199,7 @@ _Last updated: 2026-09-22_
 | `pnpm verify`                        | ✅     | exit 0                                                                                                                                                  |
 | GitHub CI on the PR                  | ✅     | Passed on `f90ce14`. The first run on `c758360` failed on an e2e wait race in the admin draw test; the test was fixed, not the product                  |
 
-## Database (migration 0008_draws)
+### Database (migration 0008_draws)
 
 - **`draws`**
   - One market per draw.
@@ -59,7 +221,7 @@ _Last updated: 2026-09-22_
 - **Privileges:** `hv_app` cannot DELETE or TRUNCATE draws; they are cancelled instead.
 - **Concurrency:** publish-versus-prize-removal race tested (15 rounds, 5 repeat runs); the prize and question triggers lock the draw row.
 
-## API (Phase 3)
+### API (Phase 3)
 
 | Endpoint                                           | Access                         | Behaviour                                                                                                       |
 | -------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
@@ -74,7 +236,7 @@ _Last updated: 2026-09-22_
 
 **Worker:** the `draw-lifecycle` queue sweeps every 60 s, moving `scheduled → live` and `live → closed` with conditional updates. Concurrent sweeps apply each change once, and each change is audited as a system action. Between sweeps, the API reports the _effective_ status based on the current time.
 
-## Web (Phase 3)
+### Web (Phase 3)
 
 - **Design foundation:** `globals.css` in plain CSS with tokens, no UI framework and no web-font download. It covers the header and footer, hero, cards, badges, panels, forms and tables, responsive at 720px and 1080px, and respects reduced motion.
 - **Customer pages**
@@ -85,7 +247,7 @@ _Last updated: 2026-09-22_
   - Prize images are branded placeholders (the storage/CDN decision is O14).
 - **Admin pages:** `/admin/draws` (market tabs), `/admin/draws/{market}/new`, and `/admin/draws/{market}/{id}` (details, prizes, skill question, publish with blockers shown, cancel with reason).
 
-## Phase 3 verification
+### Phase 3 verification
 
 | Check                     | Command                                                       | Result                      |
 | ------------------------- | ------------------------------------------------------------- | --------------------------- |
@@ -100,12 +262,12 @@ _Last updated: 2026-09-22_
 | Secret scan               | gitleaks 8.30.1 `git` + `dir` (235 files)                     | ✅ no leaks                 |
 | Client bundle             | grep `.next/static` for DB URLs, env names, `isCorrect`       | ✅ none                     |
 
-## Phase 3 scope notes
+### Phase 3 scope notes
 
 - **Caching:** Part F says "public list/detail (functional, cached)". The pages are rendered per request instead, so gate changes and cancellations take effect immediately. The < 200 ms cached-page target (SPEC §9) needs tag revalidation from the API. That is not built yet; proposed with the performance work.
 - **Not built (later phases):** ticket pool at publish (P4), availability counts (P4), checking skill answers (P5; wrong-answer behaviour is O12), settlement after close (P9), prize values and cash alternatives (O16), prize images (O14).
 
-## Implementation choices made in Phase 3 (for review)
+### Implementation choices made in Phase 3 (for review)
 
 1. **Publication = lifecycle status.** Draft is unpublished; scheduled and later are published (`published_at` recorded). There is no separate flag that could disagree with the status.
 2. **Customers list scheduled and live draws.** Closed draws stay reachable by URL; draft and cancelled draws are 404.
@@ -118,7 +280,7 @@ _Last updated: 2026-09-22_
 9. **The lifecycle sweep runs every 60 s.** The effective status covers the gap for display; Phase 4 allocation must also check `closes_at`, as Revision 2 B9 already says.
 10. **e2e tuning:** 3 workers, 10 s expect timeout, and an e2e Redis DB (14) emptied per run. Rate-limit counters and Argon2 cost made heavier parallelism on this machine flaky; no assertion was weakened.
 
-## Decisions needed
+### Decisions needed
 
 | #   | Decision                                                                                                  | Blocks                                     |
 | --- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
@@ -130,39 +292,11 @@ _Last updated: 2026-09-22_
 | 6   | **O6** policy for cancelling a live draw                                                                  | Cancelling live draws (refused today)      |
 | 7   | Public page caching approach (see scope notes)                                                            | SPEC §9 performance target                 |
 
-## Phase 3 known issues
+### Phase 3 known issues
 
 - Under heavy CPU load on this Windows machine, the web app's 5 s API timeout can trip during e2e runs (`UNREACHABLE`). A 2-worker local run passes 33/33, and CI passes with the committed 3 workers.
 - The e2e suite is CPU-heavy on this Windows machine. It is tuned to 3 workers; CI runs the same configuration.
 - `The destination stream closed early` appears in the web server log when a test navigates away mid-stream. It is harmless.
-
-## Open decisions (Revision 2 Part G, still unresolved)
-
-| ID        | Question                                                                                                                                      | Needed by                                                                                                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| O6 (part) | Policy for cancelling a draw that is already live                                                                                             | Phase 9                                                                                                     |
-| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                       | Phases 6/10                                                                                                 |
-| O8        | Which roles are "privileged" for mandatory MFA (not enforced in Phase 2)                                                                      | Phase 2                                                                                                     |
-| O9        | Exact list of "major configuration changes" (market gate changes are treated as sensitive meanwhile)                                          | Phases 2/10                                                                                                 |
-| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                    | Phases 7/10                                                                                                 |
-| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                           | Phase 11                                                                                                    |
-| O12       | Compliance values: minimum age per market, wrong skill answer behaviour, self-exclusion scope, consent wording, retention, masked-name format | **Now** for UK/IE `min_age` + self-exclusion (market enablement); the rest Phase 12 (skill answer: Phase 5) |
-| O13       | Production payment provider(s)                                                                                                                | Before Phase 14                                                                                             |
-| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                  | Before Phase 13                                                                                             |
-| O15       | Customer-visible ticket numbering: random vs sequential                                                                                       | Phase 4                                                                                                     |
-| O16       | Cash alternative for physical prizes                                                                                                          | Phases 8/9                                                                                                  |
-| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                | Now (migration discovery)                                                                                   |
-
-O1–O6 and O18 were approved by the owner on 2026-09-21. They are recorded in ADR-0020 to ADR-0026 as the Revision 2 proposals, because the approval did not restate them. If any approval differs from the proposal, amend the ADR.
-
-## Blockers
-
-- **Phase 3:** none for the implementation. Customer pages stay unreachable on real databases until O12 lets a market be enabled.
-- **Migration discovery:** O17, legacy system access.
-
-## Next task
-
-**Stop for owner review of Phase 3 (PR #7).** Phase 4 (ticket engine) starts only on explicit owner approval. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

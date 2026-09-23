@@ -61,14 +61,71 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
-### 2026-09-22 — P3 — Draws foundation (for Phase 4, the ticket engine)
+### 2026-09-22 — P4 — Ticket engine + customer entry flow (for Phase 5, checkout)
 
 Status: OPEN
 
+Task: P4 (no GitHub issue; no PR open yet)
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p4-ticket-engine` (implementation still uncommitted in the working tree; no PR, not merged)
+Status of the work: DONE and verified locally; waiting to be committed and reviewed
+
+What was completed:
+
+- `0009_tickets`: ticket pool created on publish, reservations, per-entrant counters, guard triggers, `hv_end_reservation`, `hv_expire_reservations`.
+- `@hv/domain` tickets (transitions, entrant keys, totals, quantity and open checks, display numbering); `@hv/contracts` tickets.
+- API `tickets` module (reservations, availability, admin inventory) and `TicketAllocator` with a contention retry; worker `reservations` expiry sweep.
+- Web: reservation flow on the draw page, `/{market}/reservations/{id}` with a server-timed countdown, admin inventory.
+
+Important implementation details:
+
+- **Allocation (one transaction):** create and lock the entrant's counter row → check the cap → insert the reservation → `SELECT … WHERE status = 'available' ORDER BY ticket_number LIMIT n FOR UPDATE SKIP LOCKED` → mark the tickets reserved → increment the counter. A short result rolls everything back. `AllocationContended` means "retry"; any other refusal is final.
+- **Lock order** is always entrant counter → tickets. `hv_expire_reservations` processes reservations in entrant order with SKIP LOCKED, so sweeps and allocations cannot deadlock. Keep this order in checkout.
+- **Cap:** `draw_entrant_counts.count` = tickets held in active reservations. **Phase 5 must not decrement it when a reservation becomes an order**: sold tickets keep counting. Guests use the `email` key with the normalized verified email (ADR-0020); the API does not accept guests yet.
+- **Selling:** Phase 5 marks the reservation's tickets `reserved → sold` (the trigger allows only this, for the same reservation) and ends the reservation. A new reservation status (for example `converted`) needs a migration that extends `reservations_status_valid` and `hv_reservations_guard`. Check `expires_at > now()` in the same transaction: an expired reservation must never become an order.
+- **Order lines** can reference `reservations (id, draw_id)` and `draws (id, market_id)` with composite FKs.
+- **Reads use the effective state:** an active reservation past `expires_at` is shown as expired, and availability, allowance and inventory count its tickets as free before any sweep runs.
+- **Availability is display-only** (cached 3 s). Never base a decision on it.
+- **Database:** migration `0009_tickets.sql`, applied only to local dev and test databases; codegen re-run (18 tables). READ COMMITTED with row locks (`FOR UPDATE`, `SKIP LOCKED`); no advisory or table locks. `hv_app` has no DELETE or TRUNCATE on the three new tables.
+- **Tickets:** invariants and the concurrency results are in PROJECT_STATUS.md ("Ticket engine: invariants and concurrency" and "Phase 4 verification").
+- **Authentication:** reservation routes need a full session (MFA-pending sessions are refused). Another customer's or another market's reservation is 404. The availability route is public and only adds `allowance` for a signed-in caller.
+- **Security:** no route or admin page can change a ticket by hand; staff see counts only. Reservations are rate-limited per user (30 per 10 minutes).
+
+Files/modules affected:
+
+- `packages/db/migrations/0009_tickets.sql`, `packages/db/src/generated/db.ts`, `packages/db/src/testing/{fixtures,e2e-database}.ts`
+- `packages/domain/src/tickets.ts`, `packages/domain/src/draws.ts` (pool limit), `packages/contracts/src/{tickets,errors,draws}.ts`
+- `apps/api/src/tickets/`, `apps/api/src/rbac/access*.ts`, `apps/api/src/common/request-context.ts`, `apps/api/src/config/env.ts`, `apps/api/src/auth/rate-limiter.ts`
+- `apps/worker/src/tickets/`
+- `apps/web/src/app/[market]/{reservation-actions.ts,reservations/,draws/[slug]/}`, `apps/web/src/components/{entry-panel,reservation-countdown}.tsx`, `apps/web/src/lib/reservations.ts`, `apps/web/src/app/admin/draws/[market]/[id]/page.tsx`
+
+Tests executed:
+
+- See PROJECT_STATUS.md, "Phase 4 verification": unit, integration, repeated concurrency runs, e2e on desktop and mobile, clean-DB migrations.
+- Not tested: guest (email-key) reservations through the API (not exposed yet; the key is covered by the DB and concurrency tests). Automated tests stop at a 50,000-ticket pool.
+
+Known issues:
+
+- Publishing a very large draw holds one transaction for the pool insert (linear in size). Fine for publication, which is rare; revisit if much larger pools are wanted.
+
+Integration points:
+
+- **Database:** `reservations (id, draw_id)`, `tickets.reservation_id`, `draw_entrant_counts`; functions `hv_end_reservation` and `hv_expire_reservations`.
+- **API:** `TicketsRepository`, `TicketAllocator` (the only place that allocates), `ReservationsService`.
+- **Infrastructure:** worker queue `reservations` (job `expire`, every 30 s); env `RESERVATION_TTL_SECONDS`.
+
+Next developer action:
+
+- After P4 is reviewed and merged, P5 (cart and checkout) starts only on explicit owner approval. It needs O12 (wrong skill answer behaviour) and the email-verification timing decision for guests.
+
+### 2026-09-22 — P3 — Draws foundation (for Phase 4, the ticket engine)
+
+Status: ACCEPTED (by P4, 2026-09-22)
+
 Task: P3 (no GitHub issue; PR #7)
 Developer: Divyanshu (owner), with Claude
-Branch: `feature/p3-draws` (PR #7 into `develop`, not merged)
-Status of the work: DONE, in review
+Branch: `feature/p3-draws`, merged into `develop` (PR #7, `3eb551e`)
+Status of the work: DONE (merged into `develop`)
 
 What was completed:
 

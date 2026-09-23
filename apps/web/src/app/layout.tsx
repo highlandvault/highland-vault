@@ -40,7 +40,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <footer className="site-footer">
           <div className="container">
-            <p>Highland Vault — pre-release build. Online entry is not open yet.</p>
+            <p>
+              Highland Vault — pre-release build. Tickets can be reserved, but checkout and payment
+              are not open yet.
+            </p>
           </div>
         </footer>
       </body>

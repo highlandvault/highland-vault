@@ -17,3 +17,14 @@ export async function signIn(page: Page, email: string, next?: string): Promise<
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
+
+/** Registers a fresh customer account; the page is then signed in as it. */
+export async function registerCustomer(page: Page, label = 'customer'): Promise<string> {
+  const email = uniqueEmail(label);
+  await page.goto('/register');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel(/Password/).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await page.waitForURL(/\/account$/);
+  return email;
+}
