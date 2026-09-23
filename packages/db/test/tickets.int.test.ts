@@ -279,6 +279,55 @@ describe('ticket engine (database layer)', () => {
       expect((await pgError(hold(second, a, [2]))).constraint).toBe('tickets_status_transition');
     });
 
+    /**
+     * NB-3. `hv_tickets_guard` compares a reservation's expiry with `now()`,
+     * which is the TRANSACTION timestamp, not the wall clock. That single fact
+     * is what makes allocation safe and what makes a hold spread over separate
+     * statements a race, so both halves are pinned here.
+     */
+    describe('a reservation takes tickets against the transaction clock (NB-3)', () => {
+      it('refuses tickets to a reservation that ran out between statements', async () => {
+        const userId = await insertFixtureUser(client, 'lapsed@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 5,
+        });
+        // Still 'active' — no sweep has run — but its second is up.
+        const r = await reservation(id, userId, 1, '1 second');
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+
+        expect((await pgError(hold(r, id, [1]))).constraint).toBe('tickets_reservation_active');
+        expect((await tickets(id)).every((t) => t.status === 'available')).toBe(true);
+      });
+
+      it('lets a short reservation take its tickets inside one transaction, however slow', async () => {
+        const userId = await insertFixtureUser(client, 'sametx@example.com');
+        const id = await insertFixtureDraw(client, {
+          market: 'uk',
+          slug: 's',
+          state: 'live',
+          totalTickets: 5,
+        });
+        await client.query('BEGIN');
+        const r = await reservation(id, userId, 2, '1 second');
+        // Longer than the reservation's whole lifetime: this is what a loaded
+        // machine does to the allocation transaction. now() does not move.
+        await client.query('SELECT pg_sleep(1.3)');
+        await hold(r, id, [1, 2]);
+        await client.query('COMMIT');
+
+        expect((await tickets(id)).filter((t) => t.status === 'reserved')).toHaveLength(2);
+        // And it really was overdue by the wall clock once the transaction ended.
+        const { rows } = await client.query<{ overdue: boolean }>(
+          `SELECT expires_at <= clock_timestamp() AS overdue FROM reservations WHERE id = $1`,
+          [r],
+        );
+        expect(rows[0]!.overdue).toBe(true);
+      });
+    });
+
     it('keeps a ticket’s draw and number immutable', async () => {
       const id = await insertFixtureDraw(client, {
         market: 'uk',
@@ -432,20 +481,35 @@ describe('ticket engine (database layer)', () => {
   });
 
   describe('ending and expiring reservations', () => {
+    /**
+     * Sets a reservation up the way the allocation leaves it, in ONE
+     * transaction like TicketsRepository.allocate. `hv_tickets_guard` checks
+     * the reservation against `now()`, the transaction timestamp, so a
+     * short-lived reservation can always take its own tickets inside its own
+     * transaction. Spread over separate statements, a one-second hold would
+     * instead depend on the round trips finishing inside a second.
+     */
     async function heldReservation(
       drawId: string,
       userId: string,
       numbers: number[],
       ttl = '10 minutes',
     ) {
-      const r = await reservation(drawId, userId, numbers.length, ttl);
-      await hold(r, drawId, numbers);
-      await client.query(
-        `INSERT INTO draw_entrant_counts (draw_id, entrant_type, entrant_ref, count) VALUES ($1, 'user', $2, $3)
-         ON CONFLICT (draw_id, entrant_type, entrant_ref) DO UPDATE SET count = draw_entrant_counts.count + EXCLUDED.count`,
-        [drawId, userId, numbers.length],
-      );
-      return r;
+      await client.query('BEGIN');
+      try {
+        const r = await reservation(drawId, userId, numbers.length, ttl);
+        await hold(r, drawId, numbers);
+        await client.query(
+          `INSERT INTO draw_entrant_counts (draw_id, entrant_type, entrant_ref, count) VALUES ($1, 'user', $2, $3)
+           ON CONFLICT (draw_id, entrant_type, entrant_ref) DO UPDATE SET count = draw_entrant_counts.count + EXCLUDED.count`,
+          [drawId, userId, numbers.length],
+        );
+        await client.query('COMMIT');
+        return r;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     }
     const count = async (drawId: string, userId: string) =>
       (
