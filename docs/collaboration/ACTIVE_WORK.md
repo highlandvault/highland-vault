@@ -44,33 +44,33 @@ Next:
 
 - **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
 - **Phase 4 (Day 4):** DONE. Merged into `develop` via **PR #8** (`49e3903`) and released to `main` via **PR #9** (`c284825`) on 2026-09-23. O15 decided: sequential ticket numbers (ADR-0027). Review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
-- **Phase 5 (Day 5):** begun, **task P5-0 only**. Scope is Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). O12 decided (incorrect skill answer rejects the checkout). No later P5 task is approved to start.
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `aec2aa9`.
+- **Phase 5 (Day 5):** under way, Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). O12 decided (incorrect skill answer rejects the checkout). **P5-0 merged (PR #11)** and the **NB-3 fixture fix merged (PR #12)**. **P5-1 (outbox) is the active task.** No later P5 task is approved to start.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `cb3813e`.
 
 ## Active entries
 
-### P5-0 — NB-1 structural reservation-end fix
+### P5-1 — Transactional outbox
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `fix/p5-0-reservation-end-cap` (from `origin/develop` `aec2aa9`)
+Branch: `feature/p5-1-outbox` (from `origin/develop` `cb3813e`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
 PR: none yet
 Status: IN PROGRESS
 
 Current task:
-Make the entrant-cap decrement in `hv_end_reservation` follow the ticket rows actually freed rather than the reservation quantity, so the invariant is structural before Phase 6 introduces RESERVED → SOLD. New migration `0010_reservation_end_fix`; migration `0009` is untouched.
+The transactional outbox foundation: migration `0011_outbox` (table, guard trigger, `hv_claim_outbox`), `enqueueOutboxEvent` for producers, and a worker that claims and delivers due events. **No producers and no handlers yet** — P5-2 registers the first one with the mail port.
 
 Affected areas:
-`packages/db/migrations/0010_reservation_end_fix.sql` (new), `packages/db/test/tickets.int.test.ts` (regression tests), docs.
+`packages/db/migrations/0011_outbox.sql` (new), `packages/db/src/generated/db.ts` (codegen, 19 tables), `apps/worker/src/outbox/` (new), `apps/worker/src/worker.module.ts`, `apps/worker/test/outbox.int.test.ts` (new), docs.
 
 Avoid modifying:
-`packages/db/migrations/` (0010 is taken by this branch; the next free number is 0011), `hv_end_reservation`.
+`packages/db/migrations/` (0011 is taken by this branch; the next free number is 0012), `apps/worker/src/outbox/`.
 
 Blockers:
-None. NB-1 is unreachable in Phase 4 and Phase 5 because nothing writes `sold`; this lands first because Phase 6 depends on it.
+None.
 
 Last update:
-2026-09-23 — Migration written, four regression tests added. The defect was reproduced against the original 0009 function on a scratch database (cap returned to 0 while a sold ticket was still held) and the same scenario returns 1 under 0010. `pnpm verify` exit 0; integration 259/259; e2e 38/38; clean-database sequence green.
+2026-09-24 — Outbox implemented with 17 integration tests. `SKIP LOCKED` was proven non-vacuous by comparing against a variant without it (the variant blocks on the locked tuple and times out).
 
 Next:
-Owner review of the P5-0 PR. P5-1 does not start until this merges and the owner approves it.
+Owner review of the P5-1 PR. P5-2 does not start until this merges and the owner approves it.
