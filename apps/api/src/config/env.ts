@@ -60,6 +60,15 @@ export const ApiEnvSchema = z
     // good for the rest of the day.
     GUEST_VERIFIED_EMAIL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
 
+    // The API seals sensitive outbox payloads and the worker opens them, so
+    // both must hold the same key (ADR-0028). Separate from MFA_ENCRYPTION_KEY:
+    // same construction, different purpose.
+    OUTBOX_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters'),
+    OUTBOX_ENCRYPTION_KEY_ID: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,32}$/)
+      .default('k1'),
+
     // Ticket reservation lifetime. D11 fixes it at 10 minutes (600 s); shorter
     // values exist only so automated tests can observe expiry, and are refused
     // in production.
@@ -105,6 +114,16 @@ export const ApiEnvSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['MFA_ENCRYPTION_KEY'],
+        message: 'must be a real random key in production, not the placeholder',
+      });
+    }
+    // The same guard the worker applies (apps/worker/src/config/env.ts). The
+    // API became a holder of this key in P5-4, when it started sealing
+    // verification codes; a placeholder here would seal them to nothing.
+    if (/^(..)\1+$/.test(env.OUTBOX_ENCRYPTION_KEY.toLowerCase())) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OUTBOX_ENCRYPTION_KEY'],
         message: 'must be a real random key in production, not the placeholder',
       });
     }

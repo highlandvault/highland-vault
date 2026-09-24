@@ -39,6 +39,8 @@ export const Errors = {
   notFound: (what = 'Resource') => new AppError(404, 'NOT_FOUND', `${what} not found.`),
   marketNotAvailable: () =>
     new AppError(404, 'MARKET_NOT_AVAILABLE', 'This market is not available.'),
+  badRequest: (code: ErrorCode, message: string, details?: unknown) =>
+    new AppError(400, code, message, details),
   conflict: (code: ErrorCode, message: string, details?: unknown) =>
     new AppError(409, code, message, details),
   rateLimited: (retryAfterSeconds: number) =>

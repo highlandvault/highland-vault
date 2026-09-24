@@ -53,6 +53,24 @@ export class GuestSessionsRepository {
     };
   }
 
+  /** The same live-session read, by id, for re-reading after a write. */
+  async findLiveById(db: DbExecutor, id: string): Promise<GuestContext | null> {
+    const row = await db
+      .selectFrom('guest_sessions')
+      .select(['id', 'verified_email', 'verified_email_at', 'expires_at'])
+      .where('id', '=', id)
+      .where('revoked_at', 'is', null)
+      .where('expires_at', '>', sql<Date>`now()`)
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      guestSessionId: row.id,
+      verifiedEmail: row.verified_email,
+      verifiedEmailAt: row.verified_email_at,
+      expiresAt: row.expires_at,
+    };
+  }
+
   /**
    * Records a verified address, once.
    *

@@ -47,6 +47,9 @@ export const E2E_API_ENV = {
   WEB_ORIGINS: E2E_WEB_ORIGIN,
   SESSION_COOKIE_SECURE: 'false',
   MFA_ENCRYPTION_KEY: '0'.repeat(64),
+  // Required since P5-4, because the API seals verification codes. A local
+  // placeholder, which production refuses.
+  OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
   RESERVATION_TTL_SECONDS: String(E2E_RESERVATION_TTL_SECONDS),
 } as const;
 

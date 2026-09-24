@@ -8,6 +8,9 @@ const valid = {
   ENABLED_MARKETS: 'uk,ie',
   WEB_ORIGINS: 'http://127.0.0.1:3000',
   MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
+  // Required since P5-4: the API seals verification codes with it, so a boot
+  // without it would only fail later, one request at a time.
+  OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
 };
 
 const production = {
@@ -16,6 +19,7 @@ const production = {
   WEB_ORIGINS: 'https://www.example.com',
   // Generated per run: no key-like literal ever lands in the repository.
   MFA_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
+  OUTBOX_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
 };
 
 describe('parseApiEnv', () => {
@@ -48,6 +52,7 @@ describe('parseApiEnv', () => {
       'ENABLED_MARKETS',
       'WEB_ORIGINS',
       'MFA_ENCRYPTION_KEY',
+      'OUTBOX_ENCRYPTION_KEY',
     ]) {
       expect(() => parseApiEnv({})).toThrow(new RegExp(name));
     }
@@ -115,6 +120,23 @@ describe('parseApiEnv', () => {
       expect(() => parseApiEnv({ ...production, MFA_ENCRYPTION_KEY: 'ab'.repeat(32) })).toThrow(
         /MFA_ENCRYPTION_KEY/,
       );
+    });
+
+    it('refuses a placeholder outbox key, as the worker does', () => {
+      // The two must agree: the API seals with this key and the worker opens
+      // with it, so a guard on one side only would leave a real gap.
+      expect(() => parseApiEnv({ ...production, OUTBOX_ENCRYPTION_KEY: '0'.repeat(64) })).toThrow(
+        /OUTBOX_ENCRYPTION_KEY: must be a real random key/,
+      );
+      expect(() => parseApiEnv({ ...production, OUTBOX_ENCRYPTION_KEY: 'ab'.repeat(32) })).toThrow(
+        /OUTBOX_ENCRYPTION_KEY/,
+      );
+    });
+
+    it('rejects a malformed outbox key without echoing it', () => {
+      const attempt = () => parseApiEnv({ ...valid, OUTBOX_ENCRYPTION_KEY: 'nothex' });
+      expect(attempt).toThrow(/OUTBOX_ENCRYPTION_KEY: must be 64 hex/);
+      expect(attempt).not.toThrow(/nothex/);
     });
   });
 });

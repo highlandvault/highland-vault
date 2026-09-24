@@ -61,6 +61,11 @@ export class GuestSessionsService {
     return this.repository.bindVerifiedEmail(trx, guestSessionId, normalizeEmail(email));
   }
 
+  /** Re-reads a session, so a response can reflect what was just written to it. */
+  reload(guestSessionId: string): Promise<GuestContext | null> {
+    return this.repository.findLiveById(this.db, guestSessionId);
+  }
+
   revoke(guestSessionId: string): Promise<void> {
     return this.repository.revoke(this.db, guestSessionId);
   }
