@@ -8,6 +8,9 @@ dist/
 next-env.d.ts
 out/
 
+# downloaded developer tooling (gitleaks binary), never source
+.cache/
+
 # test output
 coverage/
 test-results/
