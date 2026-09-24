@@ -22,7 +22,8 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:e2e": "pnpm --filter @hv/web run test:e2e",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:migrate up && pnpm db:migrate verify && pnpm test:integration && pnpm build"
+    "verify": "pnpm secrets:scan && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:migrate up && pnpm db:migrate verify && pnpm test:integration && pnpm build",
+    "secrets:scan": "node tools/gitleaks/scan.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
