@@ -79,6 +79,18 @@ export interface Draws {
   winner_positions: number;
 }
 
+export interface GuestSessions {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  ip: string | null;
+  revoked_at: Timestamp | null;
+  token_hash: Buffer;
+  user_agent: string | null;
+  verified_email: string | null;
+  verified_email_at: Timestamp | null;
+}
+
 export interface Markets {
   code: string;
   created_at: Generated<Timestamp>;
@@ -231,6 +243,7 @@ export interface DB {
   draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;
+  guest_sessions: GuestSessions;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;

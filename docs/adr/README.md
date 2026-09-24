@@ -34,3 +34,4 @@ An accepted ADR is changed only by a new ADR that supersedes it.
 | [0026](0026-one-basket-per-market.md)               | One basket and order per market                             | O18       |
 | [0027](0027-sequential-ticket-numbers.md)           | Sequential ticket numbers                                   | O15       |
 | [0028](0028-outbox-relay-and-sensitive-payloads.md) | Outbox relay to target queues, encrypted sensitive payloads | B17, P5-2 |
+| [0029](0029-guest-sessions.md)                      | Guest sessions                                              | O1, P5-3  |

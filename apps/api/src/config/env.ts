@@ -51,6 +51,15 @@ export const ApiEnvSchema = z
 
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
 
+    // Guest checkout (ADR-0029). A guest session lasts a day: long enough to
+    // finish a checkout and come back to it, short enough that an abandoned
+    // browser does not carry an identity around for a week.
+    GUEST_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+    // How long a verified email stays usable (ADR-0020). Deliberately much
+    // shorter than the session: proving you can read an inbox should not be
+    // good for the rest of the day.
+    GUEST_VERIFIED_EMAIL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
+
     // Ticket reservation lifetime. D11 fixes it at 10 minutes (600 s); shorter
     // values exist only so automated tests can observe expiry, and are refused
     // in production.

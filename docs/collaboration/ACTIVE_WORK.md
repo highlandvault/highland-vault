@@ -44,33 +44,33 @@ Next:
 
 - **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
 - **Phase 4 (Day 4):** DONE. Merged into `develop` via **PR #8** (`49e3903`) and released to `main` via **PR #9** (`c284825`) on 2026-09-23. O15 decided: sequential ticket numbers (ADR-0027). Review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
-- **Phase 5 (Day 5):** under way, Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). O12 decided (incorrect skill answer rejects the checkout). **P5-0 (PR #11)**, the **NB-3 fixture fix (PR #12)** and **P5-1, the transactional outbox (PR #13, `13b35ae`)** are merged. **P5-2 (mail port and the B17 notifications relay) is the active task.** No later P5 task is approved to start.
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `13b35ae`.
+- **Phase 5 (Day 5):** under way, Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). **P5-0, NB-3, P5-1, P5-2, the ticket-engine teardown fix and the local gitleaks tooling are merged.** **P5-3 (guest sessions) is the active task.** No later P5 task is approved to start.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `5ebbdf2`.
 
 ## Active entries
 
-### P5-2 — Mail port and the outbox notifications relay
+### P5-3 — Guest sessions
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `feature/p5-2-mail-port` (from `origin/develop` `13b35ae`)
+Branch: `feature/p5-3-guest-sessions` (from `origin/develop` `5ebbdf2`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
 PR: none yet
 Status: IN PROGRESS
 
 Current task:
-Provider-independent `MailPort` with an SMTP adapter (Mailpit in dev/test), the B17 `outbox` → `notifications` relay keyed by the outbox row id, and AES-256-GCM sealed payloads so no plaintext one-time code is stored. **No producer yet** — the guest verification flow is P5-4. No migration.
+Guest identity for checkout (ADR-0029): migration `0012_guest_sessions`, repository and service reusing the authenticated session primitives, the `hv_guest` cookie, and guest resolution on public routes only. **It is not authentication** and cannot satisfy any authenticated or admin route. **No verification flow yet** — issuing codes is P5-4.
 
 Affected areas:
-`apps/worker/src/mail/` (new), `apps/worker/src/outbox/` (relay + the approved `OutboxOutcome` change), `apps/worker/src/config/env.ts`, `packages/domain/src/` (`SecretBox` moved here, sealed-payload envelope), `.github/workflows/ci.yml` (Mailpit), `.env.example`, docs, ADR-0028.
+`packages/db/migrations/0012_guest_sessions.sql` (new), `packages/db/src/generated/db.ts` (codegen, 20 tables), `apps/api/src/guests/` (new), `apps/api/src/auth/cookies.ts` (one implementation, two cookies), `apps/api/src/rbac/access.guard.ts` (public branch only), `apps/api/src/common/request-context.ts`, `apps/api/src/config/env.ts`, docs, ADR-0029.
 
 Avoid modifying:
-`apps/worker/src/outbox/`, `apps/worker/src/mail/`, `packages/domain/src/{secret-box,sealed-payload}.ts`.
+`packages/db/migrations/` (0012 is taken by this branch; the next free number is 0013), `apps/api/src/guests/`.
 
 Blockers:
-None. O14 (production email provider) stays open by design: production refuses to start without explicit mail configuration.
+None.
 
 Last update:
-2026-09-24 — Implemented with 37 focused tests. BullMQ job-lifecycle semantics were verified by experiment first: retained completed or failed jobs silently swallow a re-enqueue under the same id, which would have destroyed the retry guarantee, so notification jobs remove themselves on both outcomes.
+2026-09-24 — Implemented with 41 focused tests, including negative authorization tests that drive real guest cookies at customer and admin routes and prove they are refused.
 
 Next:
-Owner review of the P5-2 PR. P5-3 does not start until this merges and the owner approves it.
+Owner review of the P5-3 PR. P5-4 does not start until this merges and the owner approves it.
