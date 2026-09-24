@@ -44,7 +44,11 @@ function testRedisUrl(): string {
   return url;
 }
 
-const KEY = '4f8b2c19a07d3e56b1c48a29f70d6e35c92a1b84de07f63a5c18e40b9d2f7a61';
+// Deterministic 64-hex test key, the same low-entropy convention as
+// secret-box.test.ts: not a real key, and not mistaken for one by the
+// secret scan. Not a single repeated pair, so the production guard
+// (which refuses those) still treats it as a valid key here.
+const KEY = 'a1'.repeat(16) + 'b2'.repeat(16);
 const box = new SecretBox(KEY, 'k1');
 const open = createVerificationEmailOpener(box);
 
