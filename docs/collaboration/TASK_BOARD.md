@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                                | Owner             | Branch                         | Dependencies | Area                           | Issue / PR | Notes                                                                                                  |
-| ---- | ----------------------------------- | ----------------- | ------------------------------ | ------------ | ------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------ |
-| P5-0 | NB-1 structural reservation-end fix | Divyanshu (owner) | `fix/p5-0-reservation-end-cap` | P4           | `packages/db` (migration 0010) | none yet   | First task of Phase 5 (Option A). Cap decrement follows rows actually freed. Next free migration: 0011 |
+| ID   | Task                 | Owner             | Branch                | Dependencies | Area                                | Issue / PR | Notes                                                                                          |
+| ---- | -------------------- | ----------------- | --------------------- | ------------ | ----------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| P5-1 | Transactional outbox | Divyanshu (owner) | `feature/p5-1-outbox` | P5-0         | `packages/db` (0011), `apps/worker` | none yet   | Outbox table, claim function, worker drain. No producers yet (P5-2). Next free migration: 0012 |
 
 ## BLOCKED
 
@@ -90,3 +90,5 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 | P2    | Users · Markets · RBAC · MFA · Audit · admin shell | Divyanshu (owner) | `feature/p2-users-markets-auth`                | P1           | db, auth, RBAC, `/admin`, `/[market]`   | PR #3      | Merged into `develop` (`6b0ea82`) on 2026-09-22. Decisions still open: PROJECT_STATUS.md                                                                            |
 | P3    | Draws foundation + first customer vertical slice   | Divyanshu (owner) | `feature/p3-draws`                             | P2           | draws, API, worker, web                 | PR #7      | Merged into `develop` (`3eb551e`) on 2026-09-22                                                                                                                     |
 | P4    | Ticket engine + customer entry flow                | Divyanshu (owner) | `feature/p4-ticket-engine`                     | P3           | tickets, reservations, API, worker, web | PR #8      | Merged into `develop` (`49e3903`) on 2026-09-23; released to `main` via PR #9 (`c284825`). O15 = sequential (ADR-0027). Phase 5 carry-over items: PROJECT_STATUS.md |
+| P5-0  | NB-1 structural reservation-end fix                | Divyanshu (owner) | `fix/p5-0-reservation-end-cap`                 | P4           | `packages/db` (migration 0010)          | PR #11     | Merged into `develop` (`834400f`) on 2026-09-23. Cap decrement follows rows actually freed                                                                          |
+| NB-3  | Reservation fixtures made transaction-stable       | Divyanshu (owner) | `fix/nb3-reservation-fixture-timing`           | P4           | integration tests                       | PR #12     | Merged into `develop` (`cb3813e`). Test-fixture fix; original CI attribution never confirmed                                                                        |

@@ -53,6 +53,7 @@ The tool connects with `MIGRATION_DATABASE_URL` (the owner role `hv_owner`). `--
 | 0008_draws                  | `draws` (one market; currency pinned by the `(market_id, currency)` FK; lifecycle trigger; frozen once published), `draw_prizes` (one per winner position), `skill_questions` + options (same market; exactly one correct option)                                          |
 | 0009_tickets                | `tickets` (pool 1..N created when a draw is published; `UNIQUE(draw_id, ticket_number)`; guarded state machine), `reservations` (at most 10 minutes, exact total, one market), `draw_entrant_counts` (per-entrant cap); `hv_end_reservation()`, `hv_expire_reservations()` |
 | 0010_reservation_end_fix    | `hv_end_reservation()` returns the entrant-cap allowance for the ticket rows it actually freed, not the reservation quantity, so sold tickets keep counting against the cap (NB-1)                                                                                         |
+| 0011_outbox                 | `outbox` (transactional outbox: events written in the producer’s transaction, delivered at least once), guard trigger, `hv_claim_outbox()` claiming due events with `FOR UPDATE SKIP LOCKED` and leasing them                                                              |
 
 `hv_draw_publish_blockers(draw_id)` is the single definition of what a draft still needs before it can be published.
 

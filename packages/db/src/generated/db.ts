@@ -110,6 +110,17 @@ export interface MfaRecoveryCodes {
   user_id: string;
 }
 
+export interface Outbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  last_error: string | null;
+  payload: Json;
+  published_at: Timestamp | null;
+  topic: string;
+}
+
 export interface Permissions {
   code: string;
   description: string;
@@ -223,6 +234,7 @@ export interface DB {
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
+  outbox: Outbox;
   permissions: Permissions;
   reservations: Reservations;
   role_permissions: RolePermissions;
