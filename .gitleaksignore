@@ -1,0 +1,17 @@
+# Findings gitleaks should not report again, one fingerprint per line
+# (commit:path:rule:line). Each entry is a single, already-committed finding —
+# never a pattern, a path or a rule, so nothing new is suppressed.
+#
+# Commit 250cc68 (P5-2) introduced the OUTBOX_ENCRYPTION_KEY placeholder as a
+# random-looking 64-hex value, which the generic-api-key rule flags on entropy.
+# It is a placeholder: it has never protected anything, and the worker's
+# production configuration refuses it. The value has since been replaced by the
+# repository's low-entropy convention (all zeros in .env.example, a repeated
+# pattern in tests), but CI scans the whole history, so the original commit
+# would keep failing the scan for ever.
+#
+# History is not rewritten to remove it: develop is shared and protected
+# (DEVELOPMENT_RULES §4).
+250cc68cd728fd31f627649f54f48ba0e611a216:.env.example:generic-api-key:95
+250cc68cd728fd31f627649f54f48ba0e611a216:apps/worker/src/config/env.test.ts:generic-api-key:8
+250cc68cd728fd31f627649f54f48ba0e611a216:apps/worker/test/notifications.int.test.ts:generic-api-key:47
