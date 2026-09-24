@@ -11,7 +11,7 @@ _Last updated: 2026-09-24_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; task P5-2 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 (PR #11), NB-3 (PR #12) and P5-1 (PR #13, `13b35ae`) are merged. No task after P5-2 is approved to start.
+- **Phase 5 (cart + checkout) is under way; task P5-3 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0, NB-3, P5-1, P5-2, the ticket-engine teardown fix and the local gitleaks tooling are merged. No task after P5-3 is approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -187,13 +187,16 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                              | State         | Evidence                                                       |
-| ------------------------------------------------- | ------------- | -------------------------------------------------------------- |
-| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                       |
-| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                             |
-| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                           |
-| **P5-2 Mail port + notifications relay**          | **in review** | ADR-0028, `apps/worker/src/mail/`, B17 relay, 37 focused tests |
-| P5-3 onwards                                      | not started   | Each needs its own branch, PR and owner approval               |
+| Task                                              | State         | Evidence                                                     |
+| ------------------------------------------------- | ------------- | ------------------------------------------------------------ |
+| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                     |
+| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                           |
+| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                         |
+| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                 |
+| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                             |
+| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                             |
+| **P5-3 Guest sessions**                           | **in review** | ADR-0029, migration `0012`, `apps/api/src/guests/`, 41 tests |
+| P5-4 onwards                                      | not started   | Each needs its own branch, PR and owner approval             |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -230,7 +233,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way: task P5-2 (mail port and the outbox notifications relay).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way: task P5-3 (guest sessions).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

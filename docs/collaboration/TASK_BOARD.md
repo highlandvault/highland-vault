@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                                   | Owner             | Branch                   | Dependencies | Area                             | Issue / PR | Notes                                                                                                           |
-| ---- | -------------------------------------- | ----------------- | ------------------------ | ------------ | -------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
-| P5-2 | Mail port + outbox notifications relay | Divyanshu (owner) | `feature/p5-2-mail-port` | P5-1         | `apps/worker`, `packages/domain` | none yet   | MailPort, SMTP/Mailpit adapter, B17 relay, encrypted verification payload. No producer yet (P5-4). No migration |
+| ID   | Task           | Owner             | Branch                        | Dependencies | Area                             | Issue / PR | Notes                                                                                                                     |
+| ---- | -------------- | ----------------- | ----------------------------- | ------------ | -------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| P5-3 | Guest sessions | Divyanshu (owner) | `feature/p5-3-guest-sessions` | P5-2         | `packages/db` (0012), `apps/api` | none yet   | Guest identity for checkout: opaque hashed token, 24h, verified-email slot. Not authentication. Next free migration: 0013 |
 
 ## BLOCKED
 
@@ -93,3 +93,4 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 | P5-0  | NB-1 structural reservation-end fix                | Divyanshu (owner) | `fix/p5-0-reservation-end-cap`                 | P4           | `packages/db` (migration 0010)          | PR #11     | Merged into `develop` (`834400f`) on 2026-09-23. Cap decrement follows rows actually freed                                                                          |
 | NB-3  | Reservation fixtures made transaction-stable       | Divyanshu (owner) | `fix/nb3-reservation-fixture-timing`           | P4           | integration tests                       | PR #12     | Merged into `develop` (`cb3813e`). Test-fixture fix; original CI attribution never confirmed                                                                        |
 | P5-1  | Transactional outbox                               | Divyanshu (owner) | `feature/p5-1-outbox`                          | P5-0         | `packages/db` (0011), `apps/worker`     | PR #13     | Merged into `develop` (`13b35ae`) on 2026-09-24. Outbox table, claim function, worker drain                                                                         |
+| P5-2  | Mail port + outbox notifications relay             | Divyanshu (owner) | `feature/p5-2-mail-port`                       | P5-1         | `apps/worker`, `packages/domain`        | PR #15     | Merged into `develop` (`f1d33d3`). B17 relay, sealed payloads                                                                                                       |

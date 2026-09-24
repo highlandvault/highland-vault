@@ -1,6 +1,7 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { MarketCode } from '@hv/domain';
 import type { FastifyRequest } from 'fastify';
+import type { GuestContext } from '../guests/guest-sessions.repository';
 import { Errors } from './errors';
 
 /** The authenticated session behind a request (set by AccessGuard). */
@@ -33,6 +34,14 @@ declare module 'fastify' {
   interface FastifyRequest {
     hvAuth?: AuthContext;
     hvMarket?: MarketContext;
+    /**
+     * The guest behind a public request, if any (ADR-0029).
+     *
+     * Deliberately a different field from hvAuth, holding a different type
+     * with no user and no permissions. Nothing on the authenticated or
+     * permission paths reads it, so a guest cookie can never satisfy them.
+     */
+    hvGuest?: GuestContext;
   }
 }
 
@@ -55,6 +64,17 @@ export const CurrentAuth = createParamDecorator((_: unknown, ctx: ExecutionConte
 export const OptionalAuth = createParamDecorator(
   (_: unknown, ctx: ExecutionContext) =>
     ctx.switchToHttp().getRequest<FastifyRequest>().hvAuth ?? null,
+);
+
+/**
+ * The guest behind the request, if any.
+ *
+ * Always optional and never a substitute for @CurrentAuth: a route that needs
+ * a signed-in customer asks for authentication, and this returns null for one.
+ */
+export const CurrentGuest = createParamDecorator(
+  (_: unknown, ctx: ExecutionContext) =>
+    ctx.switchToHttp().getRequest<FastifyRequest>().hvGuest ?? null,
 );
 
 export const CurrentMarket = createParamDecorator((_: unknown, ctx: ExecutionContext) => {

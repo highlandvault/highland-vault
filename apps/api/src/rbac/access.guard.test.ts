@@ -33,8 +33,11 @@ function contextFor(handler: () => void, controller: new () => object): Executio
 }
 
 describe('AccessGuard: deny by default', () => {
+  // Every collaborator throws if touched, so these tests prove the guard
+  // reaches its decision without consulting sessions, guests or RBAC.
   const guard = new AccessGuard(
     new Reflector(),
+    unreachable as never,
     unreachable as never,
     unreachable as never,
     unreachable as never,
