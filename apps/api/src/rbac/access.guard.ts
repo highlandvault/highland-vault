@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import type { Database } from '@hv/db';
 import type { FastifyRequest } from 'fastify';
 import { SessionsService } from '../auth/sessions.service';
+import { GuestSessionsService } from '../guests/guest-sessions.service';
 import { Errors } from '../common/errors';
 import { DATABASE } from '../database/database.module';
 import { MarketsRepository } from '../markets/markets.repository';
@@ -34,6 +35,7 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly sessions: SessionsService,
+    private readonly guests: GuestSessionsService,
     private readonly rbac: RbacService,
     private readonly markets: MarketsRepository,
     @Inject(DATABASE) private readonly db: Database,
@@ -55,6 +57,14 @@ export class AccessGuard implements CanActivate {
         const auth = await this.sessions.authenticate(request);
         // A half-signed-in session (MFA pending) stays anonymous.
         if (auth && !(auth.mfaRequired && auth.mfaVerifiedAt === null)) request.hvAuth = auth;
+        // A guest, if there is one. Resolved ONLY here, on the public branch:
+        // every path below this point is an authorization decision, and none of
+        // them reads hvGuest, so a guest cookie can never satisfy one
+        // (ADR-0029). A signed-in caller is never also treated as a guest.
+        if (!request.hvAuth) {
+          const guest = await this.guests.resolve(request);
+          if (guest) request.hvGuest = guest;
+        }
       }
       return true;
     }

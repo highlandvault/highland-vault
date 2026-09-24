@@ -79,6 +79,18 @@ export interface Draws {
   winner_positions: number;
 }
 
+export interface GuestSessions {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  ip: string | null;
+  revoked_at: Timestamp | null;
+  token_hash: Buffer;
+  user_agent: string | null;
+  verified_email: string | null;
+  verified_email_at: Timestamp | null;
+}
+
 export interface Markets {
   code: string;
   created_at: Generated<Timestamp>;
@@ -108,6 +120,17 @@ export interface MfaRecoveryCodes {
   id: Generated<string>;
   used_at: Timestamp | null;
   user_id: string;
+}
+
+export interface Outbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  last_error: string | null;
+  payload: Json;
+  published_at: Timestamp | null;
+  topic: string;
 }
 
 export interface Permissions {
@@ -220,9 +243,11 @@ export interface DB {
   draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;
+  guest_sessions: GuestSessions;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
+  outbox: Outbox;
   permissions: Permissions;
   reservations: Reservations;
   role_permissions: RolePermissions;

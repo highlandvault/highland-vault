@@ -52,28 +52,48 @@ describe('reservation expiry worker', () => {
     await database?.drop();
   });
 
-  /** A held reservation of `n` tickets lasting `seconds`, set up the way the allocation leaves it. */
+  /**
+   * A held reservation of `n` tickets lasting `seconds`, set up the way the
+   * allocation leaves it.
+   *
+   * The whole hold runs in ONE transaction, exactly as TicketsRepository
+   * .allocate does, and for the same reason: `hv_tickets_guard` refuses a
+   * ticket whose reservation is not `active` and unexpired, and it compares
+   * against `now()`, which is the transaction timestamp. Inside one
+   * transaction that timestamp is fixed, so a short-lived reservation can
+   * always take its own tickets however slow the machine is. Statement by
+   * statement, each one gets a fresh `now()`, and these one-second holds then
+   * depend on the round trips finishing inside a second — which is a race, not
+   * a test.
+   */
   async function held(email: string, numbers: number[], seconds: number) {
     const userId = await insertFixtureUser(sql, email);
-    const { rows } = await sql.query<{ id: string }>(
-      `INSERT INTO reservations (draw_id, market_id, currency, entrant_type, entrant_ref, user_id,
-                                 quantity, unit_price_minor, total_minor, expires_at)
-       SELECT d.id, d.market_id, d.currency, 'user', $2::text, $5::uuid, $3::int, d.ticket_price_minor,
-              d.ticket_price_minor * $3::int, now() + make_interval(secs => $4)
-         FROM draws d WHERE d.id = $1
-       RETURNING id`,
-      [drawId, userId, numbers.length, seconds, userId],
-    );
-    const id = rows[0]!.id;
-    await sql.query(
-      `UPDATE tickets SET status = 'reserved', reservation_id = $1 WHERE draw_id = $2 AND ticket_number = ANY($3::int[])`,
-      [id, drawId, numbers],
-    );
-    await sql.query(
-      `INSERT INTO draw_entrant_counts (draw_id, entrant_type, entrant_ref, count) VALUES ($1, 'user', $2, $3)`,
-      [drawId, userId, numbers.length],
-    );
-    return id;
+    await sql.query('BEGIN');
+    try {
+      const { rows } = await sql.query<{ id: string }>(
+        `INSERT INTO reservations (draw_id, market_id, currency, entrant_type, entrant_ref, user_id,
+                                   quantity, unit_price_minor, total_minor, expires_at)
+         SELECT d.id, d.market_id, d.currency, 'user', $2::text, $5::uuid, $3::int, d.ticket_price_minor,
+                d.ticket_price_minor * $3::int, now() + make_interval(secs => $4)
+           FROM draws d WHERE d.id = $1
+         RETURNING id`,
+        [drawId, userId, numbers.length, seconds, userId],
+      );
+      const id = rows[0]!.id;
+      await sql.query(
+        `UPDATE tickets SET status = 'reserved', reservation_id = $1 WHERE draw_id = $2 AND ticket_number = ANY($3::int[])`,
+        [id, drawId, numbers],
+      );
+      await sql.query(
+        `INSERT INTO draw_entrant_counts (draw_id, entrant_type, entrant_ref, count) VALUES ($1, 'user', $2, $3)`,
+        [drawId, userId, numbers.length],
+      );
+      await sql.query('COMMIT');
+      return id;
+    } catch (error) {
+      await sql.query('ROLLBACK');
+      throw error;
+    }
   }
 
   const state = async () => {

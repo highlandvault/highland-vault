@@ -52,10 +52,15 @@ jobs:
 
       # Same docker-compose stack and bootstrap script as local development.
       # .env.example only holds local-only placeholder values.
-      - name: Start PostgreSQL 18 and Redis
+      - name: Start PostgreSQL 18, Redis and Mailpit
         run: |
           cp .env.example .env
-          docker compose up -d --wait postgres redis
+          docker compose up -d --wait postgres redis mailpit
+
+      # --wait already gates on the healthchecks; this proves Mailpit’s HTTP API
+      # is reachable, which is what the mail integration tests assert against.
+      - name: Mailpit is reachable
+        run: curl -sSf http://127.0.0.1:8025/api/v1/messages > /dev/null
 
       - name: Migrations — up, status, verify
         run: |

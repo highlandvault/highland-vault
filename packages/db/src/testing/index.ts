@@ -69,6 +69,44 @@ export async function createTestDatabase(
 }
 
 /**
+ * How long to let a test's connections finish closing before dropping its
+ * database. Generously above what closing actually takes (milliseconds), so
+ * reaching it means something is really still connected rather than slow.
+ */
+const CONNECTIONS_CLOSED_TIMEOUT_MS = 10_000;
+
+/**
+ * Waits until nothing is connected to `name` any more.
+ *
+ * `pool.end()` resolves once its clients have been ASKED to close, not once
+ * their backends are gone: after destroying a 60-connection pool, PostgreSQL
+ * still reported several live backends, which disappeared a few hundred
+ * milliseconds later. Dropping in that window makes WITH (FORCE) terminate a
+ * connection that is still finishing, and the driver surfaces that as
+ * `57P01: terminating connection due to administrator command` — an unhandled
+ * error that fails the run even though every test passed.
+ *
+ * So this waits on the server's own view of the database rather than on a
+ * duration: it returns the moment the count reaches zero, whatever the machine
+ * is doing. If the deadline passes, something is genuinely still holding a
+ * connection and the drop goes ahead as before — WITH (FORCE) stays the safety
+ * net it always was, it just no longer has anything to terminate.
+ */
+async function waitForConnectionsToClose(client: pg.Client, name: string): Promise<boolean> {
+  const deadline = Date.now() + CONNECTIONS_CLOSED_TIMEOUT_MS;
+  for (;;) {
+    const { rows } = await client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [name],
+    );
+    if (rows[0]!.n === 0) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+/**
  * DROP … WITH (FORCE) cannot terminate an autovacuum worker (it runs as the
  * bootstrap superuser, and the test role may not signal it), so a drop that
  * races autovacuum fails with 42501. The worker finishes quickly: retry.
@@ -76,9 +114,10 @@ export async function createTestDatabase(
 async function dropDatabase(name: string): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
-      await withAdminClient((client) =>
-        client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`),
-      );
+      await withAdminClient(async (client) => {
+        await waitForConnectionsToClose(client, name);
+        await client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+      });
       return;
     } catch (error) {
       const code = (error as { code?: unknown }).code;
@@ -86,6 +125,26 @@ async function dropDatabase(name: string): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
+}
+
+/**
+ * Waits until nothing is connected to `name`, for a test that needs to assert
+ * on that directly. Ordinary teardown gets this from `drop()`.
+ */
+export async function connectionsClosed(name: string): Promise<boolean> {
+  return withAdminClient((client) => waitForConnectionsToClose(client, name));
+}
+
+/** Backends currently connected to `name`, excluding the caller. */
+export async function countBackends(name: string): Promise<number> {
+  return withAdminClient(async (client) => {
+    const { rows } = await client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [name],
+    );
+    return rows[0]!.n;
+  });
 }
 
 /** Opens `count` independent physical connections (not a pool) and checks they are distinct backends. */

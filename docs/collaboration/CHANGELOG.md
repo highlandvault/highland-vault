@@ -17,6 +17,16 @@ Format: newest first, one short line per change with its task and PR or commit. 
 
 ## Unreleased
 
+- **P5-3:** Migration `0012_guest_sessions` and guest identity for checkout (ADR-0029). An opaque token stored only as its SHA-256, carried in a separate `hv_guest` cookie, lasting 24 hours, with a slot for the verified email that is a guest’s ticket-cap key (normalized exactly as `users.email`, good for 30 minutes). It is **not authentication**: the guard resolves it only on public routes, and it cannot satisfy any authenticated or admin route. New optional env: `GUEST_SESSION_TTL_HOURS`, `GUEST_VERIFIED_EMAIL_TTL_MINUTES`. Run `pnpm db:migrate up` and `pnpm db:codegen`. Next free migration number: `0013`.
+
+- **P5-2:** Mail delivery for the outbox (ADR-0028). The `outbox` queue now RELAYS to a new `notifications` queue keyed by the outbox row id (specification B17); the notifications worker sends the message and only then marks the row published, so `published_at` still means delivered. Provider-independent `MailPort` with an SMTP adapter (Mailpit in dev/test; production provider is still O14 and a production worker without mail configuration refuses to start). Verification-code payloads are sealed with AES-256-GCM, so no plaintext one-time code is stored in PostgreSQL or Redis. New worker env: `SMTP_URL`, `MAIL_FROM`, `OUTBOX_ENCRYPTION_KEY`, `OUTBOX_ENCRYPTION_KEY_ID`. No migration; next free number is still `0012`.
+
+- **P5-1:** Migration `0011_outbox`: transactional outbox (`outbox` table, guard trigger, `hv_claim_outbox`). Producers add an event with `enqueueOutboxEvent` inside their own transaction, so it commits or rolls back with the business change; the worker claims due events every 5 s with `FOR UPDATE SKIP LOCKED` and delivers them at least once. No producers or handlers yet (P5-2). Run `pnpm db:migrate up` and `pnpm db:codegen`. Next free migration number: `0012`.
+
+- **P5-0:** Migration `0010_reservation_end_fix`: `hv_end_reservation` now returns the entrant-cap allowance for the ticket rows it actually freed (`GET DIAGNOSTICS`), not the reservation quantity, so tickets that are already sold keep counting against the cap (NB-1). Behaviour is unchanged for Phase 4 and Phase 5, where nothing writes `sold`. Run `pnpm db:migrate up`. Next free migration number: `0011`.
+
+- **P4:** Merged into `develop` via PR #8 (`49e3903`) and released to `main` via PR #9 (`c284825`) on 2026-09-23. Phase 4 is DONE; review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md) and [HANDOFFS.md](HANDOFFS.md).
+
 - **P4:** O15 decided: sequential ticket numbers (ADR-0027).
 - **P4:** Migration `0009_tickets`: `tickets`, `reservations`, `draw_entrant_counts`. Publishing a draw now creates its ticket pool (1..N) in the same transaction; at most 1,000,000 tickets per draw. Run `pnpm db:migrate up`. Next free migration number: `0010`.
 - **P4:** Customer API: `GET /markets/:market/draws/:slug/availability`, `POST …/draws/:slug/reservations`, `GET /markets/:market/reservations[/:reservation]`, `POST …/reservations/:reservation/release`. Admin: `GET /admin/markets/:market/draws/:draw/inventory` (read-only).

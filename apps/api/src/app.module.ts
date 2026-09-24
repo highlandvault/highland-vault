@@ -7,6 +7,7 @@ import { ApiExceptionFilter } from './common/exception.filter';
 import { API_ENV, type ApiEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
 import { DrawsModule } from './draws/draws.module';
+import { GuestsModule } from './guests/guests.module';
 import { HealthController } from './health/health.controller';
 import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
@@ -53,6 +54,7 @@ export class AppModule {
         RbacModule,
         MarketsModule,
         AuthModule,
+        GuestsModule,
         DrawsModule,
         TicketsModule,
       ],
