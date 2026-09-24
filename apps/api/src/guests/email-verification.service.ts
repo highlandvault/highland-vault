@@ -40,8 +40,9 @@ export interface CodeRequestResult {
  * Six digits is only safe because guessing is bounded, so all three limits are
  * enforced here and in the database rather than trusted to the client: the
  * code expires, it is single-use, and attempts against it are counted under a
- * row lock. Sending is limited separately, per address, by the existing
- * fail-closed Redis limiter.
+ * row lock. Sending is limited separately by the existing fail-closed Redis
+ * limiter, per IP and per address — one address cannot be flooded, and one
+ * caller cannot escape that by rotating addresses.
  */
 @Injectable()
 export class EmailVerificationService {
@@ -61,6 +62,10 @@ export class EmailVerificationService {
    * an email is never queued for a code that was not stored, and a stored code
    * never goes unsent. The plaintext reaches the event sealed (ADR-0028) and is
    * never logged.
+   *
+   * The rate limits are consumed OUTSIDE that transaction, deliberately: Redis
+   * is not transactional, and a rolled-back transaction must not appear to
+   * give a refused caller their allowance back.
    */
   async requestCode(
     guest: GuestContext | null,
@@ -68,8 +73,15 @@ export class EmailVerificationService {
     meta: RequestMeta,
   ): Promise<CodeRequestResult> {
     const email = normalizeEmail(rawEmail);
-    // Per address, so one inbox cannot be flooded; fail-closed, so a Redis
-    // outage refuses rather than lets an unlimited number through.
+    // Both limits are consumed before a code exists and before anything is
+    // written, and both fail closed: a Redis outage refuses the request rather
+    // than letting an unlimited number through.
+    //
+    // Per IP first, because it is the broader guard. The per-address limit
+    // protects one inbox from being flooded; it does nothing about a caller
+    // who rotates addresses, which is what would produce unbounded mail to
+    // strangers and unbounded rows on tables hv_app cannot delete from.
+    await this.rateLimiter.consume(RATE_LIMITS.verificationCodePerIp, meta.ip ?? 'unknown');
     await this.rateLimiter.consume(RATE_LIMITS.verificationCodePerEmail, email);
 
     const result = await withTransaction(this.db, async (trx) => {

@@ -12,8 +12,9 @@ import { GuestSessionsService } from './guest-sessions.service';
  *
  * Global because the access guard resolves a guest on every public route that
  * asks to identify its caller, the same way SessionsService is available to
- * it. The module exposes no controller: P5-3 is the identity itself, and the
- * verification routes (P5-4) are the only place a guest cookie is set.
+ * it. Its only controller is the email verification one (P5-4), which is also
+ * the only place a guest cookie is set: a guest session is created when a code
+ * is first requested, because there is nothing to verify without one.
  */
 @Global()
 @Module({

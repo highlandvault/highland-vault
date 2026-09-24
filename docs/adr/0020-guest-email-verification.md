@@ -29,6 +29,7 @@ The values the owner approved at the Phase 5 planning gate, recorded here as thi
 | Expiry                      | 10 minutes | Long enough to fetch an email, short enough that an abandoned code is not a standing target          |
 | Attempts per code           | 5          | Counted under a row lock, before the comparison, and committed whatever the verdict                  |
 | Sends per address, per hour | 3          | Limits flooding an inbox someone else owns                                                           |
+| Sends per IP, per hour      | 20         | Bounds a caller who rotates addresses; the same value as `registerPerIp` (B19)                       |
 | Verified email lifetime     | 30 minutes | `GUEST_VERIFIED_EMAIL_TTL_MINUTES` (ADR-0029); proving you can read an inbox is not a day pass       |
 
 How the properties above are actually enforced:

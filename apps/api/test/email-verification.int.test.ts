@@ -20,8 +20,9 @@ import { enableMarketsForTesting } from '@hv/db/testing';
 import { ErrorResponseSchema } from '@hv/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { GUEST_SESSION_COOKIE } from '../src/auth/cookies';
+import { RATE_LIMITS } from '../src/auth/rate-limiter';
 import { sha256 } from '../src/auth/tokens';
-import { WEB_ORIGIN, type Harness, startHarness } from './support';
+import { WEB_ORIGIN, type Harness, randomIp, startHarness } from './support';
 
 const KEY = 'a1'.repeat(16) + 'b2'.repeat(16);
 const box = new SecretBox(KEY, 'k1');
@@ -38,9 +39,20 @@ describe('guest email verification', () => {
     await h?.close();
   });
 
+  /**
+   * A fresh client address per test.
+   *
+   * Sending is limited per IP as well as per address, and the counters live in
+   * a Redis database shared with every other test and every previous run. A
+   * fixed address would make each test spend the next one's allowance — the
+   * same reason `support.ts` gives every Client a `randomIp()`.
+   */
+  let ip: string;
+
   beforeEach(async () => {
     // A clean slate per test: the send limit counts rows, and Redis counters
-    // are keyed on the address.
+    // are keyed on the address and the IP.
+    ip = randomIp();
     await h.sql.query(`TRUNCATE guest_email_verifications, outbox`);
     await h.sql.query(`UPDATE guest_sessions SET revoked_at = now() WHERE revoked_at IS NULL`);
   });
@@ -48,11 +60,14 @@ describe('guest email verification', () => {
   let unique = 0;
   const freshEmail = () => `guest-${Date.now()}-${unique++}@example.com`;
 
-  const post = (url: string, payload: unknown, cookie?: string) =>
+  // `from` defaults to this test's address; default parameters are evaluated
+  // per call, so it picks up whatever beforeEach assigned.
+  const post = (url: string, payload: unknown, cookie?: string, from = ip) =>
     h.app.inject({
       method: 'POST',
       url,
       payload: payload as object,
+      remoteAddress: from,
       headers: { origin: WEB_ORIGIN, ...(cookie ? { cookie } : {}) },
     });
 
@@ -61,6 +76,16 @@ describe('guest email verification', () => {
     const value = Array.isArray(raw) ? raw[0] : raw;
     const match = value ? new RegExp(`${GUEST_SESSION_COOKIE}=([^;]*)`).exec(value) : null;
     return match ? `${GUEST_SESSION_COOKIE}=${match[1]}` : null;
+  };
+
+  /** Everything a code request writes, so a refusal can be shown to write none of it. */
+  const rowCounts = async () => {
+    const { rows } = await h.sql.query<{ verifications: number; events: number; sessions: number }>(
+      `SELECT (SELECT count(*) FROM guest_email_verifications)::int AS verifications,
+              (SELECT count(*) FROM outbox)::int                   AS events,
+              (SELECT count(*) FROM guest_sessions)::int           AS sessions`,
+    );
+    return rows[0]!;
   };
 
   /** The code as the worker would read it: out of the outbox, unsealed. */
@@ -229,7 +254,9 @@ describe('guest email verification', () => {
       const { rows } = await h.sql.query<{ attempts: number; consumed_at: Date | null }>(
         `SELECT attempts, consumed_at FROM guest_email_verifications`,
       );
-      expect(rows[0]!.attempts).toBeGreaterThanOrEqual(VERIFICATION_CODE_MAX_ATTEMPTS);
+      // Exactly the cap: the limit check runs before the count, so a refused
+      // guess does not push it higher.
+      expect(rows[0]!.attempts).toBe(5);
       expect(rows[0]!.consumed_at).toBeNull();
     });
 
@@ -337,6 +364,102 @@ describe('guest email verification', () => {
       const fourth = await post('/markets/uk/checkout/email/code', { email }, cookie);
       expect(fourth.statusCode).toBe(429);
       expect(fourth.json()).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+    });
+
+    /**
+     * The per-address limit bounds one inbox. It does nothing about a caller
+     * who rotates addresses, which is the case that produces unlimited mail to
+     * strangers and unlimited rows on tables hv_app cannot delete from — so
+     * sending is limited per IP as well.
+     */
+    describe('per IP, so rotating the address does not buy more', () => {
+      const send = (from?: string) =>
+        post('/markets/uk/checkout/email/code', { email: freshEmail() }, undefined, from);
+
+      it('allows the whole allowance from one address', async () => {
+        for (let i = 0; i < RATE_LIMITS.verificationCodePerIp.limit; i++) {
+          expect((await send()).statusCode).toBe(202);
+        }
+      });
+
+      it('refuses the request after it, although every address is new', async () => {
+        for (let i = 0; i < RATE_LIMITS.verificationCodePerIp.limit; i++) {
+          expect((await send()).statusCode).toBe(202);
+        }
+        const over = await send();
+        expect(over.statusCode).toBe(429);
+        expect(over.json()).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+      });
+
+      it('writes nothing for a refused request', async () => {
+        for (let i = 0; i < RATE_LIMITS.verificationCodePerIp.limit; i++) await send();
+        const before = await rowCounts();
+        expect((await send()).statusCode).toBe(429);
+        // The limiter runs before the transaction, so a refusal costs no
+        // verification row, no outbox event and no guest session.
+        expect(await rowCounts()).toEqual(before);
+      });
+
+      it('does not leak the address or the session in the refusal', async () => {
+        const email = freshEmail();
+        for (let i = 0; i < RATE_LIMITS.verificationCodePerIp.limit; i++) await send();
+        const over = await post('/markets/uk/checkout/email/code', { email });
+        expect(over.statusCode).toBe(429);
+        expect(over.body).not.toContain(email);
+        // Nothing says which limit was hit, or anything about the address.
+        expect(over.json()).toMatchObject({
+          error: { code: 'RATE_LIMITED', message: 'Too many attempts. Try again later.' },
+        });
+        expect(guestCookieFrom(over)).toBeNull();
+      });
+
+      it('gives a different address its own allowance', async () => {
+        const other = randomIp();
+        for (let i = 0; i < RATE_LIMITS.verificationCodePerIp.limit; i++) await send();
+        expect((await send()).statusCode).toBe(429);
+        // A separate bucket, not a shared one.
+        expect((await send(other)).statusCode).toBe(202);
+      });
+
+      it('still refuses a single address after three, well inside the IP allowance', async () => {
+        // Proves the two limits are both live: three sends is nowhere near 20.
+        const email = freshEmail();
+        for (let i = 0; i < 3; i++) {
+          expect((await post('/markets/uk/checkout/email/code', { email })).statusCode).toBe(202);
+        }
+        expect((await post('/markets/uk/checkout/email/code', { email })).statusCode).toBe(429);
+        // And the IP itself is not exhausted: another address still works.
+        expect((await send()).statusCode).toBe(202);
+      });
+    });
+
+    it('refuses rather than sends when Redis is unreachable', async () => {
+      // Fail closed (B19): without the limiter there is no brute-force or
+      // flooding protection, so the request is refused, not waved through.
+      const offline = await startHarness({
+        ENABLED_MARKETS: 'uk,ie',
+        OUTBOX_ENCRYPTION_KEY: KEY,
+        // A port nothing listens on, so every limiter call fails. The same
+        // address the readiness test uses for an unreachable Redis.
+        REDIS_URL: 'redis://127.0.0.1:1/0',
+      });
+      try {
+        await enableMarketsForTesting(offline.sql, ['uk']);
+        const response = await offline.app.inject({
+          method: 'POST',
+          url: '/markets/uk/checkout/email/code',
+          payload: { email: freshEmail() },
+          remoteAddress: randomIp(),
+          headers: { origin: WEB_ORIGIN },
+        });
+        expect(response.statusCode).toBe(503);
+        const { rows } = await offline.sql.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM guest_email_verifications`,
+        );
+        expect(rows[0]!.n).toBe(0);
+      } finally {
+        await offline.close();
+      }
     });
   });
 
