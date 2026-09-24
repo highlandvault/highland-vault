@@ -44,11 +44,26 @@ export interface OutboxEvent {
   readonly attempts: number;
 }
 
+/**
+ * What a handler did with an event (ADR-0028).
+ *
+ * `published` — the side effect happened; the row is marked published.
+ * `deferred` — accepted, but not yet done: another worker will finish it and
+ * mark the row. The relay returns this after enqueuing a notification job, so
+ * that `published_at` keeps meaning "delivered" rather than "queued in Redis".
+ *
+ * Returning nothing means `published`, which is how in-process handlers
+ * behaved before the relay existed.
+ */
+export type OutboxOutcome = 'published' | 'deferred';
+
 /** Delivers one event. Must be idempotent: the same event can arrive twice. */
-export type OutboxHandler = (event: OutboxEvent) => Promise<void>;
+export type OutboxHandler = (event: OutboxEvent) => Promise<OutboxOutcome | void>;
 
 export interface PublishResult {
   published: number;
+  /** Handed to a target queue; still unpublished until that worker finishes. */
+  deferred: number;
   failed: number;
 }
 
@@ -90,13 +105,20 @@ async function claim(db: DbExecutor, limit: number): Promise<ClaimedRow[]> {
   return rows;
 }
 
-async function markPublished(db: DbExecutor, id: string): Promise<void> {
+/**
+ * Marks an event delivered. Exported because under the relay the worker that
+ * finishes the work is not the one that claimed it. Conditional on the row
+ * still being unpublished, and the guard trigger refuses a second publish, so
+ * a duplicate delivery cannot overwrite the record of the first.
+ */
+export async function markOutboxPublished(db: DbExecutor, id: string): Promise<void> {
   await sql`UPDATE outbox SET published_at = now(), last_error = NULL WHERE id = ${id} AND published_at IS NULL`.execute(
     db,
   );
 }
 
-async function markFailed(
+/** Records why an attempt failed and when the next one may start. */
+export async function markOutboxFailed(
   db: DbExecutor,
   id: string,
   attempts: number,
@@ -122,16 +144,21 @@ export async function publishOutbox(
   handle: OutboxHandler,
   batch = PUBLISH_BATCH,
 ): Promise<PublishResult> {
-  const result: PublishResult = { published: 0, failed: 0 };
+  const result: PublishResult = { published: 0, deferred: 0, failed: 0 };
   for (let i = 0; i < MAX_BATCHES; i++) {
     const claimed = await claim(db, batch);
     for (const event of claimed) {
       try {
-        await handle(event);
-        await markPublished(db, event.id);
+        if ((await handle(event)) === 'deferred') {
+          // Left unpublished on purpose: the target queue finishes it. The
+          // claim lease is what brings the event back if that never happens.
+          result.deferred += 1;
+          continue;
+        }
+        await markOutboxPublished(db, event.id);
         result.published += 1;
       } catch (error) {
-        await markFailed(db, event.id, event.attempts, (error as Error).message);
+        await markOutboxFailed(db, event.id, event.attempts, (error as Error).message);
         result.failed += 1;
       }
     }
@@ -146,10 +173,10 @@ export async function publishOutbox(
  * with the reason recorded. P5-2 registers the first real handler.
  */
 export function createTopicDispatcher(handlers: Readonly<Record<string, OutboxHandler>>) {
-  return async (event: OutboxEvent): Promise<void> => {
+  return (event: OutboxEvent): Promise<OutboxOutcome | void> => {
     const handler = handlers[event.topic];
     if (!handler) throw new Error(`no handler registered for outbox topic "${event.topic}"`);
-    await handler(event);
+    return handler(event);
   };
 }
 

@@ -113,7 +113,7 @@ describe('transactional outbox', () => {
       );
       const { seen, handle } = collector();
 
-      expect(await publishOutbox(db, handle)).toEqual({ published: 0, failed: 0 });
+      expect(await publishOutbox(db, handle)).toEqual({ published: 0, deferred: 0, failed: 0 });
       expect(seen).toEqual([]);
       expect((await rows())[0]).toMatchObject({ attempts: 0, published_at: null });
     });
@@ -121,10 +121,18 @@ describe('transactional outbox', () => {
     it('does not claim an event that is already published', async () => {
       await enqueueOutboxEvent(db, TOPIC, {});
       const first = collector();
-      expect(await publishOutbox(db, first.handle)).toEqual({ published: 1, failed: 0 });
+      expect(await publishOutbox(db, first.handle)).toEqual({
+        published: 1,
+        deferred: 0,
+        failed: 0,
+      });
 
       const second = collector();
-      expect(await publishOutbox(db, second.handle)).toEqual({ published: 0, failed: 0 });
+      expect(await publishOutbox(db, second.handle)).toEqual({
+        published: 0,
+        deferred: 0,
+        failed: 0,
+      });
       expect(second.seen).toEqual([]);
       expect((await rows())[0]!.published_at).not.toBeNull();
     });
@@ -221,7 +229,7 @@ describe('transactional outbox', () => {
       expect(claimed).toHaveLength(1);
 
       const { seen, handle } = collector();
-      expect(await publishOutbox(db, handle)).toEqual({ published: 0, failed: 0 });
+      expect(await publishOutbox(db, handle)).toEqual({ published: 0, deferred: 0, failed: 0 });
       expect(seen).toEqual([]);
       const [row] = await rows();
       expect(row!.attempts).toBe(1);
@@ -234,7 +242,11 @@ describe('transactional outbox', () => {
       for (let i = 0; i < 25; i++) await enqueueOutboxEvent(db, TOPIC, { i });
       const { seen, handle } = collector();
 
-      expect(await publishOutbox(db, handle, 10)).toEqual({ published: 25, failed: 0 });
+      expect(await publishOutbox(db, handle, 10)).toEqual({
+        published: 25,
+        deferred: 0,
+        failed: 0,
+      });
       expect(seen).toHaveLength(25);
       expect((await rows()).every((r) => r.published_at !== null)).toBe(true);
     });
@@ -247,7 +259,7 @@ describe('transactional outbox', () => {
         return calls === 1 ? Promise.reject(new Error('consumer unavailable')) : Promise.resolve();
       };
 
-      expect(await publishOutbox(db, flaky)).toEqual({ published: 0, failed: 1 });
+      expect(await publishOutbox(db, flaky)).toEqual({ published: 0, deferred: 0, failed: 1 });
       const afterFailure = (await rows())[0]!;
       expect(afterFailure).toMatchObject({ attempts: 1, published_at: null });
       expect(afterFailure.last_error).toBe('consumer unavailable');
@@ -256,7 +268,7 @@ describe('transactional outbox', () => {
 
       // Make it due, the way the backoff eventually would.
       await sql.query(`UPDATE outbox SET available_at = now()`);
-      expect(await publishOutbox(db, flaky)).toEqual({ published: 1, failed: 0 });
+      expect(await publishOutbox(db, flaky)).toEqual({ published: 1, deferred: 0, failed: 0 });
       const afterRetry = (await rows())[0]!;
       expect(afterRetry.attempts).toBe(2);
       expect(afterRetry.published_at).not.toBeNull();
@@ -271,7 +283,7 @@ describe('transactional outbox', () => {
       const result = await publishOutbox(db, (event) =>
         event.id === poison ? Promise.reject(new Error('nope')) : Promise.resolve(),
       );
-      expect(result).toEqual({ published: 4, failed: 1 });
+      expect(result).toEqual({ published: 4, deferred: 0, failed: 1 });
       const byId = new Map((await rows()).map((r) => [r.id, r]));
       expect(byId.get(poison)!.published_at).toBeNull();
       expect([...byId.values()].filter((r) => r.published_at !== null)).toHaveLength(4);
@@ -281,7 +293,7 @@ describe('transactional outbox', () => {
       await enqueueOutboxEvent(db, 'unhandled.topic', {});
       const dispatch = createTopicDispatcher({ [TOPIC]: () => Promise.resolve() });
 
-      expect(await publishOutbox(db, dispatch)).toEqual({ published: 0, failed: 1 });
+      expect(await publishOutbox(db, dispatch)).toEqual({ published: 0, deferred: 0, failed: 1 });
       const [row] = await rows();
       expect(row!.published_at).toBeNull();
       expect(row!.last_error).toContain('no handler registered');
@@ -333,7 +345,7 @@ describe('transactional outbox', () => {
         worker.on('failed', (_job, error) => reject(error));
       });
       await queue.add(PUBLISH_JOB, {});
-      expect(await done).toEqual({ published: 1, failed: 0 });
+      expect(await done).toEqual({ published: 1, deferred: 0, failed: 0 });
       expect(seen).toHaveLength(1);
     } finally {
       await worker.close();

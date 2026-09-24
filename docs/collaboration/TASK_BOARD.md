@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                 | Owner             | Branch                | Dependencies | Area                                | Issue / PR | Notes                                                                                          |
-| ---- | -------------------- | ----------------- | --------------------- | ------------ | ----------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| P5-1 | Transactional outbox | Divyanshu (owner) | `feature/p5-1-outbox` | P5-0         | `packages/db` (0011), `apps/worker` | none yet   | Outbox table, claim function, worker drain. No producers yet (P5-2). Next free migration: 0012 |
+| ID   | Task                                   | Owner             | Branch                   | Dependencies | Area                             | Issue / PR | Notes                                                                                                           |
+| ---- | -------------------------------------- | ----------------- | ------------------------ | ------------ | -------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| P5-2 | Mail port + outbox notifications relay | Divyanshu (owner) | `feature/p5-2-mail-port` | P5-1         | `apps/worker`, `packages/domain` | none yet   | MailPort, SMTP/Mailpit adapter, B17 relay, encrypted verification payload. No producer yet (P5-4). No migration |
 
 ## BLOCKED
 
@@ -92,3 +92,4 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 | P4    | Ticket engine + customer entry flow                | Divyanshu (owner) | `feature/p4-ticket-engine`                     | P3           | tickets, reservations, API, worker, web | PR #8      | Merged into `develop` (`49e3903`) on 2026-09-23; released to `main` via PR #9 (`c284825`). O15 = sequential (ADR-0027). Phase 5 carry-over items: PROJECT_STATUS.md |
 | P5-0  | NB-1 structural reservation-end fix                | Divyanshu (owner) | `fix/p5-0-reservation-end-cap`                 | P4           | `packages/db` (migration 0010)          | PR #11     | Merged into `develop` (`834400f`) on 2026-09-23. Cap decrement follows rows actually freed                                                                          |
 | NB-3  | Reservation fixtures made transaction-stable       | Divyanshu (owner) | `fix/nb3-reservation-fixture-timing`           | P4           | integration tests                       | PR #12     | Merged into `develop` (`cb3813e`). Test-fixture fix; original CI attribution never confirmed                                                                        |
+| P5-1  | Transactional outbox                               | Divyanshu (owner) | `feature/p5-1-outbox`                          | P5-0         | `packages/db` (0011), `apps/worker`     | PR #13     | Merged into `develop` (`13b35ae`) on 2026-09-24. Outbox table, claim function, worker drain                                                                         |

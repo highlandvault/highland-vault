@@ -11,7 +11,7 @@ _Last updated: 2026-09-24_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; task P5-1 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 merged (PR #11, `834400f`) and the NB-3 fixture fix merged (PR #12, `cb3813e`). No task after P5-1 is approved to start.
+- **Phase 5 (cart + checkout) is under way; task P5-2 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 (PR #11), NB-3 (PR #12) and P5-1 (PR #13, `13b35ae`) are merged. No task after P5-2 is approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -187,12 +187,13 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                              | State         | Evidence                                                          |
-| ------------------------------------------------- | ------------- | ----------------------------------------------------------------- |
-| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                          |
-| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                                |
-| **P5-1 Transactional outbox**                     | **in review** | Migration `0011`, `apps/worker/src/outbox/`, 17 integration tests |
-| P5-2 onwards                                      | not started   | Each needs its own branch, PR and owner approval                  |
+| Task                                              | State         | Evidence                                                       |
+| ------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                       |
+| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                             |
+| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                           |
+| **P5-2 Mail port + notifications relay**          | **in review** | ADR-0028, `apps/worker/src/mail/`, B17 relay, 37 focused tests |
+| P5-3 onwards                                      | not started   | Each needs its own branch, PR and owner approval               |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -204,7 +205,17 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 - **Privileges:** `hv_app` cannot `DELETE` or `TRUNCATE` the outbox, so application code cannot lose a pending event.
 - **Worker:** `outbox` queue, job `publish`, scheduler `outbox-publish` every 5 s, up to 20 batches of 100 per run, `concurrency: 1` per process. Several worker processes remain safe because claiming skips what another holds.
 - **Retry:** backoff doubles from 10 s and stops growing at 1 hour. **No give-up policy is set** — a stuck event keeps its attempt count and last error and stays visible rather than being dropped. Choosing when to stop is a policy decision left to the owner.
-- **Nothing is produced or handled yet.** An unknown topic fails the event (recorded, not dropped); P5-2 registers the first handler with the mail port.
+- **Nothing is produced yet.** An unknown topic fails the event (recorded, not dropped). P5-2 registered the first handler; the first producer arrives with guest verification in P5-4.
+
+### P5-2: mail delivery and the B17 relay (ADR-0028, no migration)
+
+- **The `outbox` queue relays**, it does not deliver: it claims due rows and enqueues a job on the `notifications` queue with **`jobId` = the outbox row id** (specification B17), then returns `deferred` so the row stays unpublished.
+- **The `notifications` queue delivers**: it opens the sealed payload, sends the message, and only then marks the row published. **`published_at` still means the side effect happened** — never "queued in Redis".
+- **PostgreSQL owns retry, exclusively.** Notification jobs use `attempts: 1`; the outbox lease, `attempts` and backoff remain the only retry mechanism.
+- **Notification jobs remove themselves on success and on failure.** Verified by experiment, not assumed: BullMQ silently ignores an enqueue whose job id belongs to a **retained** completed or failed job, so retention would have left a failed email permanently un-redeliverable while its attempt count climbed.
+- **Sensitive payloads are sealed** with the same AES-256-GCM construction as TOTP secrets (`SecretBox`, now in `@hv/domain` so the API and worker share one key-management model). The topic is the associated data. No plaintext one-time code or recipient address is stored in PostgreSQL **or Redis** — proven by direct SQL and by inspecting the job.
+- **`MailPort` is provider-independent**, following the shape of ADR-0006. `nodemailer` exists only behind the SMTP adapter; Mailpit is the dev/test target. **Production refuses to start without `SMTP_URL`, `MAIL_FROM` and `OUTBOX_ENCRYPTION_KEY`**, because O14 has not chosen a provider.
+- **Duplicate verification emails are possible and accepted** (at-least-once). Redelivery is tested: the message is sent again, but the record of the first success is not overwritten.
 
 ## Carried into Phase 5 (from the Phase 4 review)
 
@@ -219,7 +230,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way: task P5-1 (transactional outbox).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way: task P5-2 (mail port and the outbox notifications relay).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 
