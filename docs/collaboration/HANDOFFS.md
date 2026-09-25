@@ -1,6 +1,6 @@
 # Handoffs
 
-_Last updated: 2026-09-23_
+_Last updated: 2026-09-25_
 
 A handoff is written when another developer (or another developer's Claude session) needs to continue, integrate with, or depend on your work. It carries what the code and the commit messages don't: the decisions, traps, and state that someone continuing the work needs.
 
@@ -61,9 +61,59 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
-### 2026-09-22 — P4 — Ticket engine + customer entry flow (for Phase 5, checkout)
+### 2026-09-25 — P5-3 + P5-4 — Guest identity and verified email (for P5-5, basket and guest checkout)
 
 Status: OPEN
+
+Task: P5-3 (PR #20), P5-4 (PR #21)
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p5-3-guest-sessions` merged as `b940e7d`; `feature/p5-4-guest-email-verification` merged as `173fd45`
+Status of the work: DONE, reviewed and merged
+
+What was completed:
+
+- `0012_guest_sessions`: a guest's checkout identity — opaque token stored as SHA-256 only, 24-hour lifetime, and the verified email that is their ticket-cap key. Cookie `hv_guest`, built by the same code as `hv_session` (ADR-0029).
+- `0013_guest_email_verifications`: the six-digit code proving a guest can read an address — hashed, single-use, 10-minute expiry, 5 attempts counted under a row lock, 3 sends per address and 20 per IP per hour (ADR-0020). First real producer for the outbox; the payload is sealed (ADR-0028) and delivered by the P5-2 relay.
+
+Important implementation details:
+
+- **A guest session is not authentication.** `AccessGuard` resolves it only on the `public` branch, for `@Public({ identify: true })` routes, into `request.hvGuest`. Every authorization path reads `hvAuth` only, and a signed-in caller is never also treated as a guest. **P5-5 must not weaken this**: opening checkout to guests means giving the relevant routes a public-with-identify policy, never making `hvGuest` satisfy an authenticated one.
+- **The cap key for a guest is `guest_sessions.verified_email`**, normalized exactly as `users.email` (ADR-0008). It is **immutable once set** — verifying a different address means a new session.
+- **Freshness is judged on every use, never cached.** Call `GuestSessionsService.hasFreshVerifiedEmail()` at the point of decision; the 30-minute window (`GUEST_VERIFIED_EMAIL_TTL_MINUTES`) is deliberately much shorter than the session.
+- **Producing outbox events:** `enqueueOutboxEvent` lives in `@hv/db` and takes an executor, so it must be called with the **same transaction** as the business change.
+- **Database:** migrations `0012` and `0013`; codegen re-run (21 tables). `hv_app` has no `DELETE` or `TRUNCATE` on either table, so retention is an operator task (Phase 12, O12). Guard triggers make identity columns immutable independently of the API.
+- **Infrastructure:** `OUTBOX_ENCRYPTION_KEY` is now **required by the API as well as the worker** and must hold the same value in both, or sealed payloads cannot be opened. Both refuse a low-entropy placeholder in production. Placeholders are in `.env.example` only.
+- **Security:** every failure of `verify` returns one generic `INVALID_VERIFICATION_CODE`; attempts are committed even when the code is wrong (the transaction returns a verdict and the error is raised outside it). Plaintext codes exist only in memory, never in PostgreSQL, Redis, a response or a log.
+
+Files/modules affected:
+
+- `packages/db/migrations/{0012,0013}*.sql`, `packages/db/src/{outbox.ts,generated/db.ts}`
+- `packages/domain/src/{verification-code,verification-email}.ts`, `packages/contracts/src/guests.ts`
+- `apps/api/src/guests/`, `apps/api/src/auth/{cookies,rate-limiter}.ts`, `apps/api/src/rbac/access.guard.ts`, `apps/api/src/config/env.ts`
+- `apps/worker/src/{outbox,mail}/` (re-exports only; delivery unchanged)
+
+Tests executed:
+
+- `pnpm verify` green: 213 unit, 362 integration, 13 migrations with matching checksums, build. `pnpm test:e2e`: 38 passed. Integration suite run twice. Gitleaks clean.
+- Not tested: guest **purchase** end to end — there is no guest purchase path yet. That is P5-5.
+
+Known issues:
+
+- Reconciliation findings the owner chose to leave: authenticated callers can create unreachable guest sessions; `VERIFICATION_REQUIRED` is distinguishable from an invalid code; a 429 can expose per-address limit state; the SQL send-limit backstop is not independently atomic; only the newest live verification is reachable. All are recorded in `PROJECT_STATUS.md`.
+
+Integration points:
+
+- **Database:** `guest_sessions`, `guest_email_verifications`, `outbox`.
+- **API:** `GuestSessionsService` (`issue`, `resolve`, `bindVerifiedEmail`, `hasFreshVerifiedEmail`, `reload`), `EmailVerificationService`, `@CurrentGuest()`.
+- **Infrastructure:** env `GUEST_SESSION_TTL_HOURS`, `GUEST_VERIFIED_EMAIL_TTL_MINUTES`, `OUTBOX_ENCRYPTION_KEY`.
+
+Next developer action:
+
+- **P5-5** (guest checkout access + per-market basket). Its scope, constraints and Definition of Done are in `PROJECT_STATUS.md` ("Phase 5 remaining scope"); cart ownership is fixed by **ADR-0031** (`user_id` XOR `guest_session_id`, one `market_id`). It starts only on explicit owner approval, and its first step is to inspect the existing reservation API before proposing any route. What happens to a guest cart when they sign in is deliberately left to it to decide and report.
+
+### 2026-09-22 — P4 — Ticket engine + customer entry flow (for Phase 5, checkout)
+
+Status: ACCEPTED (by Divyanshu, 2026-09-25) — **amended, see the end of this entry**
 
 Task: P4 (no GitHub issue; PR #8)
 Developer: Divyanshu (owner), with Claude
@@ -82,7 +132,7 @@ Important implementation details:
 - **Allocation (one transaction):** create and lock the entrant's counter row → check the cap → insert the reservation → `SELECT … WHERE status = 'available' ORDER BY ticket_number LIMIT n FOR UPDATE SKIP LOCKED` → mark the tickets reserved → increment the counter. A short result rolls everything back. `AllocationContended` means "retry"; any other refusal is final.
 - **Lock order** is always entrant counter → tickets. `hv_expire_reservations` processes reservations in entrant order with SKIP LOCKED, so sweeps and allocations cannot deadlock. Keep this order in checkout.
 - **Cap:** `draw_entrant_counts.count` = tickets held in active reservations. **Phase 5 must not decrement it when a reservation becomes an order**: sold tickets keep counting. See **NB-1** below — the database function does not currently enforce this, so Phase 5 has to make it structural. Guests use the `email` key with the normalized verified email (ADR-0020); the API does not accept guests yet.
-- **Selling:** Phase 5 marks the reservation's tickets `reserved → sold` (the trigger allows only this, for the same reservation) and ends the reservation. A new reservation status (for example `converted`) needs a migration that extends `reservations_status_valid` and `hv_reservations_guard`. Check `expires_at > now()` in the same transaction: an expired reservation must never become an order.
+- **Selling:** ~~Phase 5 marks the reservation's tickets `reserved → sold` … and ends the reservation.~~ **SUPERSEDED on 2026-09-25 by the approved Option A scope** (see the amendment at the end of this handoff). `reserved → sold` and ending the reservation belong to **Phase 6**, not Phase 5. What is still true and still applies whenever that transition is built: the trigger allows only `reserved → sold` for the same reservation; a new reservation status (for example `converted`) needs a migration extending `reservations_status_valid` and `hv_reservations_guard`; and `expires_at > now()` must be checked in the same transaction, because an expired reservation must never become an order.
 - **Order lines** can reference `reservations (id, draw_id)` and `draws (id, market_id)` with composite FKs.
 - **Reads use the effective state:** an active reservation past `expires_at` is shown as expired, and availability, allowance and inventory count its tickets as free before any sweep runs.
 - **Availability is display-only** (cached 3 s). Never base a decision on it.
@@ -125,7 +175,17 @@ Review findings carried into Phase 5 (from the final review of PR #8):
 
 Next developer action:
 
-- P5 (cart and checkout) starts only on explicit owner approval. It needs O12 (wrong skill answer behaviour) and the email-verification timing decision for guests, and it must address NB-1 in its database design before any order can mark tickets sold.
+- ~~P5 (cart and checkout) starts only on explicit owner approval. It needs O12 (wrong skill answer behaviour) and the email-verification timing decision for guests, and it must address NB-1 in its database design before any order can mark tickets sold.~~ **Done: all three are settled — see the amendment below.**
+
+#### Amendment — 2026-09-25, Phase 5 scope lock
+
+This handoff was written before Phase 5's scope was fixed, and two of its statements no longer match the approved architecture. They are corrected here rather than deleted, because a handoff is the project's memory (§ Handoffs, rule 4).
+
+1. **Phase 5 does NOT sell tickets.** The approved scope is **Option A**: Phase 5 ends at `pending_payment`. **Payment, payment webhooks, the `reserved → sold` transition and Gate 4 are all Phase 6** (ADR-0006). Phase 5 also must never treat a payment return URL as proof of payment. The "Selling" bullet above is struck through accordingly. An order created in Phase 5 leaves its reservation active and its tickets `reserved`.
+2. **The three preconditions are met.** NB-1 was fixed structurally by **P5-0** (migration `0010`, PR #11) — `hv_end_reservation` now decrements the cap by the rows actually freed. The guest email-verification timing decision became **ADR-0020** and was implemented by **P5-4** (migration `0013`, PR #21). The O12 wrong-skill-answer behaviour is now **ADR-0030**.
+3. **Guests still cannot reserve.** The reservation routes remain `@Authenticated()`. Part F requires guest checkout, so opening that path is explicit scope for **P5-5**; the constraints it must honour are recorded in `PROJECT_STATUS.md` ("Phase 5 remaining scope").
+
+Everything else in this handoff — the allocation transaction, the lock order (entrant counter → tickets), the composite FKs available to order lines, effective-state reads, availability being display-only, and NB-2 — is unchanged and still applies to Phase 5.
 
 ### 2026-09-22 — P3 — Draws foundation (for Phase 4, the ticket engine)
 

@@ -1,6 +1,6 @@
 # Development Changelog
 
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 Meaningful changes that other developers and Claude sessions need to know about. This is **not** a copy of Git history.
 
@@ -16,6 +16,10 @@ Don't record routine commits, refactors with no external effect, or test-only ch
 Format: newest first, one short line per change with its task and PR or commit. Unmerged work goes under **Unreleased**.
 
 ## Unreleased
+
+- **Phase 5 scope lock (documentation only):** the remaining Phase 5 work is now broken down as **P5-5** (guest checkout access + per-market basket, migration `0014`), **P5-6** (market terms versions and acceptance, `0015`), **P5-7** (order creation, skill answer and idempotency, `0016`) and **P5-8** (integration and gate hardening). Scope, dependencies, per-task constraints and a **committed Phase 5 Definition of Done** are in [PROJECT_STATUS.md](../PROJECT_STATUS.md). **ADR-0030** settles the wrong-skill-answer behaviour, which was previously recorded in three places that disagreed. The P4 handoff's instruction that "Phase 5 marks the reservation's tickets `reserved → sold`" is **superseded**: under Option A that is Phase 6. **P5-5 is next and is not approved to start.**
+
+- **Phase 5 checkout decisions (documentation only):** **ADR-0031** records the owner's decisions on the three questions the scope lock left open, so P5-5, P5-6 and P5-7 are no longer blocked. **Cart ownership:** a cart carries `user_id` and `guest_session_id` with a CHECK that exactly one is set, plus one `market_id` — so "one cart per owner per market" is two partial unique indexes, and `hvAuth`/`hvGuest` stay as separate in the schema as ADR-0029 keeps them in the guard. **Terms:** an active terms version gates **checkout**, not market enablement — a market can be enabled and browsable without one but cannot take an order; content stays Phase 12 and is never invented. **`order_number`:** `HV-` plus an uppercase alphanumeric suffix, randomly generated, `UNIQUE`, never the primary key, never sequential; the length is P5-7's to choose. Cart-merge-on-sign-in is explicitly **not** decided — nothing requires it, so it is a P5-5 implementation decision.
 
 - **P5-4:** Migration `0013_guest_email_verifications` and guest email verification (ADR-0020). A six-digit code, stored only as its SHA-256, valid 10 minutes, usable once, with 5 attempts counted under a row lock, 3 sends per address per hour and 20 per IP per hour (the same value as registration). New public routes under `/markets/:market/checkout/email` (`POST code`, `POST verify`, `GET verification`); the first request issues the guest session, so these are the only routes that set `hv_guest`. This is the **first producer** for the outbox: the payload is sealed (ADR-0028) and delivered by the P5-2 relay, so no plaintext code exists in PostgreSQL or Redis. **`OUTBOX_ENCRYPTION_KEY` is now required by the API as well as the worker, and must be the same value in both**, or codes cannot be opened. Two shared pieces moved so the producer can reach them: `enqueueOutboxEvent` from `apps/worker` to `@hv/db`, and the verification-email topic and payload type to `@hv/domain` — both old paths re-export, so no caller changed. Run `pnpm db:migrate up` and `pnpm db:codegen`. Next free migration number: `0014`.
 
