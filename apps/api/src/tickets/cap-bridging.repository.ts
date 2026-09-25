@@ -56,10 +56,19 @@ export class CapBridgingRepository {
     // The holds move with their counters, or the allowance is lost.
     const reservations = await this.rekeyReservations(trx, normalizedEmail, userId);
 
-    // Summed onto whatever the account already holds. The total may exceed the
-    // draw's cap, which is correct and not an error: it means this entrant may
-    // buy no more, which is the invariant doing its job. There is no upper
-    // CHECK on `count`, only `count >= 0`.
+    // Summed onto whatever the account already holds.
+    //
+    // A counter can never exceed the draw's `max_per_person`:
+    // `hv_draw_entrant_counts_guard` (0009) raises `draw_entrant_counts_cap`
+    // on any count above it, and this merge is checked like any other write.
+    // So a bridge whose merged total would go over the cap is REFUSED, and
+    // because the whole thing runs in the registration transaction, that
+    // refusal rolls back the account with it — counters, reservations and
+    // identity are all left exactly as they were.
+    //
+    // Registration itself cannot reach that: it bridges onto an account
+    // created moments earlier, which holds nothing, so the merged total is
+    // just the address's own count — already capped when it was taken.
     await sql`
       INSERT INTO draw_entrant_counts (draw_id, entrant_type, entrant_ref, count)
       SELECT draw_id, 'user', ${userId}, count
