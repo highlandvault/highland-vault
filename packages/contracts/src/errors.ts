@@ -33,6 +33,11 @@ export const ERROR_CODES = [
   // The basket (ADR-0031). CHECKOUT_IDENTITY_REQUIRED means the caller has
   // neither a session nor a guest session, so there is no basket to own.
   'CHECKOUT_IDENTITY_REQUIRED',
+  // Market terms (ADR-0031). TERMS_UNAVAILABLE means the market has no active
+  // version, so no order can be created in it yet; TERMS_VERSION_STALE means
+  // the customer agreed to a version that is no longer the active one.
+  'TERMS_UNAVAILABLE',
+  'TERMS_VERSION_STALE',
   'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',

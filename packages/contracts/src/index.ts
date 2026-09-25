@@ -6,4 +6,5 @@ export * from './guests';
 export * from './errors';
 export * from './health';
 export * from './markets';
+export * from './terms';
 export * from './tickets';

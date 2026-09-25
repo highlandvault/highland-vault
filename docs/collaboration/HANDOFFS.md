@@ -61,6 +61,60 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-25 — P5-6 — Market terms versions and acceptance (for P5-7, order creation)
+
+Status: OPEN
+
+Task: P5-6
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p5-6-market-terms` (not merged)
+Status of the work: DONE, awaiting review
+
+What was completed:
+
+- `0015_market_terms`: `terms_versions`, `terms_acceptances`, and `market_settings.active_terms_version_id`, with guard triggers and the project's usual DELETE/TRUNCATE protection.
+- `apps/api/src/terms/`: repository, customer service, admin service, and two controllers.
+- Routes: `GET /markets/:market/terms`, `POST …/terms/acceptance`; admin `GET/POST /admin/markets/:market/terms`, `POST …/:terms/publish`, `POST …/:terms/activate`.
+
+Important implementation details:
+
+- **What P5-7 needs is `TermsService`**, which the module exports. `acceptedActiveVersion(market, identity)` answers both questions order creation has to ask — is there an active version here, and has this customer accepted it — and returns the version to write into `orders.terms_version_id`. It returns null in both the "no terms" and "not accepted" cases, so P5-7 must distinguish them if it wants different errors (`TERMS_UNAVAILABLE` already exists for the first).
+- **The gate is on checkout, not enablement.** `hv_market_missing_settings` is deliberately untouched (ADR-0031). A market with no active version is still enabled and browsable; `GET …/terms` reports `checkoutAllowed: false`. A test asserts the enablement gate does not mention terms.
+- **A published version is immutable and cannot be withdrawn.** An order points at it as the thing the customer agreed to; that record is worthless if it can be rewritten. A correction is a new version. Enforced by `hv_terms_versions_guard`, not by the service.
+- **Acceptances are append-only** — `hv_app` has no UPDATE or DELETE, and a trigger refuses any change. Accepting twice is one acceptance (two partial unique indexes), so P5-7 can call it freely.
+- **Identity follows ADR-0031**: `user_id` **or** `guest_session_id`, exactly one. B18's "per user or order" predates ADR-0029; the order link is P5-7's to add if it wants one, and `orders.terms_version_id` already records the version. **A guest accepting creates no user row.**
+- **Market isolation is structural**: composite foreign keys tie the active version and every acceptance to the market they claim, so no market can point at or accept another's terms. Proven in raw SQL.
+- **No legal wording exists.** No content column, no content field in any contract, none in fixtures. B12 marks it legal; Part F puts per-market terms in Phase 12. **Do not add placeholder wording in P5-7 or its tests.**
+- **Database:** migration `0015_market_terms.sql`, applied to local dev and test only; codegen re-run (25 tables). `terms_versions` keeps UPDATE (publishing is an update); `terms_acceptances` has UPDATE, DELETE and TRUNCATE revoked.
+- **Security:** admin mutations are `markets.gate.manage`, scoped to the market in the route and **sensitive** (step-up MFA), audited in the same transaction as the change. Accepting needs a checkout identity and grants nothing; a guest cookie reaches no admin route.
+
+Files/modules affected:
+
+- `packages/db/migrations/0015_market_terms.sql`, `packages/db/src/generated/db.ts`, `packages/db/src/testing/global-setup.ts`
+- `packages/contracts/src/{terms,errors,index}.ts`
+- `apps/api/src/terms/` (new), `apps/api/src/app.module.ts`
+
+Tests executed:
+
+- `apps/api/test/terms.int.test.ts`: 33/33 against real PostgreSQL.
+- Full `pnpm verify`, plus `pnpm test:e2e`. Results in PROJECT_STATUS.md.
+- **Not tested:** anything that consumes terms at checkout — there is no order yet.
+
+Known issues:
+
+- **A shared-test-infrastructure fix rides along.** `global-setup.ts` now reproduces the production privilege model in the test template. Before it, `hv_app` had **no privileges at all** in any test database, so every "hv_app cannot DELETE this" assertion — including the one merged with P5-5 — passed because there was no grant to revoke. A migration that forgot its REVOKE would have looked correct. Those assertions are real now, and this is the reason a test-only file appears in a schema task.
+- No admin UI for terms; the routes are API-only. The web app is unchanged.
+
+Integration points:
+
+- **Database:** `terms_versions`, `terms_acceptances`, `market_settings.active_terms_version_id`; `hv_terms_versions_guard`, `hv_terms_acceptances_guard`.
+- **API:** `TermsService` (`marketTerms`, `accept`, `acceptedActiveVersion`), `TermsRepository`, `AdminTermsService`.
+- **For P5-7:** `orders.terms_version_id` points at `terms_versions(id)`; the composite `UNIQUE(id, market_id)` is there so the order's market can be checked against it too.
+
+Next developer action:
+
+- **P5-7** (order creation, skill answer and idempotency, migration `0016`), which needs both this and P5-5. Scope in `PROJECT_STATUS.md`. It starts only on explicit owner approval.
+
 ### 2026-09-25 — P5-5 — Guest checkout access + per-market basket (for P5-6 and P5-7)
 
 Status: OPEN
