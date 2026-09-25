@@ -156,6 +156,41 @@ export interface MfaRecoveryCodes {
   user_id: string;
 }
 
+export interface OrderItems {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  draw_id: string;
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  quantity: number;
+  reservation_id: string;
+  skill_answer_option_id: string | null;
+  total_minor: number;
+  unit_price_minor: number;
+}
+
+export interface Orders {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  external_due_minor: number;
+  guest_email: string | null;
+  id: Generated<string>;
+  /**
+   * SHA-256 of the canonicalised request the idempotency key was first used with, so reusing a key for a different request is refused rather than answered with the earlier order.
+   */
+  idempotency_digest: Buffer;
+  idempotency_key: string;
+  market_id: string;
+  order_number: string;
+  status: Generated<string>;
+  terms_version_id: string;
+  total_minor: number;
+  updated_at: Generated<Timestamp>;
+  user_id: string | null;
+  wallet_applied_minor: Generated<number>;
+}
+
 export interface Outbox {
   attempts: Generated<number>;
   available_at: Generated<Timestamp>;
@@ -301,6 +336,8 @@ export interface DB {
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
+  order_items: OrderItems;
+  orders: Orders;
   outbox: Outbox;
   permissions: Permissions;
   reservations: Reservations;

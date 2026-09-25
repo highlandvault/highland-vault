@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { MarketTermsResponse, TermsAcceptance, TermsVersion } from '@hv/contracts';
-import { type Database, withTransaction } from '@hv/db';
+import { type Database, type DbExecutor, withTransaction } from '@hv/db';
 import { Errors } from '../common/errors';
 import type { MarketContext } from '../common/request-context';
 import { DATABASE } from '../database/database.module';
@@ -97,16 +97,33 @@ export class TermsService {
 
   /**
    * Whether this identity may proceed to an order in this market, and under
-   * which version. P5-7 calls this; Phase 5 does not create orders.
+   * which version.
+   *
+   * Takes an executor so order creation can ask inside its own transaction —
+   * the answer has to be true at the moment the order is written, not a
+   * moment earlier. The two failures are reported separately because they are
+   * different situations for the customer: a market with no terms is nobody's
+   * fault, and an unaccepted one just needs a tick.
    */
-  async acceptedActiveVersion(
+  async acceptedActiveVersionIn(
+    db: DbExecutor,
     market: MarketContext,
     identity: CheckoutIdentity,
-  ): Promise<TermsVersionRecord | null> {
-    const active = await this.terms.activeVersion(this.db, market.id);
-    if (!active) return null;
-    const acceptance = await this.terms.findAcceptance(this.db, active.id, accepting(identity));
-    return acceptance ? active : null;
+  ): Promise<
+    | { reason: 'ok'; version: TermsVersionRecord }
+    | { reason: 'no_active_version' }
+    | { reason: 'not_accepted' }
+  > {
+    const active = await this.terms.activeVersion(db, market.id);
+    if (!active) return { reason: 'no_active_version' };
+    const acceptance = await this.terms.findAcceptance(db, active.id, accepting(identity));
+    return acceptance ? { reason: 'ok', version: active } : { reason: 'not_accepted' };
+  }
+
+  /** The label of a version an order was placed under. */
+  async versionLabel(db: DbExecutor, termsVersionId: string): Promise<string> {
+    const version = await this.terms.findAnyById(db, termsVersionId);
+    return version?.version ?? '';
   }
 
   toDto(market: MarketContext, record: TermsVersionRecord): TermsVersion {

@@ -52,6 +52,16 @@ export class TermsRepository {
     return row ? toVersion(row) : null;
   }
 
+  /** A version by id with no market filter, for reading back what an order points at. */
+  async findAnyById(db: DbExecutor, id: string): Promise<TermsVersionRecord | null> {
+    const row = await db
+      .selectFrom('terms_versions')
+      .select(COLUMNS)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row ? toVersion(row) : null;
+  }
+
   async list(db: DbExecutor, marketId: string): Promise<TermsVersionRecord[]> {
     const rows = await db
       .selectFrom('terms_versions')

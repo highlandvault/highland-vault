@@ -37,3 +37,4 @@ An accepted ADR is changed only by a new ADR that supersedes it.
 | [0029](0029-guest-sessions.md)                        | Guest sessions                                               | O1, P5-3         |
 | [0030](0030-wrong-skill-answer-rejects-checkout.md)   | An incorrect skill answer rejects the checkout               | O12 (part), P5-7 |
 | [0031](0031-checkout-cart-terms-and-order-numbers.md) | Checkout — cart ownership, the terms gate, and order numbers | P5-5, P5-6, P5-7 |
+| [0032](0032-checkout-request-identity.md)             | Checkout request identity — self-describing purchase intent  | P5-7 (spec gap)  |

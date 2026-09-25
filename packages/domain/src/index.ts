@@ -2,6 +2,12 @@ export * from './draws';
 export * from './email';
 export * from './markets';
 export * from './money';
+export {
+  ORDER_NUMBER_PREFIX,
+  ORDER_NUMBER_SUFFIX_LENGTH,
+  generateOrderNumber,
+  isWellFormedOrderNumber,
+} from './order-number';
 export * from './tickets';
 export * from './time';
 export { SecretBox } from './secret-box';
