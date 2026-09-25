@@ -84,7 +84,7 @@ export class ReservationsService {
         this.env.RESERVATION_TTL_SECONDS,
       ));
     } catch (error) {
-      throw mapRefusal(error);
+      throw this.mapRefusal(error);
     }
     await this.forgetAvailability(draw.id);
     return this.get(market, reservationId, auth);
@@ -134,6 +134,14 @@ export class ReservationsService {
     return this.get(market, reservationId, auth);
   }
 
+  /**
+   * Domain refusals and database backstops become the same API errors.
+   * Shared with the basket, which allocates through the same allocator.
+   */
+  mapRefusal(error: unknown): unknown {
+    return mapRefusal(error);
+  }
+
   async availability(
     market: MarketContext,
     slug: string,
@@ -178,7 +186,14 @@ export class ReservationsService {
     return available;
   }
 
-  private async forgetAvailability(drawId: string): Promise<void> {
+  /**
+   * Drops the cached availability count for a draw.
+   *
+   * Public because the basket allocates and releases through the same engine
+   * and must invalidate the same cache; the count is display-only either way
+   * (B9), so a miss costs a query rather than a wrong decision.
+   */
+  async forgetAvailability(drawId: string): Promise<void> {
     try {
       await this.redis.del(`hv:availability:${drawId}`);
     } catch {
@@ -214,7 +229,6 @@ export class ReservationsService {
   }
 }
 
-/** Domain refusals and database backstops become the same API errors. */
 function mapRefusal(error: unknown): unknown {
   if (error instanceof ReservationRefused) {
     if (error.reason === 'cap_exceeded') {

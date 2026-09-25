@@ -39,6 +39,25 @@ export interface AuditLog {
   request_id: string | null;
 }
 
+export interface CartItems {
+  cart_id: string;
+  created_at: Generated<Timestamp>;
+  draw_id: string;
+  id: Generated<string>;
+  market_id: string;
+  removed_at: Timestamp | null;
+  reservation_id: string;
+}
+
+export interface Carts {
+  created_at: Generated<Timestamp>;
+  guest_session_id: string | null;
+  id: Generated<string>;
+  market_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string | null;
+}
+
 export interface DrawEntrantCounts {
   count: Generated<number>;
   draw_id: string;
@@ -251,6 +270,8 @@ export interface Users {
 
 export interface DB {
   audit_log: AuditLog;
+  cart_items: CartItems;
+  carts: Carts;
   draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;

@@ -30,6 +30,9 @@ export const ERROR_CODES = [
   // Guest email verification (ADR-0020). Deliberately coarse: a caller never
   // learns whether a code was wrong, expired, already used or never issued.
   'VERIFICATION_REQUIRED',
+  // The basket (ADR-0031). CHECKOUT_IDENTITY_REQUIRED means the caller has
+  // neither a session nor a guest session, so there is no basket to own.
+  'CHECKOUT_IDENTITY_REQUIRED',
   'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',

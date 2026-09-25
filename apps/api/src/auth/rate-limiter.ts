@@ -21,6 +21,11 @@ export const RATE_LIMITS = {
   registerPerIp: { name: 'register-ip', limit: 20, windowSeconds: 60 * 60 },
   mfaPerUser: { name: 'mfa-user', limit: 5, windowSeconds: 15 * 60 },
   reservePerUser: { name: 'reserve-user', limit: 30, windowSeconds: 10 * 60 },
+  // Basket changes per owner (ADR-0031), keyed on the user or the guest
+  // session rather than the address, so it holds for both kinds of checkout.
+  // Same value and window as reservePerUser: adding to a basket allocates
+  // tickets through the same engine and costs the same.
+  cartItemsPerOwner: { name: 'cart-owner', limit: 30, windowSeconds: 10 * 60 },
   // Guest verification codes per address per hour (ADR-0020). Keyed on the
   // address so one inbox cannot be flooded from many sessions.
   verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },

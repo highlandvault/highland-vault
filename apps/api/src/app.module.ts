@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { CartModule } from './cart/cart.module';
 import { ApiExceptionFilter } from './common/exception.filter';
 import { API_ENV, type ApiEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
@@ -57,6 +58,7 @@ export class AppModule {
         GuestsModule,
         DrawsModule,
         TicketsModule,
+        CartModule,
       ],
       controllers: [HealthController],
       providers: [

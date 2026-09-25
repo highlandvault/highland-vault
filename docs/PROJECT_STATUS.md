@@ -11,7 +11,7 @@ _Last updated: 2026-09-25_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; the next task is P5-5** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below; none of them is approved to start.
+- **Phase 5 (cart + checkout) is under way; P5-5 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (guest checkout access and the per-market basket, migration `0014`) is implemented and awaiting review; P5-6 to P5-8 are not approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -187,20 +187,20 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                               | State       | Evidence                                                  |
-| -------------------------------------------------- | ----------- | --------------------------------------------------------- |
-| P5-0 NB-1 structural reservation-end fix           | ✅ merged   | PR #11, migration `0010`                                  |
-| NB-3 reservation fixtures made transaction-stable  | ✅ merged   | PR #12, tests only                                        |
-| P5-1 Transactional outbox                          | ✅ merged   | PR #13 (`13b35ae`), migration `0011`                      |
-| P5-2 Mail port + notifications relay               | ✅ merged   | PR #15 (`f1d33d3`), ADR-0028                              |
-| Ticket-engine test-pool teardown fix               | ✅ merged   | PR #17 (`117a6fa`), harness only                          |
-| Local gitleaks in `pnpm verify`                    | ✅ merged   | PR #18 (`5ebbdf2`), tooling only                          |
-| P5-3 Guest sessions                                | ✅ merged   | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests  |
-| P5-4 Guest email verification                      | ✅ merged   | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013` |
-| **P5-5 Guest checkout access + per-market basket** | **next**    | Scope and DoD below. Not approved to start                |
-| P5-6 Market terms versions and acceptance          | not started | Scope below                                               |
-| P5-7 Order creation, skill answer and idempotency  | not started | Scope below                                               |
-| P5-8 Phase 5 integration and gate hardening        | not started | Scope below                                               |
+| Task                                               | State         | Evidence                                                     |
+| -------------------------------------------------- | ------------- | ------------------------------------------------------------ |
+| P5-0 NB-1 structural reservation-end fix           | ✅ merged     | PR #11, migration `0010`                                     |
+| NB-3 reservation fixtures made transaction-stable  | ✅ merged     | PR #12, tests only                                           |
+| P5-1 Transactional outbox                          | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                         |
+| P5-2 Mail port + notifications relay               | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                 |
+| Ticket-engine test-pool teardown fix               | ✅ merged     | PR #17 (`117a6fa`), harness only                             |
+| Local gitleaks in `pnpm verify`                    | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                             |
+| P5-3 Guest sessions                                | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests     |
+| P5-4 Guest email verification                      | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`    |
+| **P5-5 Guest checkout access + per-market basket** | **in review** | Migration `0014`, `apps/api/src/cart/`, 34 integration tests |
+| P5-6 Market terms versions and acceptance          | not started   | Scope below                                                  |
+| P5-7 Order creation, skill answer and idempotency  | not started   | Scope below                                                  |
+| P5-8 Phase 5 integration and gate hardening        | not started   | Scope below                                                  |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -293,6 +293,19 @@ Out of scope: orders, payment, terms, skill answers.
 **OWNER-DECIDED (2026-09-25) — cart ownership. ADR-0031, Decision 1.** A cart carries both `user_id` and `guest_session_id` with a CHECK that **exactly one** is set, plus one `market_id` — the same shape the specification already gives `orders`. "One cart per owner per market" is therefore two partial unique indexes, not one constraint. Cart ownership and order identity differ on purpose: the cart points at a guest **session**, the order records a guest **email**, and the verified email must still be fresh at order creation even though the cart is not.
 
 **Cart merge on sign-in is not decided, because nothing requires it.** ADR-0021's merge is about cap counters, not baskets. What happens to a guest's cart when they sign in is a **P5-5 implementation decision** to be taken from the ownership model and reported at the P5-5 gate; doing nothing is consistent with ADR-0031. If P5-5 concludes a merge is needed, that needs its own ADR.
+
+### P5-5 as built (migration 0014)
+
+- **`carts`:** `market_id`, plus `user_id` and `guest_session_id` with the ADR-0031 CHECK that exactly one is set. One cart per owner per market as **two partial unique indexes**, because the owning column differs.
+- **`cart_items`:** `cart_id`, `market_id`, `draw_id`, `reservation_id`, `removed_at`. It deliberately **does not copy quantity, price or currency** — the reservation already records all three under constraints that tie them to the draw and the market, and a second copy could only drift.
+- **Market isolation is structural.** Composite foreign keys force an item's market to equal its cart's market _and_ its draw's market, and a reservation already carries the same pair (0009). A UK basket holding an IE draw is unrepresentable, not merely refused. Proven by a test that tries it in raw SQL.
+- **`hv_cart_items_guard` checks ownership in the database**: a user's basket takes only that user's `user` reservations, a guest's only `email` reservations for the address that guest session verified. Putting someone else's reservation in your basket would otherwise be one INSERT.
+- **Nothing is deleted.** `hv_app` has no DELETE or TRUNCATE on either table; removing an item sets `removed_at`, and B18's `UNIQUE(cart_id, draw_id)` is a partial index over live items.
+- **Routes** (all `@Public({ identify: true })` behind `MarketGuard`): `GET /markets/:market/cart`, `POST …/cart/items`, `DELETE …/cart/items/:item`. The authenticated reservation routes are **unchanged** and still refuse a guest cookie.
+- **The basket allocates through the existing engine** — same `TicketAllocator`, same caps, same lock order, same expiry. There is no second allocation path.
+- **A guest's cap key is their verified email, checked fresh at the moment it is used** (ADR-0008, ADR-0020); a lapsed verification cannot add to a basket.
+- **An expired hold stays visible but stops counting**: the item is reported with its effective status and is excluded from `activeItemCount` and the total.
+- **Guest → user cart merge is deliberately not implemented** (ADR-0031). A guest's basket and an account's basket are separate rows and stay that way; nothing in the specification asks for a merge, and inventing one was out of scope.
 
 ### P5-6 — Market terms versions and acceptance
 
@@ -408,7 +421,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way; P5-0 to P5-4 are merged and the next task is P5-5.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-4 are merged and P5-5 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 
