@@ -11,7 +11,7 @@ _Last updated: 2026-09-25_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; P5-6 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (basket, `0014`) is merged. P5-6 (market terms, `0015`) is implemented and awaiting review; P5-7 and P5-8 are not approved to start.
+- **Phase 5 (cart + checkout) is under way; P5-7 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (basket, `0014`) and P5-6 (market terms, `0015`) are merged. P5-7 (order creation, `0016`) is implemented and awaiting review; P5-8 is not approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -187,20 +187,20 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                              | State         | Evidence                                                      |
-| ------------------------------------------------- | ------------- | ------------------------------------------------------------- |
-| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                      |
-| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                            |
-| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                          |
-| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                  |
-| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                              |
-| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                              |
-| P5-3 Guest sessions                               | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests      |
-| P5-4 Guest email verification                     | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`     |
-| P5-5 Guest checkout access + per-market basket    | ✅ merged     | PR #23 (`e61e31a`), migration `0014`, 34 integration tests    |
-| **P5-6 Market terms versions and acceptance**     | **in review** | Migration `0015`, `apps/api/src/terms/`, 33 integration tests |
-| P5-7 Order creation, skill answer and idempotency | not started   | Scope below                                                   |
-| P5-8 Phase 5 integration and gate hardening       | not started   | Scope below                                                   |
+| Task                                               | State         | Evidence                                                       |
+| -------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| P5-0 NB-1 structural reservation-end fix           | ✅ merged     | PR #11, migration `0010`                                       |
+| NB-3 reservation fixtures made transaction-stable  | ✅ merged     | PR #12, tests only                                             |
+| P5-1 Transactional outbox                          | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                           |
+| P5-2 Mail port + notifications relay               | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                   |
+| Ticket-engine test-pool teardown fix               | ✅ merged     | PR #17 (`117a6fa`), harness only                               |
+| Local gitleaks in `pnpm verify`                    | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                               |
+| P5-3 Guest sessions                                | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests       |
+| P5-4 Guest email verification                      | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`      |
+| P5-5 Guest checkout access + per-market basket     | ✅ merged     | PR #23 (`e61e31a`), migration `0014`, 34 integration tests     |
+| P5-6 Market terms versions and acceptance          | ✅ merged     | PR #24 (`210c217`), migration `0015`, 33 integration tests     |
+| **P5-7 Order creation, skill answer, idempotency** | **in review** | Migration `0016`, `apps/api/src/orders/`, 30 integration tests |
+| P5-8 Phase 5 integration and gate hardening        | not started   | Scope below                                                    |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -354,6 +354,21 @@ Explicitly out of scope, and this is the part the P4 handoff originally got wron
 
 **The length is left to P5-7**, since nothing in the specification, schema or tests constrains one; P5-7 records its choice and the reasoning. Worth weighing there: `generateRecoveryCode` is the project's other customer-facing typed-back identifier and uses base32, whose alphabet has no `0`/`O` or `1`/`I` to confuse when read aloud. Either the full alphanumeric range or a narrower one satisfies ADR-0031.
 
+### P5-7 as built (migration 0016)
+
+- **`orders`:** `order_number` (UNIQUE), `(market_id, currency)` FK, `user_id` **or** `guest_email` (CHECK exactly one), `terms_version_id` (NOT NULL, **composite** FK so an order cannot cite another market's terms), `status`, `total_minor = wallet_applied_minor + external_due_minor` (CHECK), `idempotency_key` (UNIQUE) and `idempotency_digest`.
+- **`order_items`:** composite FKs on `(order_id, market_id)`, `(draw_id, market_id)`, `(reservation_id, draw_id)` and `(market_id, currency)`; `quantity`, `unit_price_minor` and `total_minor` snapshotted; `skill_answer_option_id`. `UNIQUE(order_id, draw_id)` and `UNIQUE(reservation_id)`.
+- **The snapshot is immutable.** `hv_orders_guard` freezes buyer, market, currency, totals, terms and idempotency — **only `status` may move**, because Phase 6 has to move it. `hv_order_items_guard` refuses any change to a line. `hv_app` cannot DELETE an order or UPDATE a line.
+- **`order_number` is `HV-` + 10 base32 characters** (`^HV-[A-Z2-7]{10}$`, enforced by CHECK). About 50 bits; base32 has no `0`/`O` or `1`/`I` to confuse when read aloud, matching `generateRecoveryCode`, which is this project's other customer-facing typed-back identifier. Random, never sequential. A collision is a UNIQUE violation, retried up to five times.
+- **Idempotency is the database's job.** The key is claimed by `INSERT … ON CONFLICT (idempotency_key) DO NOTHING`; there is no read-then-insert and no Redis anywhere in the path. A replay is matched on `idempotency_digest`, a SHA-256 of market, buyer, terms label and sorted answers, so the **same key with a different request, or from a different customer, is refused** rather than answered with somebody else's order.
+- **A duplicate request blocks on the cart lock** and finds the basket emptied when it is released. That is not conclusive on its own, so an empty basket is re-checked against the idempotency key: found means replay, absent means genuinely empty. Found by the concurrency test, not by reading the code.
+- **A wrong skill answer leaves nothing behind** (ADR-0030): no order, no spent idempotency key, and the basket and its hold intact. A missing answer and a wrong one produce an identical error, and the correct option never enters a response — it is compared in SQL and only a boolean comes back.
+- **Terms are P5-6's rules, re-asked inside the order transaction**: an active version must exist, the customer must have accepted _that_ version, and the label they sent must still be the active one.
+- **The reservation is untouched.** An order leaves it **active** and its tickets **`reserved`**; only the basket line is removed, because the order is now the record. Nothing is allocated a second time.
+- **Phase 5 stops here.** Status is `awaiting_payment`; there is no payment, provider, webhook or `sold`. Tests assert positively that no ticket is sold and that no payment table exists.
+
+**On the status name.** Revision 2 B7 gives the state machine as `created → awaiting_payment → paid`, and its later transitions name the same value; the Phase 5 planning prose describes the boundary as "ends at `pending_payment`". The specification is the authority for a persisted value, and Phase 6 will implement its transitions literally, so the stored status is **`awaiting_payment`**. The two names mean the same moment. The CHECK admits the full B7 enumeration, so Phase 6 adds transitions rather than values.
+
 ### P5-8 — Phase 5 integration and gate hardening
 
 **Objective.** Prove the whole checkout works together, and close the phase.
@@ -433,7 +448,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way; P5-0 to P5-5 are merged and P5-6 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-6 are merged and P5-7 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

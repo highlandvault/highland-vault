@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                                 | Owner             | Branch                      | Dependencies | Area                                        | Issue / PR | Notes                                                                                                                       |
-| ---- | ------------------------------------ | ----------------- | --------------------------- | ------------ | ------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
-| P5-6 | Market terms versions and acceptance | Divyanshu (owner) | `feature/p5-6-market-terms` | P5-4         | `packages/db` (0015), `apps/api/src/terms/` | none yet   | `terms_versions`, `terms_acceptances`, active version per market. Gates checkout, not enablement. Next free migration: 0016 |
+| ID   | Task                                      | Owner             | Branch                        | Dependencies | Area                                         | Issue / PR | Notes                                                                                                                   |
+| ---- | ----------------------------------------- | ----------------- | ----------------------------- | ------------ | -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | `feature/p5-7-order-creation` | P5-5, P5-6   | `packages/db` (0016), `apps/api/src/orders/` | none yet   | `orders`/`order_items`, ADR-0030 skill answer, `Idempotency-Key`. Ends at `awaiting_payment`. Next free migration: 0017 |
 
 ## BLOCKED
 
@@ -61,10 +61,9 @@ _None._
 
 Phase 5's remaining work, scoped on 2026-09-25 from the specification. Full scope, constraints and per-task Definition of Done: [PROJECT_STATUS.md](../PROJECT_STATUS.md) ("Phase 5 remaining scope"). **Specified and unblocked** — the three open decisions were settled on 2026-09-25 by [ADR-0031](../adr/0031-checkout-cart-terms-and-order-numbers.md). Each still needs explicit owner instruction to start, in order.
 
-| ID   | Task                                      | Owner             | Branch | Dependencies | Area                                         | Issue / PR | Notes                                                                                                         |
-| ---- | ----------------------------------------- | ----------------- | ------ | ------------ | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | —      | P5-5, P5-6   | `packages/db` (0016), `apps/api`, `apps/web` | —          | Ends at `pending_payment`. ADR-0030, ADR-0031. No payment, no SOLD. `order_number` length chosen by this task |
-| P5-8 | Phase 5 integration and gate hardening    | Divyanshu (owner) | —      | P5-7         | tests, docs                                  | —          | Part F exit criteria + the ADR-0021 guest/registration race. No migration expected                            |
+| ID   | Task                                   | Owner             | Branch | Dependencies | Area        | Issue / PR | Notes                                                                              |
+| ---- | -------------------------------------- | ----------------- | ------ | ------------ | ----------- | ---------- | ---------------------------------------------------------------------------------- |
+| P5-8 | Phase 5 integration and gate hardening | Divyanshu (owner) | —      | P5-7         | tests, docs | —          | Part F exit criteria + the ADR-0021 guest/registration race. No migration expected |
 
 ## BACKLOG
 
@@ -72,7 +71,7 @@ Phase-level tasks from the Initialization Report, Part F. Dependencies come from
 
 | ID  | Task                                      | Owner             | Branch | Dependencies          | Area                          | Issue / PR | Notes                                                                                                                                                             |
 | --- | ----------------------------------------- | ----------------- | ------ | --------------------- | ----------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P5  | Cart + Checkout                           | Divyanshu (owner) | —      | P4                    | checkout, orders, outbox      | —          | **Option A approved**: ends at `pending_payment`; payments/webhooks/SOLD stay in P6. Skill answer: ADR-0030. Tasks P5-0…P5-8; P5-0 to P5-5 merged, P5-6 in review |
+| P5  | Cart + Checkout                           | Divyanshu (owner) | —      | P4                    | checkout, orders, outbox      | —          | **Option A approved**: ends at `pending_payment`; payments/webhooks/SOLD stay in P6. Skill answer: ADR-0030. Tasks P5-0…P5-8; P5-0 to P5-6 merged, P5-7 in review |
 | P6  | Payments                                  | unassigned        | —      | P5                    | `packages/payments`, webhooks | —          | Gate 4. Fake provider; O13 before production                                                                                                                      |
 | P7  | Wallet                                    | unassigned        | —      | P6                    | wallet                        | —          | Gate 3. O7 affects refunds                                                                                                                                        |
 | P8  | Instant wins                              | unassigned        | —      | P7                    | instant wins                  | —          | Gate 6. O16 affects physical prizes                                                                                                                               |
@@ -105,3 +104,4 @@ Open decisions (O6–O17) are tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.m
 | P5-3   | Guest sessions                                     | Divyanshu (owner) | `feature/p5-3-guest-sessions`                  | P5-2         | `packages/db` (0012), `apps/api`                                          | PR #20     | Merged into `develop` (`b940e7d`) on 2026-09-24. Opaque hashed token, 24 h, verified-email slot. Not authentication (ADR-0029)                                                  |
 | P5-4   | Guest email verification                           | Divyanshu (owner) | `feature/p5-4-guest-email-verification`        | P5-3         | `packages/db` (0013), `packages/domain`, `packages/contracts`, `apps/api` | PR #21     | Merged into `develop` (`173fd45`) on 2026-09-25. 6-digit code, hashed, single-use, 10 min, 5 attempts, 3/address and 20/IP per hour. First outbox producer (ADR-0020, ADR-0030) |
 | P5-5   | Guest checkout access + per-market basket          | Divyanshu (owner) | `feature/p5-5-guest-checkout-basket`           | P5-4         | `packages/db` (0014), `apps/api/src/cart/`                                | PR #23     | Merged into `develop` (`e61e31a`) on 2026-09-25. Server-side basket, guest checkout, market isolation enforced by composite FKs (ADR-0031)                                      |
+| P5-6   | Market terms versions and acceptance               | Divyanshu (owner) | `feature/p5-6-market-terms`                    | P5-4         | `packages/db` (0015), `apps/api/src/terms/`                               | PR #24     | Merged into `develop` (`210c217`) on 2026-09-25. Versioned per-market terms, acceptance recorded per checkout identity; gates checkout, not enablement                          |

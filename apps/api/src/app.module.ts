@@ -14,6 +14,7 @@ import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
 import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
+import { OrdersModule } from './orders/orders.module';
 import { TermsModule } from './terms/terms.module';
 import { TicketsModule } from './tickets/tickets.module';
 
@@ -61,6 +62,7 @@ export class AppModule {
         TicketsModule,
         TermsModule,
         CartModule,
+        OrdersModule,
       ],
       controllers: [HealthController],
       providers: [

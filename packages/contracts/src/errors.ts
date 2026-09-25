@@ -38,6 +38,15 @@ export const ERROR_CODES = [
   // the customer agreed to a version that is no longer the active one.
   'TERMS_UNAVAILABLE',
   'TERMS_VERSION_STALE',
+  // Checkout (ADR-0030, ADR-0031). INVALID_SKILL_ANSWER is deliberately
+  // coarse: it never says which line was wrong or which option was right.
+  // IDEMPOTENCY_KEY_REUSED means the same key arrived with a different
+  // request, which is a mistake rather than a retry.
+  'INVALID_SKILL_ANSWER',
+  'TERMS_NOT_ACCEPTED',
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'IDEMPOTENCY_KEY_REUSED',
+  'BASKET_EMPTY',
   'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',
