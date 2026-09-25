@@ -1,0 +1,22 @@
+{
+  "name": "@hv/payments",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Provider-independent payment port and the fake provider used in development and tests (ADR-0006).",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hv/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@hv/config": "workspace:*"
+  }
+}
