@@ -61,6 +61,59 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-25 — P5-8 — Phase 5 integration and gate hardening (closes Phase 5; for Phase 6)
+
+Status: OPEN
+
+Task: P5-8
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p5-8-phase5-hardening` (not merged)
+Status of the work: DONE, awaiting review
+
+What was completed:
+
+- `0017_entrant_rekey` and `0018_cart_guard_bridged_entrant`.
+- `packages/db/src/entrant-lock.ts`, `apps/api/src/tickets/cap-bridging.repository.ts`, entrant resolution moved inside the allocation transaction, bridging inside the registration transaction, `checkoutPerOwner` rate limit.
+- `cap-bridging.int.test.ts` (8), checkout rate-limit tests (4), `phase5-journey.int.test.ts` (4).
+
+Important implementation details — read these before Phase 6:
+
+- **P5-8 was scoped as test hardening and was not.** The opening audit found ADR-0021 bridging had never been implemented and the B19 checkout limit ADR-0030 relies on did not exist. Both are now built. If you are reading this to plan Phase 6, the cap is only correct _because_ of what is here.
+- **The counters and the live holds move together, always.** `hv_end_reservation` decrements using the key stored on the reservation. Move a counter without its hold and the decrement matches zero rows — silently, permanently, and the entrant is over-charged for ever. This is NB-1 in reverse. **Phase 6 must preserve it when it marks tickets sold**: a sold ticket's allowance is never returned, so the reservation's key must still be the key its counter lives under.
+- **Migration `0017` relaxes `hv_reservations_guard` by exactly one case** and nothing more: `email → user`, `user_id` populated, `entrant_ref` becoming that account's id, active reservations only. Every other column is as immutable as it was. Do not widen it.
+- **Migration `0018` was found by a test, not by design.** `hv_cart_items_guard` required a guest basket to hold an email-keyed reservation. Bridging makes that false for a guest whose address has an account, and checkout failed on the constraint. The lesson generalises: guards written before bridging may assume a guest is always email-keyed.
+- **One advisory lock.** `lockEntrantEmail` (`pg_advisory_xact_lock` on the normalized address), taken by guest allocation and by registration. It orders two identity decisions and nothing else — not tickets, not reservations. ADR-0011 is amended; the earlier "no advisory locks" statements are annotated rather than rewritten.
+- **The checkout rate limit is not an answer-attempt counter.** 30 per 10 minutes per checkout identity satisfies B19 and ADR-0030's stated premise. It does **not** make a 3-to-10-option skill question unguessable, and nothing in the code or docs claims it does. If that matters legally, it needs a decision about an attempt counter, which ADR-0030 currently declines.
+- **Database:** `0017` and `0018`, applied to local dev and test only; **no codegen change** — neither touches a table shape. READ COMMITTED with row locks, plus the one advisory lock above.
+- **Security:** bridging is audited (`entrant.cap.bridged`) with counts only, never the address. Cross-identity order reads answer **404**, not 403, in both directions.
+
+Files/modules affected:
+
+- `packages/db/migrations/{0017,0018}*.sql`, `packages/db/src/{entrant-lock,index}.ts`
+- `apps/api/src/tickets/{cap-bridging.repository,ticket-allocator,tickets.module,reservations.service}.ts`
+- `apps/api/src/auth/{auth.service,auth.module,rate-limiter}.ts`, `apps/api/src/cart/cart.service.ts`, `apps/api/src/orders/{checkout.service,orders.module}.ts`
+
+Tests executed:
+
+- Integration suite: 29 files, 484 tests. Results and the gate are in PROJECT_STATUS.md.
+- **Not tested:** anything past `awaiting_payment`. No payment exists.
+
+Known issues:
+
+- **Two flaky tests, neither introduced here, both load-sensitive.** `tools/gitleaks/negative-control.test.mjs` (measured ~5–10% during P5-6) and one `apps/worker/test/outbox.int.test.ts` case, which failed once under a loaded machine and passed 3/3 in isolation and in the clean suite run. Each wants its own `fix/*` branch; neither is a Phase 5 defect.
+- The integration suite is 29 files at `maxWorkers: 4`. Peak measured at **75 of 200** connections, so capacity is fine — but a full run overlapping another full run times out. Run one at a time.
+- No web UI for cart, terms or checkout; the routes are API-only and `apps/web` says so.
+
+Integration points:
+
+- **Database:** `draw_entrant_counts`, `reservations` (re-key), `hv_reservations_guard`, `hv_cart_items_guard`.
+- **API:** `CapBridgingRepository.bridge()`, `TicketAllocator.reserve(draw, intent, …)` — note it now takes an **intent**, not a resolved entrant, and resolves inside the transaction.
+- **For Phase 6:** the cap key on a reservation is authoritative and may have been re-keyed. Read it from the reservation, never re-derive it from the buyer.
+
+Next developer action:
+
+- Owner review, then sign off the **Phase 5 Definition of Done** in PROJECT_STATUS.md. Phase 6 starts only on explicit owner approval.
+
 ### 2026-09-25 — P5-7 — Order creation, skill answer and idempotency (for P5-8 and Phase 6)
 
 Status: OPEN
@@ -302,7 +355,7 @@ Important implementation details:
 - **Order lines** can reference `reservations (id, draw_id)` and `draws (id, market_id)` with composite FKs.
 - **Reads use the effective state:** an active reservation past `expires_at` is shown as expired, and availability, allowance and inventory count its tickets as free before any sweep runs.
 - **Availability is display-only** (cached 3 s). Never base a decision on it.
-- **Database:** migration `0009_tickets.sql`, applied only to local dev and test databases; codegen re-run (18 tables). READ COMMITTED with row locks (`FOR UPDATE`, `SKIP LOCKED`); no advisory or table locks. `hv_app` has no DELETE or TRUNCATE on the three new tables.
+- **Database:** migration `0009_tickets.sql`, applied only to local dev and test databases; codegen re-run (18 tables). READ COMMITTED with row locks (`FOR UPDATE`, `SKIP LOCKED`); no advisory or table locks. **Amended 2026-09-25:** P5-8 added one advisory lock, on a normalized email, for ADR-0021 bridging — see ADR-0011. `hv_app` has no DELETE or TRUNCATE on the three new tables.
 - **Tickets:** invariants and the concurrency results are in PROJECT_STATUS.md ("Ticket engine: invariants and concurrency" and "Phase 4 verification").
 - **Authentication:** reservation routes need a full session (MFA-pending sessions are refused). Another customer's or another market's reservation is 404. The availability route is public and only adds `allowance` for a signed-in caller.
 - **Security:** no route or admin page can change a ticket by hand; staff see counts only. Reservations are rate-limited per user (30 per 10 minutes).
@@ -347,7 +400,7 @@ Next developer action:
 
 This handoff was written before Phase 5's scope was fixed, and two of its statements no longer match the approved architecture. They are corrected here rather than deleted, because a handoff is the project's memory (§ Handoffs, rule 4).
 
-1. **Phase 5 does NOT sell tickets.** The approved scope is **Option A**: Phase 5 ends at `pending_payment`. **Payment, payment webhooks, the `reserved → sold` transition and Gate 4 are all Phase 6** (ADR-0006). Phase 5 also must never treat a payment return URL as proof of payment. The "Selling" bullet above is struck through accordingly. An order created in Phase 5 leaves its reservation active and its tickets `reserved`.
+1. **Phase 5 does NOT sell tickets.** The approved scope is **Option A**: Phase 5 ends at `awaiting_payment`. **Payment, payment webhooks, the `reserved → sold` transition and Gate 4 are all Phase 6** (ADR-0006). Phase 5 also must never treat a payment return URL as proof of payment. The "Selling" bullet above is struck through accordingly. An order created in Phase 5 leaves its reservation active and its tickets `reserved`.
 2. **The three preconditions are met.** NB-1 was fixed structurally by **P5-0** (migration `0010`, PR #11) — `hv_end_reservation` now decrements the cap by the rows actually freed. The guest email-verification timing decision became **ADR-0020** and was implemented by **P5-4** (migration `0013`, PR #21). The O12 wrong-skill-answer behaviour is now **ADR-0030**.
 3. **Guests still cannot reserve.** The reservation routes remain `@Authenticated()`. Part F requires guest checkout, so opening that path is explicit scope for **P5-5**; the constraints it must honour are recorded in `PROJECT_STATUS.md` ("Phase 5 remaining scope").
 

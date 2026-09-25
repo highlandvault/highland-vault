@@ -4,10 +4,10 @@ import { type Database, withTransaction } from '@hv/db';
 import {
   ReservationRefused,
   effectiveReservationStatus,
-  entrantKey,
   isOpenForEntries,
   isPublished,
   isValidQuantity,
+  normalizeEmail,
 } from '@hv/domain';
 import { RATE_LIMITS, RateLimiter } from '../auth/rate-limiter';
 import { AppError, Errors } from '../common/errors';
@@ -18,7 +18,7 @@ import { DATABASE } from '../database/database.module';
 import { DrawsRepository, type DrawRecord } from '../draws/draws.repository';
 import { GuestSessionsService } from '../guests/guest-sessions.service';
 import { ReservationsService } from '../tickets/reservations.service';
-import { TicketAllocator } from '../tickets/ticket-allocator';
+import { type EntrantIntent, TicketAllocator } from '../tickets/ticket-allocator';
 import { TicketsRepository, type ReservationRecord } from '../tickets/tickets.repository';
 import { type CartOwner, CartRepository } from './cart.repository';
 import type { CheckoutIdentity } from './checkout-identity';
@@ -91,7 +91,7 @@ export class CartService {
       );
     }
 
-    const entrant = this.entrantOf(identity);
+    const intent = this.intentOf(identity);
     const cart = await withTransaction(this.db, (trx) =>
       this.carts.findOrCreate(trx, market.id, owner),
     );
@@ -114,7 +114,7 @@ export class CartService {
     try {
       ({ reservationId } = await this.allocator.reserve(
         draw,
-        entrant,
+        intent,
         quantity,
         this.env.RESERVATION_TTL_SECONDS,
       ));
@@ -202,20 +202,18 @@ export class CartService {
   }
 
   /**
-   * The cap identity (ADR-0008) the tickets are charged to.
+   * Who the tickets will be charged to (ADR-0008, ADR-0021).
    *
-   * For a guest this is their verified email, and it must still be fresh
-   * (ADR-0020). A lapsed verification cannot buy: the address is what the cap
-   * is counted against, and an address nobody has proved recently is not an
-   * identity.
+   * This returns an INTENT, not a resolved key. For a guest the key depends on
+   * whether an account owns the address they verified, and that question is
+   * only safe to answer inside the allocating transaction — asked out here it
+   * can be stale by the time it is used.
+   *
+   * The freshness of the verification is checked here, because this is the
+   * moment the cap identity is actually being claimed (ADR-0020).
    */
-  private entrantOf(identity: CheckoutIdentity) {
-    if (identity.kind === 'user') {
-      return {
-        ...entrantKey({ type: 'user', userId: identity.auth.userId }),
-        userId: identity.auth.userId,
-      };
-    }
+  private intentOf(identity: CheckoutIdentity): EntrantIntent {
+    if (identity.kind === 'user') return { kind: 'user', userId: identity.auth.userId };
     const guest = identity.guest;
     if (!this.guests.hasFreshVerifiedEmail(guest) || !guest.verifiedEmail) {
       throw Errors.badRequest(
@@ -223,9 +221,7 @@ export class CartService {
         'Verify your email address before adding entries to your basket.',
       );
     }
-    // userId stays null: a guest has no account, and the cap is counted
-    // against the address instead (ADR-0008).
-    return { ...entrantKey({ type: 'email', verifiedEmail: guest.verifiedEmail }), userId: null };
+    return { kind: 'verifiedEmail', email: normalizeEmail(guest.verifiedEmail) };
   }
 
   private async publishedDraw(market: MarketContext, slug: string): Promise<DrawRecord> {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
+import { AuthModule } from '../auth/auth.module';
 import { CartModule } from '../cart/cart.module';
 import { DrawsModule } from '../draws/draws.module';
 import { MarketsModule } from '../markets/markets.module';
@@ -18,7 +19,15 @@ import { OrdersRepository } from './orders.repository';
  * agreement, under the same locks.
  */
 @Module({
-  imports: [AuditModule, CartModule, DrawsModule, MarketsModule, TermsModule, TicketsModule],
+  imports: [
+    AuditModule,
+    AuthModule,
+    CartModule,
+    DrawsModule,
+    MarketsModule,
+    TermsModule,
+    TicketsModule,
+  ],
   controllers: [CheckoutController],
   providers: [OrdersRepository, CheckoutService],
   exports: [OrdersRepository, CheckoutService],

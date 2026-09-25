@@ -58,6 +58,14 @@ B12 records market terms as `terms_versions` per market with acceptance recorded
 - **No legal content is written by this project.** The mechanism is built with the content absent, exactly as `market_settings` already carries nullable compliance columns. Terms content stays Phase 12 and comes from legal. Nothing in the codebase, its fixtures or its tests may invent terms wording; test fixtures use placeholders, as they already do for compliance values.
 - Because acceptance is recorded in the order-creation transaction, a checkout rejected for any reason — including a wrong skill answer (ADR-0030) — records no acceptance.
 
+### What an acceptance is linked to, and what it is not
+
+B18 lists `terms_acceptances` as `terms_version_id`, `user_id` **or** `order_id`. This design records `user_id` **or** `guest_session_id`, and links the order through `orders.terms_version_id`.
+
+For a signed-in customer that is B18 exactly. For a guest it is not: a guest has no `user_id`, so B18's remaining option would be `order_id`, and this uses a third column instead — for the same reason cart ownership does, because B18 predates ADR-0029's separation of guest sessions from authenticated ones.
+
+Reviewed again at the P5-8 gate and **kept**. The version an order was placed under is unambiguous, which is what an order needs. What is _not_ recorded is which acceptance **event** backs a given order: for a guest the join runs `orders.guest_email` → `guest_sessions.verified_email` → `terms_acceptances.guest_session_id`, and if the same address verified on two sessions there are two acceptance rows with no way to say which one the order used. Accept that, or add `order_id` — a later decision, not a Phase 5 blocker.
+
 ## Decision 3 — `order_number` is an opaque `HV-` identifier
 
 B18 requires `order_number UNIQUE` and says nothing else. It is customer-facing: it appears in emails, and people read it aloud to support.

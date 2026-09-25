@@ -74,12 +74,11 @@ export class ReservationsService {
     // (never inside the allocation, which would take other entrants' locks).
     await this.tickets.expireDue(this.db, draw.id, INLINE_SWEEP_LIMIT);
 
-    const entrant = { ...entrantKey({ type: 'user', userId: auth.userId }), userId: auth.userId };
     let reservationId: string;
     try {
       ({ reservationId } = await this.allocator.reserve(
         draw,
-        entrant,
+        { kind: 'user', userId: auth.userId },
         quantity,
         this.env.RESERVATION_TTL_SECONDS,
       ));
