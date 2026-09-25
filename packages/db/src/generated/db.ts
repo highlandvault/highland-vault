@@ -137,6 +137,10 @@ export interface Markets {
 }
 
 export interface MarketSettings {
+  /**
+   * The terms version a checkout in this market is placed under (ADR-0031). NULL means no order can be created; it does NOT stop the market being enabled or browsed.
+   */
+  active_terms_version_id: string | null;
   created_at: Generated<Timestamp>;
   market_id: string;
   min_age: number | null;
@@ -226,6 +230,23 @@ export interface SkillQuestions {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TermsAcceptances {
+  accepted_at: Generated<Timestamp>;
+  guest_session_id: string | null;
+  id: Generated<string>;
+  market_id: string;
+  terms_version_id: string;
+  user_id: string | null;
+}
+
+export interface TermsVersions {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  market_id: string;
+  published_at: Timestamp | null;
+  version: string;
+}
+
 export interface Tickets {
   created_at: Generated<Timestamp>;
   draw_id: string;
@@ -288,6 +309,8 @@ export interface DB {
   sessions: Sessions;
   skill_question_options: SkillQuestionOptions;
   skill_questions: SkillQuestions;
+  terms_acceptances: TermsAcceptances;
+  terms_versions: TermsVersions;
   tickets: Tickets;
   user_mfa: UserMfa;
   user_roles: UserRoles;

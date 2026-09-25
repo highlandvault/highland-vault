@@ -11,7 +11,7 @@ _Last updated: 2026-09-25_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; P5-5 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (guest checkout access and the per-market basket, migration `0014`) is implemented and awaiting review; P5-6 to P5-8 are not approved to start.
+- **Phase 5 (cart + checkout) is under way; P5-6 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (basket, `0014`) is merged. P5-6 (market terms, `0015`) is implemented and awaiting review; P5-7 and P5-8 are not approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -187,20 +187,20 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                               | State         | Evidence                                                     |
-| -------------------------------------------------- | ------------- | ------------------------------------------------------------ |
-| P5-0 NB-1 structural reservation-end fix           | ✅ merged     | PR #11, migration `0010`                                     |
-| NB-3 reservation fixtures made transaction-stable  | ✅ merged     | PR #12, tests only                                           |
-| P5-1 Transactional outbox                          | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                         |
-| P5-2 Mail port + notifications relay               | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                 |
-| Ticket-engine test-pool teardown fix               | ✅ merged     | PR #17 (`117a6fa`), harness only                             |
-| Local gitleaks in `pnpm verify`                    | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                             |
-| P5-3 Guest sessions                                | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests     |
-| P5-4 Guest email verification                      | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`    |
-| **P5-5 Guest checkout access + per-market basket** | **in review** | Migration `0014`, `apps/api/src/cart/`, 34 integration tests |
-| P5-6 Market terms versions and acceptance          | not started   | Scope below                                                  |
-| P5-7 Order creation, skill answer and idempotency  | not started   | Scope below                                                  |
-| P5-8 Phase 5 integration and gate hardening        | not started   | Scope below                                                  |
+| Task                                              | State         | Evidence                                                      |
+| ------------------------------------------------- | ------------- | ------------------------------------------------------------- |
+| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                      |
+| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                            |
+| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                          |
+| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                  |
+| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                              |
+| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                              |
+| P5-3 Guest sessions                               | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests      |
+| P5-4 Guest email verification                     | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`     |
+| P5-5 Guest checkout access + per-market basket    | ✅ merged     | PR #23 (`e61e31a`), migration `0014`, 34 integration tests    |
+| **P5-6 Market terms versions and acceptance**     | **in review** | Migration `0015`, `apps/api/src/terms/`, 33 integration tests |
+| P5-7 Order creation, skill answer and idempotency | not started   | Scope below                                                   |
+| P5-8 Phase 5 integration and gate hardening       | not started   | Scope below                                                   |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -321,6 +321,18 @@ Out of scope: **terms content**, which B12 marks "Content: legal" and Part F ass
 
 **The gate is on checkout, not on market enablement** — `hv_market_missing_settings` is not extended. A market can be enabled and browsable with no terms version; it simply cannot take an order. Terms content remains Phase 12 and comes from legal; no wording is invented here or in fixtures.
 
+### P5-6 as built (migration 0015)
+
+- **`terms_versions`:** `market_id`, `version` (the publisher's label, `UNIQUE(market_id, version)`), `published_at` (NULL while a draft), `created_at`. `UNIQUE(id, market_id)` so everything pointing at a version can be checked against the market it claims.
+- **`hv_terms_versions_guard`:** a published version is **immutable and cannot be withdrawn**. An order will point at it as the thing the customer agreed to, and that record is worthless if it can be rewritten. A correction is a new version.
+- **`market_settings.active_terms_version_id`**, with a **composite** foreign key, so a market cannot point at another market's terms. Nullable, like every other compliance value there.
+- **`hv_market_missing_settings` is untouched.** The terms gate is on **checkout**, not enablement (ADR-0031): a market with no active version is still enabled and browsable, it simply cannot take an order. A test asserts the enablement gate does not mention it.
+- **`terms_acceptances`:** `market_id`, `terms_version_id`, and `user_id` **or** `guest_session_id` with a CHECK that exactly one is set — the same resolution ADR-0031 applied to cart ownership, because B18's "per user or order" predates ADR-0029. Two partial unique indexes make accepting twice one acceptance. **Append-only**: `hv_app` has no UPDATE or DELETE, and a trigger refuses any change.
+- **No legal wording anywhere.** There is no content column, no content field in any contract, and no invented terms in fixtures — version labels in tests are marked as fixtures. B12 marks the wording "legal" and Part F puts it in Phase 12.
+- **Routes:** `GET /markets/:market/terms` (public; `checkoutAllowed` is the flag P5-7's gate turns on) and `POST …/terms/acceptance` (`@Public({ identify: true })`). Admin: `GET/POST /admin/markets/:market/terms`, `POST …/:terms/publish`, `POST …/:terms/activate` — `markets.gate.manage`, market-scoped, mutations sensitive, every change audited in the same transaction.
+- **The accepted version is checked against the active one.** A page left open while legal published a revision cannot record agreement to wording nobody was shown (`TERMS_VERSION_STALE`).
+- **A guest accepting creates no account**, and their acceptance is recorded against the guest session (ADR-0029).
+
 ### P5-7 — Order creation, skill answer and idempotency
 
 **Objective.** Turn a basket into an order that stops at `pending_payment`.
@@ -421,7 +433,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way; P5-0 to P5-4 are merged and P5-5 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-5 are merged and P5-6 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

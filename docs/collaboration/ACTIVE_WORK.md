@@ -44,36 +44,36 @@ Next:
 
 - **Phases 1–3:** complete. Phase 3 merged into `develop` (PR #7, `3eb551e`); GitHub CI green on `develop`.
 - **Phase 4 (Day 4):** DONE. Merged into `develop` via **PR #8** (`49e3903`) and released to `main` via **PR #9** (`c284825`) on 2026-09-23. O15 decided: sequential ticket numbers (ADR-0027). Review items carried into Phase 5 are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
-- **Phase 5 (Day 5):** under way, Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). **P5-0 to P5-4 are merged**, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is scoped as **P5-5 to P5-8** in [PROJECT_STATUS.md](../PROJECT_STATUS.md) ("Phase 5 remaining scope"), and the phase closes against the Phase 5 Definition of Done there. **P5-5 (guest checkout access and the per-market basket) is the active task**; the three decisions that blocked it were settled on 2026-09-25 by [ADR-0031](../adr/0031-checkout-cart-terms-and-order-numbers.md). No later P5 task is approved to start.
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `b352187`.
+- **Phase 5 (Day 5):** under way, Option A (specification-faithful), ending at `pending_payment`; payments, webhooks, RESERVED → SOLD and Gate 4 stay in Phase 6 (ADR-0006). **P5-0 to P5-4 are merged**, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is scoped as **P5-5 to P5-8** in [PROJECT_STATUS.md](../PROJECT_STATUS.md) ("Phase 5 remaining scope"), and the phase closes against the Phase 5 Definition of Done there. **P5-6 (market terms versions and acceptance) is the active task.** P5-0 to P5-5 are merged. No later P5 task is approved to start.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `e61e31a`.
 
 ## Active entries
 
-### P5-5 — Guest checkout access + per-market basket
+### P5-6 — Market terms versions and acceptance
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `feature/p5-5-guest-checkout-basket` (from `origin/develop` `b352187`)
+Branch: `feature/p5-6-market-terms` (from `origin/develop` `e61e31a`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
 PR: none yet
 Status: IN PROGRESS
 
 Current task:
-The server-side basket (B4, ADR-0026, ADR-0031) and the path that lets a verified guest buy without an account. Migration `0014_carts`; `carts` and `cart_items`; three market-scoped routes under `/markets/:market/cart`. Adding a draw takes a real reservation through the **existing** allocator, so a basket holds tickets rather than intentions.
+Per-market terms versions and the act of accepting them (B12, ADR-0031). Migration `0015_market_terms`; `terms_versions`, `terms_acceptances` and `market_settings.active_terms_version_id`. The active version **gates checkout, not market enablement** — a market with none is still browsable but cannot take an order, which is the flag P5-7's gate turns on.
 
 Affected areas:
-`packages/db/migrations/0014_carts.sql` (new), `packages/db/src/generated/db.ts` (codegen, 23 tables), `packages/contracts/src/cart.ts` (new), `apps/api/src/cart/` (new), `apps/api/src/tickets/` (`findById`, two members made reusable, module exports), `apps/api/src/auth/rate-limiter.ts`, `apps/api/src/app.module.ts`, docs.
+`packages/db/migrations/0015_market_terms.sql` (new), `packages/db/src/generated/db.ts` (codegen, 25 tables), `packages/db/src/testing/global-setup.ts`, `packages/contracts/src/terms.ts` (new), `apps/api/src/terms/` (new), `apps/api/src/app.module.ts`, docs.
 
 Avoid modifying:
-`packages/db/migrations/` (0014 is taken by this branch; the next free number is 0015), `apps/api/src/cart/`.
+`packages/db/migrations/` (0015 is taken by this branch; the next free number is 0016), `apps/api/src/terms/`.
 
 Blockers:
 None. **Two things for the reviewer:**
 
-1. **A cart item does not copy quantity, price or currency.** The reservation already records all three under constraints tying them to the draw and the market; a second copy could only drift from the first. Money is read from the reservation.
-2. **The authenticated reservation routes were not touched.** Guests reach tickets through the basket, which is the smallest change that gives guest checkout without loosening anything a session currently guards.
+1. **No legal wording exists anywhere in this task** — no content column, no content field, none in fixtures. B12 marks it legal and Part F puts it in Phase 12. A version is a label and a moment.
+2. **A fix to shared test infrastructure.** `global-setup.ts` now reproduces the production privilege model in the test template. Without it `hv_app` had _no_ privileges in any test database, so every "hv_app cannot DELETE this" assertion — including the one P5-5 merged — passed because there was no grant to revoke. They are real now.
 
 Last update:
-2026-09-25 — Implemented with 34 integration tests against real PostgreSQL and Redis, including the guest/account boundary, market isolation attempted in raw SQL, and four concurrency cases.
+2026-09-25 — Implemented with 33 integration tests against real PostgreSQL, including immutability of a published version, market isolation attempted in raw SQL, guest acceptance creating no account, and the enablement gate being left alone.
 
 Next:
-Owner review of the P5-5 PR. P5-6 does not start until this merges and the owner approves it.
+Owner review of the P5-6 PR. P5-7 does not start until this merges and the owner approves it.
