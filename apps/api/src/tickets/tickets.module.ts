@@ -12,5 +12,8 @@ import { TicketsRepository } from './tickets.repository';
   imports: [AuthModule, DrawsModule, MarketsModule],
   controllers: [ReservationsController, InventoryController],
   providers: [TicketsRepository, TicketAllocator, ReservationsService],
+  // The basket allocates through the same engine (P5-5): one allocation path,
+  // one set of caps and locks, rather than a second copy beside it.
+  exports: [TicketsRepository, TicketAllocator, ReservationsService],
 })
 export class TicketsModule {}

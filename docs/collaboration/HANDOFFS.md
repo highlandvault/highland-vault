@@ -61,6 +61,60 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-25 — P5-5 — Guest checkout access + per-market basket (for P5-6 and P5-7)
+
+Status: OPEN
+
+Task: P5-5
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p5-5-guest-checkout-basket` (not merged)
+Status of the work: DONE, awaiting review
+
+What was completed:
+
+- `0014_carts`: `carts` (one owner, one market) and `cart_items` (a reservation in a basket), both with guard triggers and no DELETE for `hv_app`.
+- `apps/api/src/cart/`: repository, service, controller, and `CheckoutIdentity` — the discriminated union that says whether a basket belongs to a user or a guest.
+- Routes `GET /markets/:market/cart`, `POST …/cart/items`, `DELETE …/cart/items/:item`.
+
+Important implementation details:
+
+- **A cart item carries no money.** Quantity, unit price, currency and expiry all live on the reservation, which already constrains them against the draw and the market (`reservations_total_exact`, `reservations_market_currency_fkey`). P5-7 should take an order line's money from the reservation too, not from the cart item.
+- **Market isolation is enforced by composite foreign keys**, not by the service: `(cart_id, market_id)`, `(draw_id, market_id)` and `(reservation_id, draw_id)`. There is no arrangement of rows that puts an IE draw in a UK basket. Keep that property when `order_items` is added — the specification already gives it the same `(draw_id, market_id)` FK.
+- **`hv_cart_items_guard` checks ownership against the cap identity** (ADR-0008): a user's basket takes `user` reservations with the same `user_id`; a guest's takes `email` reservations whose address is the one that guest session verified. A guest whose verification has lapsed can still _see_ their basket but cannot add to it.
+- **One allocation path.** The basket calls the same `TicketAllocator` the reservation routes use, so caps, `FOR UPDATE SKIP LOCKED`, the entrant-counter → tickets lock order and expiry are all unchanged. `TicketsModule` now exports the allocator, repository and service for this.
+- **The pre-check is not the last word.** Two requests adding the same draw can both find the basket empty; the partial unique index `cart_items_cart_draw_idx` settles it and the loser is mapped to the same 409 as a caller who was simply late. This was found by a concurrency test, not by reading the code.
+- **Removing an item releases its tickets in the same transaction.** An item gone from the basket whose tickets were still held would keep counting against the cap with nothing on screen to explain it.
+- **Authentication:** the cart routes are `@Public({ identify: true })`; the authenticated reservation routes were **not** modified and still refuse a guest cookie. A guest context never reaches an authorization decision.
+- **Database:** migration `0014_carts.sql`, applied to local dev and test databases only; codegen re-run (23 tables). READ COMMITTED with row locks; no advisory or table locks. `hv_app` has no DELETE or TRUNCATE on the two new tables.
+- **Security:** the client is never the source of truth for price, currency, market, availability or eligibility — a request names a draw slug and a quantity, and everything else is read from PostgreSQL. New rate limit `cartItemsPerOwner` (30 per 10 minutes), keyed on the user or the guest session.
+
+Files/modules affected:
+
+- `packages/db/migrations/0014_carts.sql`, `packages/db/src/generated/db.ts`
+- `packages/contracts/src/{cart,errors,index}.ts`
+- `apps/api/src/cart/` (new), `apps/api/src/tickets/{tickets.repository,reservations.service,tickets.module}.ts`, `apps/api/src/auth/rate-limiter.ts`, `apps/api/src/app.module.ts`
+
+Tests executed:
+
+- `apps/api/test/cart.int.test.ts`: 34/34 against real PostgreSQL and Redis, including the guest/account boundary, market isolation attempted in raw SQL, the ownership guard trigger, and four concurrency cases.
+- Full `pnpm verify`, plus `pnpm test:e2e`. Results in PROJECT_STATUS.md.
+- **Not tested:** anything past the basket. No order, no payment, no `sold`.
+
+Known issues:
+
+- **Guest → user cart merge is not implemented** (ADR-0031 leaves it to this task, and nothing in the specification requires it). A guest who signs in keeps a separate guest basket; both remain reachable by their own identity. If the owner wants a merge, it is an architecture decision and needs its own ADR.
+- A guest whose 30-minute verification lapses cannot re-verify on the same session (ADR-0029 makes `verified_email` immutable), so they need a new session to add more. Pre-existing, recorded during the P5-4 reconciliation.
+
+Integration points:
+
+- **Database:** `carts`, `cart_items`; `hv_cart_items_guard`, `hv_carts_guard`.
+- **API:** `CartService` (`view`, `addItem`, `removeItem`), `CartRepository`, `checkoutIdentity()`.
+- **For P5-7:** an order is built from the cart's **active** items — `CartService` already reports `activeItemCount` and excludes lapsed holds from the total. An expired item must never become an order line.
+
+Next developer action:
+
+- **P5-6** (market terms versions and acceptance, migration `0015`), which P5-7 needs before `orders.terms_version_id` can exist. Scope in `PROJECT_STATUS.md`. It starts only on explicit owner approval.
+
 ### 2026-09-25 — P5-3 + P5-4 — Guest identity and verified email (for P5-5, basket and guest checkout)
 
 Status: OPEN

@@ -212,6 +212,28 @@ export class TicketsRepository {
     return row ? toReservation(row) : null;
   }
 
+  /**
+   * A reservation by id, with no ownership filter.
+   *
+   * For callers that have already established ownership by another route —
+   * the basket reaches a reservation through a cart item, and the cart's owner
+   * is checked before that (and again by the cart_items guard trigger). Not a
+   * substitute for `findOwned` on a request that is handed a reservation id.
+   */
+  async findById(
+    db: DbExecutor,
+    reservationId: string,
+    lock = false,
+  ): Promise<ReservationRecord | null> {
+    let query = db
+      .selectFrom('reservations as r')
+      .select(RESERVATION_COLUMNS)
+      .where('r.id', '=', reservationId);
+    if (lock) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
+    return row ? toReservation(row) : null;
+  }
+
   async listActiveOwned(
     db: DbExecutor,
     marketId: string,
