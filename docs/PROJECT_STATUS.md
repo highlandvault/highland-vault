@@ -11,7 +11,7 @@ _Last updated: 2026-09-25_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; P5-8 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-6 are merged, along with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling — most recently P5-5 (basket, `0014`) and P5-6 (market terms, `0015`). P5-7 (order creation, `0016`) merged as PR #25. The remaining work is broken down as **P5-5 to P5-8** below; **P5-8** (integration and gate hardening, migrations `0017` and `0018`) is implemented and awaiting review, and it is the last task in the phase.
+- **Phase 5 (cart + checkout) is under way; P5-8 is in review** (owner-approved scope: specification-faithful Option A, ending at `awaiting_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-6 are merged, along with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling — most recently P5-5 (basket, `0014`) and P5-6 (market terms, `0015`). P5-7 (order creation, `0016`) merged as PR #25. The remaining work is broken down as **P5-5 to P5-8** below; **P5-8** (integration and gate hardening, migrations `0017` and `0018`) is implemented and awaiting review, and it is the last task in the phase.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -335,7 +335,7 @@ Out of scope: **terms content**, which B12 marks "Content: legal" and Part F ass
 
 ### P5-7 — Order creation, skill answer and idempotency
 
-**Objective.** Turn a basket into an order that stops at `pending_payment`.
+**Objective.** Turn a basket into an order that stops at `awaiting_payment`.
 
 In scope:
 
@@ -344,7 +344,7 @@ In scope:
 - **Terms acceptance** recorded in the same transaction (`orders.terms_version_id` plus a `terms_acceptances` row).
 - **`Idempotency-Key`** on the mutating endpoint (B5), backed by `orders.idempotency_key UNIQUE`, with replay returning the original order rather than creating a second.
 - **One transaction** for the whole of it: skill answer, terms, order, order items. Money as `(amount_minor, currency)`, never summed across currencies; `order_items` snapshot `market_id`, `currency` and `unit_price_minor`.
-- **The order ends at `pending_payment`.** The reservation stays active and its tickets stay `reserved`. An expired reservation must never become an order — check `expires_at > now()` in the same transaction.
+- **The order ends at `awaiting_payment`.** The reservation stays active and its tickets stay `reserved`. An expired reservation must never become an order — check `expires_at > now()` in the same transaction.
 
 Explicitly out of scope, and this is the part the P4 handoff originally got wrong: **no payment, no payment webhooks, no `reserved → sold`, no Gate 4, and a payment return URL is never proof of payment.** All of that is Phase 6 (ADR-0006).
 
@@ -462,7 +462,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way; P5-0 to P5-7 are merged and P5-8 is in review.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-7 are merged and P5-8 is in review.** Scope is Option A (specification-faithful), ending at `awaiting_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

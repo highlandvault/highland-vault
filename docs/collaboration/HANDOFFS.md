@@ -400,7 +400,7 @@ Next developer action:
 
 This handoff was written before Phase 5's scope was fixed, and two of its statements no longer match the approved architecture. They are corrected here rather than deleted, because a handoff is the project's memory (§ Handoffs, rule 4).
 
-1. **Phase 5 does NOT sell tickets.** The approved scope is **Option A**: Phase 5 ends at `pending_payment`. **Payment, payment webhooks, the `reserved → sold` transition and Gate 4 are all Phase 6** (ADR-0006). Phase 5 also must never treat a payment return URL as proof of payment. The "Selling" bullet above is struck through accordingly. An order created in Phase 5 leaves its reservation active and its tickets `reserved`.
+1. **Phase 5 does NOT sell tickets.** The approved scope is **Option A**: Phase 5 ends at `awaiting_payment`. **Payment, payment webhooks, the `reserved → sold` transition and Gate 4 are all Phase 6** (ADR-0006). Phase 5 also must never treat a payment return URL as proof of payment. The "Selling" bullet above is struck through accordingly. An order created in Phase 5 leaves its reservation active and its tickets `reserved`.
 2. **The three preconditions are met.** NB-1 was fixed structurally by **P5-0** (migration `0010`, PR #11) — `hv_end_reservation` now decrements the cap by the rows actually freed. The guest email-verification timing decision became **ADR-0020** and was implemented by **P5-4** (migration `0013`, PR #21). The O12 wrong-skill-answer behaviour is now **ADR-0030**.
 3. **Guests still cannot reserve.** The reservation routes remain `@Authenticated()`. Part F requires guest checkout, so opening that path is explicit scope for **P5-5**; the constraints it must honour are recorded in `PROJECT_STATUS.md` ("Phase 5 remaining scope").
 
