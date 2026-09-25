@@ -11,11 +11,18 @@
  * afterwards. The plaintext exists only here, in memory, while the message is
  * built. It is never logged and never returned in an error.
  */
-import { openPayload, type SecretBox } from '@hv/domain';
+import {
+  VERIFICATION_EMAIL_TOPIC,
+  openPayload,
+  type SecretBox,
+  type VerificationEmailPayload,
+} from '@hv/domain';
 import { z } from 'zod';
 import type { MailMessage } from './mail.port';
 
-export const VERIFICATION_EMAIL_TOPIC = 'email.verification_code';
+// Re-exported so the mail module stays one import for its callers; the
+// definition is shared with the API, which produces these events.
+export { VERIFICATION_EMAIL_TOPIC };
 
 /** The sealed contents. ADR-0020 fixes the 6 digits; P5-4 fixes the lifetime. */
 export const VerificationEmailPayloadSchema = z.strictObject({
@@ -23,7 +30,7 @@ export const VerificationEmailPayloadSchema = z.strictObject({
   code: z.string().regex(/^\d{6}$/, 'must be 6 digits'),
   expiresInMinutes: z.number().int().min(1).max(60),
 });
-export type VerificationEmailPayload = z.infer<typeof VerificationEmailPayloadSchema>;
+export type { VerificationEmailPayload };
 
 /** Opens a sealed payload for a topic. Injected so the key stays in configuration. */
 export type VerificationEmailOpener = (

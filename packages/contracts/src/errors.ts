@@ -27,6 +27,10 @@ export const ERROR_CODES = [
   'DRAW_TRANSITION_NOT_ALLOWED',
   'DRAW_NOT_OPEN',
   'INVALID_QUANTITY',
+  // Guest email verification (ADR-0020). Deliberately coarse: a caller never
+  // learns whether a code was wrong, expired, already used or never issued.
+  'VERIFICATION_REQUIRED',
+  'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',
   'CONFLICT',

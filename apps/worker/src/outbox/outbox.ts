@@ -15,8 +15,12 @@
  * decides when to stop retrying: attempts and the last error are recorded so a
  * stuck event stays visible, and the give-up policy is left to the owner.
  */
-import { type Database, type DbExecutor, sql } from '@hv/db';
+import { type Database, type DbExecutor, enqueueOutboxEvent, sql } from '@hv/db';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
+
+// Producers write events with this; it lives in @hv/db because the API
+// produces and the worker delivers, and neither app can import the other.
+export { enqueueOutboxEvent };
 
 export const OUTBOX_QUEUE = 'outbox';
 export const PUBLISH_JOB = 'publish';
@@ -78,24 +82,6 @@ interface ClaimedRow {
 export function retryDelaySeconds(attempts: number): number {
   const delay = RETRY_BASE_SECONDS * 2 ** Math.max(0, attempts - 1);
   return Math.min(delay, RETRY_MAX_SECONDS);
-}
-
-/**
- * Adds an event to the outbox. Call it with the SAME executor as the business
- * change, so the two commit or roll back together — that is the entire point
- * of the outbox and the reason this takes an executor rather than a database.
- */
-export async function enqueueOutboxEvent(
-  executor: DbExecutor,
-  topic: string,
-  payload: Record<string, unknown>,
-): Promise<string> {
-  const { rows } = await sql<{
-    id: string;
-  }>`INSERT INTO outbox (topic, payload) VALUES (${topic}, ${JSON.stringify(payload)}::jsonb) RETURNING id`.execute(
-    executor,
-  );
-  return rows[0]!.id;
 }
 
 async function claim(db: DbExecutor, limit: number): Promise<ClaimedRow[]> {

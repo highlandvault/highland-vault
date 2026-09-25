@@ -11,7 +11,7 @@ _Last updated: 2026-09-24_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; task P5-3 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0, NB-3, P5-1, P5-2, the ticket-engine teardown fix and the local gitleaks tooling are merged. No task after P5-3 is approved to start.
+- **Phase 5 (cart + checkout) is under way; task P5-4 is active** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0, NB-3, P5-1, P5-2, the gitleaks placeholder fix, the ticket-engine teardown fix, the local gitleaks tooling and P5-3 are merged. No task after P5-4 is approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -125,7 +125,7 @@ Anyone else's reservation, another market's reservation and malformed IDs are al
 ## Phase 4 scope notes
 
 - **Not built (later phases, as instructed):** orders, checkout, payment, webhooks, wallet, refunds, settlement, instant wins, referrals, production migration.
-- **Guest entry:** the engine and the cap support the verified-email key, but the API accepts signed-in customers only. Guests need email verification first (ADR-0020), which arrives with checkout (Phase 5).
+- **Guest entry:** the engine and the cap support the verified-email key. Phase 5 built the identity (P5-3, ADR-0029) and the verification that fills it (P5-4, ADR-0020); the reservation and checkout routes still accept signed-in customers only until the remaining P5 tasks connect them.
 - **`sold`:** nothing in Phase 4 sets it, and nothing in Phase 5 does either (Option A). **Phase 6** turns a reservation's tickets into `sold` when the payment webhook confirms the order; the trigger already allows only `reserved → sold` for the same reservation.
 
 ## Implementation choices made in Phase 4 (for review)
@@ -187,16 +187,17 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 
 ## Phase 5 progress
 
-| Task                                              | State         | Evidence                                                     |
-| ------------------------------------------------- | ------------- | ------------------------------------------------------------ |
-| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                     |
-| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                           |
-| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                         |
-| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                 |
-| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                             |
-| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                             |
-| **P5-3 Guest sessions**                           | **in review** | ADR-0029, migration `0012`, `apps/api/src/guests/`, 41 tests |
-| P5-4 onwards                                      | not started   | Each needs its own branch, PR and owner approval             |
+| Task                                              | State         | Evidence                                                    |
+| ------------------------------------------------- | ------------- | ----------------------------------------------------------- |
+| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                    |
+| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                          |
+| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                        |
+| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                |
+| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                            |
+| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                            |
+| P5-3 Guest sessions                               | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests    |
+| **P5-4 Guest email verification**                 | **in review** | ADR-0020, migration `0013`, first outbox producer, 40 tests |
+| P5-5 onwards                                      | not started   | Each needs its own branch, PR and owner approval            |
 
 ### P5-1: the outbox (migration 0011)
 
@@ -208,7 +209,7 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 - **Privileges:** `hv_app` cannot `DELETE` or `TRUNCATE` the outbox, so application code cannot lose a pending event.
 - **Worker:** `outbox` queue, job `publish`, scheduler `outbox-publish` every 5 s, up to 20 batches of 100 per run, `concurrency: 1` per process. Several worker processes remain safe because claiming skips what another holds.
 - **Retry:** backoff doubles from 10 s and stops growing at 1 hour. **No give-up policy is set** — a stuck event keeps its attempt count and last error and stays visible rather than being dropped. Choosing when to stop is a policy decision left to the owner.
-- **Nothing is produced yet.** An unknown topic fails the event (recorded, not dropped). P5-2 registered the first handler; the first producer arrives with guest verification in P5-4.
+- **The first producer is P5-4** (guest verification codes). An unknown topic still fails the event — recorded, not dropped. `enqueueOutboxEvent` now lives in `@hv/db`, because the API produces and the worker delivers and neither app can import the other; `apps/worker/src/outbox/outbox.ts` re-exports it.
 
 ### P5-2: mail delivery and the B17 relay (ADR-0028, no migration)
 
@@ -219,6 +220,20 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 - **Sensitive payloads are sealed** with the same AES-256-GCM construction as TOTP secrets (`SecretBox`, now in `@hv/domain` so the API and worker share one key-management model). The topic is the associated data. No plaintext one-time code or recipient address is stored in PostgreSQL **or Redis** — proven by direct SQL and by inspecting the job.
 - **`MailPort` is provider-independent**, following the shape of ADR-0006. `nodemailer` exists only behind the SMTP adapter; Mailpit is the dev/test target. **Production refuses to start without `SMTP_URL`, `MAIL_FROM` and `OUTBOX_ENCRYPTION_KEY`**, because O14 has not chosen a provider.
 - **Duplicate verification emails are possible and accepted** (at-least-once). Redelivery is tested: the message is sent again, but the record of the first success is not overwritten.
+
+### P5-4: guest email verification (ADR-0020, migration 0013)
+
+The parameters are in [ADR-0020](adr/0020-guest-email-verification.md#implementation-phase-5-task-p5-4). What matters structurally:
+
+- **`guest_email_verifications`:** `id` (UUIDv7), `guest_session_id`, `email` (citext, normalized exactly as `users.email`), `code_hash` (bytea, `CHECK octet_length = 32`), `attempts`, `consumed_at`, `expires_at`, `created_at`. A partial index on `(guest_session_id, email, created_at DESC) WHERE consumed_at IS NULL` serves the only hot lookup.
+- **Guard trigger `hv_guest_email_verifications_guard`:** rows are created fresh (unconsumed, unattempted); identity columns and `expires_at` are immutable; a consumed row stays consumed; attempts never decrease. A `CHECK` also caps the TTL at 60 minutes, so no migration or fixture can quietly issue an hour-long code.
+- **Privileges:** `hv_app` cannot `DELETE` or `TRUNCATE` the table, so an attempt count cannot be erased by application code. Retention is Phase 12 (O12), as for the outbox.
+- **The limits are in the database, not the API.** The attempt count is incremented under `FOR UPDATE` before the comparison, and **committed whatever the verdict** — the verifying transaction returns a verdict and the error is raised outside it. Throwing inside would roll the increment back and the cap would never engage.
+- **Every failure is the same error.** Wrong, expired, consumed, belonging to another session, never existed: one `INVALID_VERIFICATION_CODE`. Tested directly, because this is the property that makes the 5-attempt cap worth having.
+- **Sending is limited on both dimensions, deliberately.** Per address (3/hour), so one inbox cannot be flooded from many sessions; and **per IP (20/hour, the same value as `registerPerIp`)**, because the per-address limit does nothing about a caller who rotates addresses — which is what would produce unbounded mail to strangers and unbounded rows on tables `hv_app` cannot delete from. Both are consumed before anything is written, and both fail closed. A third count in SQL covers the same address across rotated sessions, as a backstop if Redis is emptied.
+- **Routes:** `POST /markets/:market/checkout/email/code` (202), `POST …/verify` (200), `GET …/verification`. All `@Public({ identify: true })` behind `MarketGuard`. The code request issues the guest session if there is none, so **these are the only routes that set `hv_guest`**.
+- **The API is now a key holder.** `OUTBOX_ENCRYPTION_KEY` is required for it to start, and it refuses a low-entropy placeholder in production exactly as the worker does. The API and worker must hold the same value.
+- **Still no plaintext code anywhere it could persist**: hashed in PostgreSQL, sealed in the outbox and in Redis, absent from every response, and never logged.
 
 ## Carried into Phase 5 (from the Phase 4 review)
 
@@ -233,7 +248,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way: task P5-3 (guest sessions).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way: task P5-4 (guest email verification).** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. O12 is decided: an incorrect skill answer rejects the whole checkout, creates no order, leaves the reservation active, and returns a generic error that never identifies the line or the correct option. Each later task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

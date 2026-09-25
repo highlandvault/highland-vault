@@ -57,6 +57,9 @@ export async function startApp(
     WEB_ORIGINS: WEB_ORIGIN,
     SESSION_COOKIE_SECURE: 'false',
     MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
+    // The API seals outbox payloads (ADR-0028); a low-entropy placeholder,
+    // the same convention as the MFA key above.
+    OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
     ...overrides,
   });
   const app = await createApp(env);

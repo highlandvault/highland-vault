@@ -79,6 +79,17 @@ export interface Draws {
   winner_positions: number;
 }
 
+export interface GuestEmailVerifications {
+  attempts: Generated<number>;
+  code_hash: Buffer;
+  consumed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  email: string;
+  expires_at: Timestamp;
+  guest_session_id: string;
+  id: Generated<string>;
+}
+
 export interface GuestSessions {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -243,6 +254,7 @@ export interface DB {
   draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;
+  guest_email_verifications: GuestEmailVerifications;
   guest_sessions: GuestSessions;
   market_settings: MarketSettings;
   markets: Markets;

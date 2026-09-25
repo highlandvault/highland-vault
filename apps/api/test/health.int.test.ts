@@ -24,6 +24,8 @@ async function start(overrides: Record<string, string>, database: TestDatabase) 
     ENABLED_MARKETS: 'uk,ie',
     WEB_ORIGINS: 'http://127.0.0.1:3000',
     MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
+    // Required since P5-4. Low-entropy on purpose: production refuses it.
+    OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
     ...overrides,
   });
   const app = await createApp(env);

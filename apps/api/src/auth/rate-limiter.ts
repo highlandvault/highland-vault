@@ -21,6 +21,15 @@ export const RATE_LIMITS = {
   registerPerIp: { name: 'register-ip', limit: 20, windowSeconds: 60 * 60 },
   mfaPerUser: { name: 'mfa-user', limit: 5, windowSeconds: 15 * 60 },
   reservePerUser: { name: 'reserve-user', limit: 30, windowSeconds: 10 * 60 },
+  // Guest verification codes per address per hour (ADR-0020). Keyed on the
+  // address so one inbox cannot be flooded from many sessions.
+  verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },
+  // And per IP, because the limit above bounds one inbox but not one caller:
+  // rotating addresses would otherwise mean unlimited mail to strangers and
+  // unlimited rows on tables hv_app cannot delete from. Same value and window
+  // as registerPerIp — the nearest thing in this codebase, another public,
+  // unauthenticated write that creates a durable identity.
+  verificationCodePerIp: { name: 'verify-ip', limit: 20, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimit>;
 
 /**
