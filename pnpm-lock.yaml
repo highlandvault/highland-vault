@@ -238,6 +238,16 @@ importers:
         specifier: workspace:*
         version: link:../config
 
+  packages/payments:
+    dependencies:
+      '@hv/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@hv/config':
+        specifier: workspace:*
+        version: link:../config
+
 packages:
 
   '@babel/code-frame@7.29.7':

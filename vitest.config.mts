@@ -29,6 +29,7 @@ export default defineConfig({
       { find: /^@hv\/db$/, replacement: src('db') },
       { find: /^@hv\/domain$/, replacement: src('domain') },
       { find: /^@hv\/contracts$/, replacement: src('contracts') },
+      { find: /^@hv\/payments$/, replacement: src('payments') },
     ],
   },
   test: {
