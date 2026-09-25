@@ -70,11 +70,11 @@ Blockers:
 None. **Three things for the reviewer:**
 
 1. **The stored status is `awaiting_payment`, not `pending_payment`.** B7 names the former and Phase 6 implements its transitions literally; the planning prose used the latter informally. Same moment, and the CHECK admits the whole B7 enumeration.
-2. **`orders.idempotency_digest` is not in B18.** It is a SHA-256 of the canonicalised request, and it is what makes "same key, different request" refusable instead of silently answered with the earlier order — which the task required.
+2. **The checkout request is self-describing (ADR-0032).** The specification does not say whether a checkout describes the purchase or just says "convert my basket"; a read-only review confirmed the gap and the owner decided. `CreateOrderRequest` now carries `items: [{ slug, quantity, optionId? }]`, the server matches it against the locked basket, and `orders.idempotency_digest` (not in B18) hashes that semantic request so "same key, different purchase" is refusable.
 3. **`order_number` is `HV-` + 10 base32 characters.** ADR-0031 left the length here; the reasoning is in `packages/domain/src/order-number.ts` and PROJECT_STATUS.
 
 Last update:
-2026-09-25 — Implemented with 30 integration tests against real PostgreSQL, including a five-way concurrent idempotency race, cross-customer key reuse, and positive assertions that nothing is sold and no payment table exists.
+2026-09-25 — Implemented with 39 integration tests against real PostgreSQL, including basket/request mismatch, a five-way concurrent idempotency race, same-key-different-purchase refusals, cross-customer key reuse, and positive assertions that nothing is sold and no payment table exists.
 
 Next:
 Owner review of the P5-7 PR. P5-8 does not start until this merges and the owner approves it.

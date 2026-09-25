@@ -54,6 +54,9 @@ describe('creating an order', () => {
   /** The correct and a wrong option for the UK draw's question. */
   let correctOption: string;
   let wrongOption: string;
+  /** A second UK draw, so a request can name a line the basket does not hold. */
+  let secondSlug: string;
+  let secondOption: string;
 
   beforeAll(async () => {
     h = await startHarness({ ENABLED_MARKETS: 'uk,ie,de', OUTBOX_ENCRYPTION_KEY: KEY });
@@ -66,6 +69,7 @@ describe('creating an order', () => {
     ieTermsVersion = await activateTerms('ie');
 
     ukSlug = `ord-uk-${Date.now()}`;
+    secondSlug = `ord-uk2-${Date.now()}`;
     ieSlug = `ord-ie-${Date.now()}`;
     await insertFixtureDraw(h.sql, {
       market: 'uk',
@@ -74,6 +78,14 @@ describe('creating an order', () => {
       totalTickets: 500,
       maxPerPerson: 10,
       ticketPriceMinor: 250,
+    });
+    await insertFixtureDraw(h.sql, {
+      market: 'uk',
+      slug: secondSlug,
+      state: 'live',
+      totalTickets: 500,
+      maxPerPerson: 10,
+      ticketPriceMinor: 400,
     });
     await insertFixtureDraw(h.sql, {
       market: 'ie',
@@ -95,6 +107,14 @@ describe('creating an order', () => {
     );
     correctOption = options.rows.find((o) => o.is_correct)!.id;
     wrongOption = options.rows.find((o) => !o.is_correct)!.id;
+
+    const secondOptions = await h.sql.query<{ id: string }>(
+      `SELECT o.id FROM skill_question_options o
+         JOIN draws d ON d.skill_question_id = o.skill_question_id
+        WHERE d.slug = $1 AND o.is_correct`,
+      [secondSlug],
+    );
+    secondOption = secondOptions.rows[0]!.id;
   });
 
   afterAll(async () => {
@@ -178,22 +198,30 @@ describe('creating an order', () => {
     return client;
   };
 
-  const place = (
-    client: Client,
-    key: string,
-    body: unknown = { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion },
-    market = 'uk',
-  ) =>
-    client.request('POST', `/markets/${market}/checkout/orders`, body, {
-      'idempotency-key': key,
-    });
+  /**
+   * The request a checkout page would send for `quantity` of the UK draw.
+   * Pass `null` for the option to leave the answer off the line entirely;
+   * `undefined` would take the default, which is the correct one.
+   */
+  const buying = (quantity: number, optionId: string | null = correctOption) => ({
+    items: [{ slug: ukSlug, quantity, ...(optionId ? { optionId } : {}) }],
+    termsVersion,
+  });
+
+  const place = (client: Client, key: string, bodyOrQuantity: unknown = 1, market = 'uk') =>
+    client.request(
+      'POST',
+      `/markets/${market}/checkout/orders`,
+      typeof bodyOrQuantity === 'number' ? buying(bodyOrQuantity) : bodyOrQuantity,
+      { 'idempotency-key': key },
+    );
 
   // ---- the happy paths -----------------------------------------------------
 
   describe('a signed-in customer', () => {
     it('turns a basket into an order awaiting payment', async () => {
       const client = await readyCustomer(3);
-      const response = await place(client, freshKey());
+      const response = await place(client, freshKey(), 3);
       expect(response.statusCode).toBe(201);
 
       const order = orderOf(response);
@@ -213,7 +241,7 @@ describe('creating an order', () => {
 
     it('empties the basket but keeps the tickets held', async () => {
       const client = await readyCustomer(2);
-      const order = orderOf(await place(client, freshKey()));
+      const order = orderOf(await place(client, freshKey(), 2));
 
       const cart = (await client.get('/markets/uk/cart')).json<{
         cart: { activeItemCount: number };
@@ -270,13 +298,9 @@ describe('creating an order', () => {
       const before = await h.sql.query<{ n: number }>(`SELECT count(*)::int AS n FROM users`);
       const { cookie, email } = await readyGuest(2);
 
-      const response = await inject(
-        'POST',
-        '/markets/uk/checkout/orders',
-        cookie,
-        { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion },
-        { 'idempotency-key': freshKey() },
-      );
+      const response = await inject('POST', '/markets/uk/checkout/orders', cookie, buying(2), {
+        'idempotency-key': freshKey(),
+      });
       expect(response.statusCode).toBe(201);
       const order = orderOf(response);
       expect(order.placedBy).toBe('guest');
@@ -300,13 +324,9 @@ describe('creating an order', () => {
         `UPDATE guest_sessions SET verified_email_at = now() - interval '31 minutes'
           WHERE verified_email IS NOT NULL`,
       );
-      const response = await inject(
-        'POST',
-        '/markets/uk/checkout/orders',
-        cookie,
-        { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion },
-        { 'idempotency-key': freshKey() },
-      );
+      const response = await inject('POST', '/markets/uk/checkout/orders', cookie, buying(2), {
+        'idempotency-key': freshKey(),
+      });
       expect(response.statusCode).toBe(400);
       expect(errorCode(response)).toBe('VERIFICATION_REQUIRED');
     });
@@ -326,7 +346,7 @@ describe('creating an order', () => {
       const key = freshKey();
 
       const response = await place(client, key, {
-        answers: [{ slug: ukSlug, optionId: wrongOption }],
+        items: [{ slug: ukSlug, quantity: 2, optionId: wrongOption }],
         termsVersion,
       });
       expect(response.statusCode).toBe(400);
@@ -342,19 +362,15 @@ describe('creating an order', () => {
       expect(cart.activeItemCount).toBe(1);
 
       // And the key is not spent — the whole transaction rolled back.
-      const retry = await place(client, key);
+      const retry = await place(client, key, 2);
       expect(retry.statusCode).toBe(201);
     });
 
     it('gives the same answer for a wrong option and a missing one', async () => {
-      const wrong = await place(await readyCustomer(1), freshKey(), {
-        answers: [{ slug: ukSlug, optionId: wrongOption }],
-        termsVersion,
-      });
-      const missing = await place(await readyCustomer(1), freshKey(), {
-        answers: [{ slug: 'some-other-draw', optionId: correctOption }],
-        termsVersion,
-      });
+      const wrong = await place(await readyCustomer(1), freshKey(), buying(1, wrongOption));
+      // "Missing" now means an item for a question-bearing draw with no option
+      // on it; a slug that is not in the basket is a basket conflict instead.
+      const missing = await place(await readyCustomer(1), freshKey(), buying(1, null));
       expect(errorCode(wrong)).toBe(errorCode(missing));
       expect(ErrorResponseSchema.parse(wrong.json()).error.message).toBe(
         ErrorResponseSchema.parse(missing.json()).error.message,
@@ -369,10 +385,7 @@ describe('creating an order', () => {
       expect(draw).toContain(correctOption);
       expect(draw).toContain(wrongOption);
 
-      const refusal = await place(await readyCustomer(1), freshKey(), {
-        answers: [{ slug: ukSlug, optionId: wrongOption }],
-        termsVersion,
-      });
+      const refusal = await place(await readyCustomer(1), freshKey(), buying(1, wrongOption));
       expect(refusal.body).not.toContain(correctOption);
     });
   });
@@ -391,7 +404,7 @@ describe('creating an order', () => {
     it('refuses a stale version even when something was accepted', async () => {
       const client = await readyCustomer(1);
       const response = await place(client, freshKey(), {
-        answers: [{ slug: ukSlug, optionId: correctOption }],
+        items: [{ slug: ukSlug, quantity: 1, optionId: correctOption }],
         termsVersion: 'test-fixture-older',
       });
       expect(response.statusCode).toBe(409);
@@ -402,7 +415,7 @@ describe('creating an order', () => {
       const client = await readyCustomer(1);
       const replacement = await activateTerms('uk');
       const response = await place(client, freshKey(), {
-        answers: [{ slug: ukSlug, optionId: correctOption }],
+        items: [{ slug: ukSlug, quantity: 1, optionId: correctOption }],
         termsVersion: replacement,
       });
       // They accepted the previous version, which is no longer the active one.
@@ -418,12 +431,7 @@ describe('creating an order', () => {
   describe('idempotency', () => {
     it('requires a key', async () => {
       const client = await readyCustomer(1);
-      const response = await client.request(
-        'POST',
-        '/markets/uk/checkout/orders',
-        { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion },
-        {},
-      );
+      const response = await client.request('POST', '/markets/uk/checkout/orders', buying(1), {});
       expect(response.statusCode).toBe(400);
       expect(errorCode(response)).toBe('IDEMPOTENCY_KEY_REQUIRED');
     });
@@ -431,8 +439,8 @@ describe('creating an order', () => {
     it('returns the same order for the same key and request', async () => {
       const client = await readyCustomer(2);
       const key = freshKey();
-      const first = orderOf(await place(client, key));
-      const second = await place(client, key);
+      const first = orderOf(await place(client, key, 2));
+      const second = await place(client, key, 2);
 
       expect(second.statusCode).toBe(201);
       const replayed = orderOf(second);
@@ -449,7 +457,7 @@ describe('creating an order', () => {
     it('creates exactly one order when duplicate requests race', async () => {
       const client = await readyCustomer(2);
       const key = freshKey();
-      const results = await Promise.all(Array.from({ length: 5 }, () => place(client, key)));
+      const results = await Promise.all(Array.from({ length: 5 }, () => place(client, key, 2)));
 
       expect(results.map((r) => r.statusCode).sort()).toEqual([201, 201, 201, 201, 201]);
       const ids = new Set(results.map((r) => orderOf(r).id));
@@ -468,10 +476,7 @@ describe('creating an order', () => {
       expect((await place(client, key)).statusCode).toBe(201);
 
       // Same key, a different answer: a mistake, not a retry.
-      const conflicting = await place(client, key, {
-        answers: [{ slug: ukSlug, optionId: wrongOption }],
-        termsVersion,
-      });
+      const conflicting = await place(client, key, buying(1, wrongOption));
       expect(conflicting.statusCode).toBe(409);
       expect(errorCode(conflicting)).toBe('IDEMPOTENCY_KEY_REUSED');
     });
@@ -488,6 +493,44 @@ describe('creating an order', () => {
       expect(response.body).not.toContain(order.id);
     });
 
+    it('refuses the same key with a different quantity', async () => {
+      const client = await readyCustomer(2);
+      const key = freshKey();
+      expect((await place(client, key, 2)).statusCode).toBe(201);
+
+      // The basket is empty now, but the point is the SEMANTIC request: a
+      // different quantity is a different purchase, not a retry (ADR-0032).
+      const changed = await place(client, key, 5);
+      expect(changed.statusCode).toBe(409);
+      expect(errorCode(changed)).toBe('IDEMPOTENCY_KEY_REUSED');
+    });
+
+    it('refuses the same key with a different draw', async () => {
+      const client = await readyCustomer(1);
+      const key = freshKey();
+      expect((await place(client, key, 1)).statusCode).toBe(201);
+
+      const changed = await place(client, key, {
+        items: [{ slug: secondSlug, quantity: 1, optionId: secondOption }],
+        termsVersion,
+      });
+      expect(changed.statusCode).toBe(409);
+      expect(errorCode(changed)).toBe('IDEMPOTENCY_KEY_REUSED');
+    });
+
+    it('refuses the same key with a different terms version', async () => {
+      const client = await readyCustomer(1);
+      const key = freshKey();
+      expect((await place(client, key, 1)).statusCode).toBe(201);
+
+      const changed = await place(client, key, {
+        items: [{ slug: ukSlug, quantity: 1, optionId: correctOption }],
+        termsVersion: 'test-fixture-something-else',
+      });
+      expect(changed.statusCode).toBe(409);
+      expect(errorCode(changed)).toBe('IDEMPOTENCY_KEY_REUSED');
+    });
+
     it('gives different keys different orders', async () => {
       const first = await readyCustomer(1);
       const second = await readyCustomer(1);
@@ -495,6 +538,70 @@ describe('creating an order', () => {
       const b = orderOf(await place(second, freshKey()));
       expect(a.id).not.toBe(b.id);
       expect(a.orderNumber).not.toBe(b.orderNumber);
+    });
+  });
+
+  // ---- the request must describe the basket (ADR-0032) --------------------
+
+  describe('the request has to match the basket', () => {
+    it('accepts a request that describes the basket exactly', async () => {
+      const client = await readyCustomer(3);
+      expect((await place(client, freshKey(), 3)).statusCode).toBe(201);
+    });
+
+    it('refuses a quantity the basket does not hold', async () => {
+      const client = await readyCustomer(3);
+      // The page said 3; this request says 2. The order must not be for
+      // something the customer was never shown.
+      const response = await place(client, freshKey(), 2);
+      expect(response.statusCode).toBe(409);
+      expect(errorCode(response)).toBe('CONFLICT');
+    });
+
+    it('refuses a draw the basket does not hold', async () => {
+      const client = await readyCustomer(1);
+      const response = await place(client, freshKey(), {
+        items: [{ slug: ieSlug, quantity: 1 }],
+        termsVersion,
+      });
+      expect(response.statusCode).toBe(409);
+      expect(errorCode(response)).toBe('CONFLICT');
+    });
+
+    it('refuses a request that omits a line the basket holds', async () => {
+      const client = await registeredClient(h.app);
+      await client.post('/markets/uk/cart/items', { slug: ukSlug, quantity: 1 });
+      await client.post('/markets/uk/cart/items', { slug: secondSlug, quantity: 1 });
+      await client.post('/markets/uk/terms/acceptance', { version: termsVersion });
+
+      const response = await place(client, freshKey(), buying(1));
+      expect(response.statusCode).toBe(409);
+      expect(errorCode(response)).toBe('CONFLICT');
+    });
+
+    it('refuses a request with an extra line the basket does not hold', async () => {
+      const client = await readyCustomer(1);
+      const response = await place(client, freshKey(), {
+        items: [
+          { slug: ukSlug, quantity: 1, optionId: correctOption },
+          { slug: secondSlug, quantity: 1, optionId: secondOption },
+        ],
+        termsVersion,
+      });
+      expect(response.statusCode).toBe(409);
+      expect(errorCode(response)).toBe('CONFLICT');
+    });
+
+    it('refuses the same draw named twice', async () => {
+      const client = await readyCustomer(1);
+      const response = await place(client, freshKey(), {
+        items: [
+          { slug: ukSlug, quantity: 1, optionId: correctOption },
+          { slug: ukSlug, quantity: 1, optionId: correctOption },
+        ],
+        termsVersion,
+      });
+      expect(response.statusCode).toBe(409);
     });
   });
 
@@ -516,7 +623,7 @@ describe('creating an order', () => {
         client,
         freshKey(),
         {
-          answers: [{ slug: ieSlug, optionId: ieOptions.rows[0]!.id }],
+          items: [{ slug: ieSlug, quantity: 2, optionId: ieOptions.rows[0]!.id }],
           termsVersion: ieTermsVersion,
         },
         'ie',
@@ -533,7 +640,10 @@ describe('creating an order', () => {
       const response = await place(
         client,
         freshKey(),
-        { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion: ieTermsVersion },
+        {
+          items: [{ slug: ukSlug, quantity: 1, optionId: correctOption }],
+          termsVersion: ieTermsVersion,
+        },
         'ie',
       );
       // The IE basket is empty; the UK one is not reachable from here.
@@ -632,7 +742,7 @@ describe('creating an order', () => {
 
   describe('Phase 5 stops before payment', () => {
     it('sells no tickets and records no payment', async () => {
-      const order = orderOf(await place(await readyCustomer(2), freshKey()));
+      const order = orderOf(await place(await readyCustomer(2), freshKey(), 2));
 
       const sold = await h.sql.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM tickets WHERE status = 'sold'`,
@@ -655,13 +765,9 @@ describe('creating an order', () => {
 
     it('writes an audit entry without the address or the answer', async () => {
       const { cookie, email } = await readyGuest(1);
-      const response = await inject(
-        'POST',
-        '/markets/uk/checkout/orders',
-        cookie,
-        { answers: [{ slug: ukSlug, optionId: correctOption }], termsVersion },
-        { 'idempotency-key': freshKey() },
-      );
+      const response = await inject('POST', '/markets/uk/checkout/orders', cookie, buying(1), {
+        'idempotency-key': freshKey(),
+      });
       const order = orderOf(response);
       const { rows } = await h.sql.query<{ action: string; after: Record<string, unknown> }>(
         `SELECT action, after FROM audit_log WHERE entity_id = $1`,

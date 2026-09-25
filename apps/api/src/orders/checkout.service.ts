@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CreateOrderRequest, Order, OrderItem, SkillAnswer } from '@hv/contracts';
+import type { CheckoutItem, CreateOrderRequest, Order, OrderItem } from '@hv/contracts';
 import { type Database, type DbExecutor, withTransaction } from '@hv/db';
 import { effectiveReservationStatus, generateOrderNumber, normalizeEmail } from '@hv/domain';
 import { createHash } from 'node:crypto';
@@ -92,7 +92,7 @@ export class CheckoutService {
       if (items.length === 0) throw await this.emptyOrReplay(trx, idempotencyKey);
 
       const termsVersion = await this.requireAcceptedTerms(trx, market, identity, request);
-      const lines = await this.priceAndValidate(trx, market, items, request.answers);
+      const lines = await this.matchAndPrice(trx, market, items, request);
 
       const total = lines.reduce((sum, line) => sum + line.totalMinor, 0);
       const order = await this.claimAndInsert(trx, {
@@ -222,26 +222,38 @@ export class CheckoutService {
   }
 
   /**
-   * Prices each basket line from the database and checks its skill answer.
+   * Checks the requested purchase against the basket, and prices it from the
+   * database.
    *
-   * The request contributes exactly one thing to a line: which option was
-   * chosen. Quantity, price, currency and draw all come from the reservation
-   * and the draw, so a tampered request cannot buy at a price it invented.
+   * The request says what the customer believes they are buying (ADR-0032).
+   * Every line of it must correspond to a basket line, with the same quantity
+   * — otherwise the basket changed after the page was drawn, and creating an
+   * order for something the customer was never shown is the outcome this
+   * exists to prevent. Price, currency and totals then come from the
+   * reservation, never from the request.
    */
-  private async priceAndValidate(
+  private async matchAndPrice(
     trx: DbExecutor,
     market: MarketContext,
     items: { id: string; reservationId: string; drawId: string }[],
-    answers: readonly SkillAnswer[],
+    request: CreateOrderRequest,
   ): Promise<Line[]> {
-    const lines: Line[] = [];
-    const used = new Set<string>();
+    // A request naming the same draw twice is malformed: two intents for one
+    // basket line cannot both be honoured.
+    const intents = new Map<string, CheckoutItem>();
+    for (const intent of request.items) {
+      if (intents.has(intent.slug)) throw this.basketChanged();
+      intents.set(intent.slug, intent);
+    }
+    // Every basket line must be accounted for, and nothing else.
+    if (intents.size !== items.length) throw this.basketChanged();
 
+    const lines: Line[] = [];
     for (const item of items) {
       // Locked, so the expiry sweep cannot end it between this check and the
       // order being written.
       const reservation = await this.tickets.findById(trx, item.reservationId, true);
-      if (!reservation) throw this.checkoutConflict();
+      if (!reservation) throw this.basketChanged();
       // An expired hold must never become an order, whatever the row says.
       if (
         effectiveReservationStatus(reservation.status, reservation.expiresAt, new Date()) !==
@@ -254,19 +266,29 @@ export class CheckoutService {
       }
 
       const draw = await this.draws.findById(trx, market.id, item.drawId);
-      if (!draw) throw this.checkoutConflict();
+      if (!draw) throw this.basketChanged();
+
+      const intent = intents.get(draw.slug);
+      // A basket line the request did not mention, or a quantity that does not
+      // match the hold. One generic answer for both: the customer's remedy is
+      // the same, and naming the line tells a probing client which of its
+      // guesses landed.
+      if (!intent || intent.quantity !== reservation.quantity) throw this.basketChanged();
+      intents.delete(draw.slug);
 
       let skillAnswerOptionId: string | null = null;
       if (draw.skillQuestionId) {
-        const answer = answers.find((a) => a.slug === draw.slug);
         // A missing answer and a wrong one are the same refusal: saying which
         // it was tells a guesser where to look (ADR-0030).
-        if (!answer) throw this.invalidAnswer();
-        if (!(await this.orders.isCorrectAnswer(trx, draw.skillQuestionId, answer.optionId))) {
+        if (!intent.optionId) throw this.invalidAnswer();
+        if (!(await this.orders.isCorrectAnswer(trx, draw.skillQuestionId, intent.optionId))) {
           throw this.invalidAnswer();
         }
-        skillAnswerOptionId = answer.optionId;
-        used.add(answer.slug);
+        skillAnswerOptionId = intent.optionId;
+      } else if (intent.optionId) {
+        // An answer for a draw that asks nothing: the client is describing a
+        // different purchase from the one in the basket.
+        throw this.basketChanged();
       }
 
       lines.push({
@@ -281,9 +303,8 @@ export class CheckoutService {
       });
     }
 
-    // An answer for a draw that is not in the basket is a malformed request,
-    // and refusing it keeps the mapping between answers and lines exact.
-    if (answers.some((a) => !used.has(a.slug))) throw this.invalidAnswer();
+    // Anything left is a request line with no basket line behind it.
+    if (intents.size > 0) throw this.basketChanged();
     return lines;
   }
 
@@ -384,7 +405,12 @@ export class CheckoutService {
     );
   }
 
-  private checkoutConflict() {
+  /**
+   * One answer for every way the request and the basket can disagree
+   * (ADR-0032): a line the request forgot, one it invented, a quantity that
+   * does not match the hold, or a hold that is no longer there.
+   */
+  private basketChanged() {
     return Errors.conflict('CONFLICT', 'Your basket has changed. Review it and try again.');
   }
 
@@ -443,19 +469,25 @@ class IdempotencyRace extends Error {
 }
 
 /**
- * What the idempotency key was used for, canonicalised.
+ * The semantic checkout request, canonically serialised (ADR-0032).
  *
- * Answers are sorted so that the same basket described in a different order is
- * the same request, and the buyer is included so one customer's key can never
- * match another's request.
+ * Every input that can change the resulting order is here: the market, who is
+ * buying, the terms they agreed to, and exactly what they asked to buy. Lines
+ * and their answers are sorted, so the same purchase described in a different
+ * order is the same request. Nothing server-derived goes in — price and
+ * currency are read from the reservation and would make a retry look like a
+ * different request if the draw were ever repriced.
+ *
+ * The buyer is included so that one customer's key can never match another's
+ * request; `ownedBy` is checked separately as well.
  */
 function fingerprint(marketCode: string, buyer: OrderBuyer, request: CreateOrderRequest): Buffer {
-  const answers = [...request.answers]
-    .map((a) => `${a.slug}:${a.optionId}`)
+  const items = [...request.items]
+    .map((i) => `${i.slug}:${i.quantity}:${i.optionId ?? '-'}`)
     .sort()
     .join(',');
   const who = buyer.kind === 'user' ? `user:${buyer.userId}` : `guest:${buyer.email}`;
   return createHash('sha256')
-    .update([marketCode, who, request.termsVersion, answers].join('|'))
+    .update([marketCode, who, request.termsVersion, items].join('|'))
     .digest();
 }

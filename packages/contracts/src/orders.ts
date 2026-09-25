@@ -7,26 +7,41 @@ import { z } from 'zod';
  * Phase 5 stops at an order awaiting payment. Nothing here takes a payment,
  * describes one, or says anything about tickets being sold.
  *
- * The request says which skill answer was chosen and nothing else that costs
- * money: the market, the draws, the quantities, the prices and the terms all
- * come from what is already in PostgreSQL.
+ * A checkout request is SELF-DESCRIBING (ADR-0032): it states the purchase the
+ * customer intends to make, and the server checks that intent against the
+ * basket it is actually holding for them. The request is intent, never
+ * evidence — price, currency, market, availability, ownership, eligibility and
+ * whether an answer is correct all come from PostgreSQL.
  */
 
-export const SkillAnswerSchema = z.object({
-  /** The draw being answered for, by its public slug. */
+/**
+ * One line of the intended purchase (ADR-0032).
+ *
+ * `slug` and `quantity` follow `AddCartItemRequest`, so the checkout page
+ * sends back what the basket told it. `optionId` is present exactly when the
+ * draw asks a skill question.
+ */
+export const CheckoutItemSchema = z.object({
+  /** The draw being bought, by its public slug. */
   slug: z.string().min(1).max(80),
-  /** The option the customer picked. Whether it is right is never echoed back. */
-  optionId: z.uuid(),
+  /** How many tickets. Checked against the reservation; never priced from. */
+  quantity: z.number().int().min(1).max(10_000),
+  /**
+   * The option the customer picked, for a draw that asks a question. Whether
+   * it is the right one is never echoed back (B20, ADR-0030).
+   */
+  optionId: z.uuid().optional(),
 });
-export type SkillAnswer = z.infer<typeof SkillAnswerSchema>;
+export type CheckoutItem = z.infer<typeof CheckoutItemSchema>;
 
 /** POST /markets/:market/checkout/orders */
 export const CreateOrderRequestSchema = z.strictObject({
   /**
-   * One answer per draw in the basket that asks a question. Order does not
-   * matter; a missing or extra answer is refused.
+   * Everything the customer means to buy. It must match the basket exactly —
+   * a missing line, an extra one or a different quantity is refused, because
+   * the order has to be for what they were shown (ADR-0032).
    */
-  answers: z.array(SkillAnswerSchema).min(1).max(50),
+  items: z.array(CheckoutItemSchema).min(1).max(50),
   /** The terms version the customer was shown, checked against the active one. */
   termsVersion: z.string().min(1).max(64),
 });

@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                                      | Owner             | Branch                        | Dependencies | Area                                         | Issue / PR | Notes                                                                                                                   |
-| ---- | ----------------------------------------- | ----------------- | ----------------------------- | ------------ | -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
-| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | `feature/p5-7-order-creation` | P5-5, P5-6   | `packages/db` (0016), `apps/api/src/orders/` | none yet   | `orders`/`order_items`, ADR-0030 skill answer, `Idempotency-Key`. Ends at `awaiting_payment`. Next free migration: 0017 |
+| ID   | Task                                      | Owner             | Branch                        | Dependencies | Area                                         | Issue / PR | Notes                                                                                                                                                       |
+| ---- | ----------------------------------------- | ----------------- | ----------------------------- | ------------ | -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | `feature/p5-7-order-creation` | P5-5, P5-6   | `packages/db` (0016), `apps/api/src/orders/` | none yet   | `orders`/`order_items`, ADR-0030 skill answer, self-describing request (ADR-0032), `Idempotency-Key`. Ends at `awaiting_payment`. Next free migration: 0017 |
 
 ## BLOCKED
 

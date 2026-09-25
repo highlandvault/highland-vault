@@ -81,7 +81,9 @@ Important implementation details — read these before Phase 6:
 - **The status is `awaiting_payment`, not `pending_payment`.** B7's state machine names it, and B7's later transitions (`awaiting_payment → failed | expired`, `paid_unfulfillable`) are what Phase 6 implements. The planning prose used "pending_payment" informally for the same moment. The CHECK already admits the full B7 enumeration, so **Phase 6 adds transitions, not values**.
 - **The reservation is the ticket hold and stays that way.** An order leaves it `active` with its tickets `reserved`. **Phase 6 marks them `sold`** (the trigger allows only `reserved → sold` for the same reservation), and per the amended P4 handoff a new reservation status such as `converted` needs a migration extending `reservations_status_valid` and `hv_reservations_guard`. `order_items.reservation_id` is UNIQUE, so an order line is the one route from an order to its tickets.
 - **Everything that decides the outcome is in one transaction**: the idempotency claim, the terms check, the skill answers, the reservation checks, the order and its lines. A refusal therefore leaves nothing at all — no draft order, and no spent idempotency key.
-- **Idempotency is the database's, not a cache's.** `INSERT … ON CONFLICT (idempotency_key) DO NOTHING`; there is no read-then-insert. `idempotency_digest` (SHA-256 of market, buyer, terms label and sorted answers) is **not in B18** — it was added because "same key, different request" must be refused rather than answered with the earlier order, and because returning one customer's order to another reusing their key would be a disclosure.
+- **The checkout request is self-describing (ADR-0032).** `CreateOrderRequest` carries `items: [{ slug, quantity, optionId? }]`, and `matchAndPrice` checks that intent against the locked basket before pricing anything: a missing line, an extra one, a duplicate slug or a quantity that does not match the hold is one generic conflict. **The request is intent, never evidence** — price, currency, market, availability, ownership, eligibility and answer correctness all come from PostgreSQL. This matters beyond idempotency: it is what lets the server refuse to create an order for something the customer was never shown.
+- **Idempotency is the database's, not a cache's.** `INSERT … ON CONFLICT (idempotency_key) DO NOTHING`; there is no read-then-insert. `idempotency_digest` (**not in B18**) is a SHA-256 of market, buyer, terms version and the sorted `slug:quantity:optionId` tuples — every input that can change the order, and nothing server-derived, so a repriced draw never makes a retry look like a new request. It is what makes "same key, different purchase" refusable, and it is why returning one customer's order to another reusing their key cannot happen.
+- **How this changed mid-task.** P5-7 was first written basket-defined for contents and request-defined for its digest, so reusing a key with different answers was refused while reusing it with a different basket silently returned the earlier order. A read-only review found the inconsistency, established that the specification does not settle it, and the owner decided in favour of self-describing requests. **ADR-0032 is the authority; do not re-derive this from the specification.**
 - **A duplicate request blocks on the cart lock**, and finds the basket emptied when released. An empty basket is therefore re-checked against the idempotency key before it is reported: found means replay, absent means genuinely empty. **This was found by the concurrency test**, which first saw four 400s where it expected five 201s.
 - **The correct skill answer never enters the API process.** `isCorrectAnswer` compares in SQL and returns a boolean. A missing answer and a wrong one are the same refusal (ADR-0030); an answer for a draw that is not in the basket is refused too, so answers and lines map exactly.
 - **Money comes from the reservation**, which already constrains price, currency and total against the draw and the market. The request contributes only which option was chosen.
@@ -93,18 +95,19 @@ Files/modules affected:
 
 - `packages/db/migrations/0016_orders.sql`, `packages/db/src/generated/db.ts`
 - `packages/domain/src/{order-number,index}.ts`, `packages/contracts/src/{orders,errors,index}.ts`
-- `apps/api/src/orders/` (new), `apps/api/src/terms/{terms.service,terms.repository}.ts`, `apps/api/src/app.module.ts`
+- `apps/api/src/orders/` (new), `apps/api/src/terms/{terms.service,terms.repository}.ts`, `apps/api/src/app.module.ts`, `docs/adr/0032-checkout-request-identity.md` (new)
 
 Tests executed:
 
-- `apps/api/test/checkout-orders.int.test.ts`: 30/30 against real PostgreSQL and Redis.
-- Full `pnpm verify` (213 unit, 459 integration, 16 migrations), `codegen:verify`, `pnpm test:e2e` 38 passed.
+- `apps/api/test/checkout-orders.int.test.ts`: 39/39 against real PostgreSQL and Redis.
+- Full `pnpm verify` (213 unit, 468 integration, 16 migrations), `codegen:verify`, `pnpm test:e2e` 38 passed.
 - **Not tested:** payment of any kind — none exists.
 
 Known issues:
 
 - **The known gitleaks negative-control flake is still open.** `tools/gitleaks/negative-control.test.mjs` plants a per-run random hex string and depends on an entropy threshold catching it; measured at roughly 5–10% during P5-6. Untouched here, and it wants its own `fix/*` branch.
-- No web UI for checkout; the routes are API-only.
+- No web UI for checkout; the routes are API-only. **The checkout page must send back the quantities the basket reported**, or every order will be refused as a mismatch.
+- `matchAndPrice` has a branch refusing an answer on a question-free draw. It is unreachable in Phase 5 — `0008_draws.sql` requires a published draw to have a skill question — and is kept as defence rather than because a test exercises it.
 
 Integration points:
 
