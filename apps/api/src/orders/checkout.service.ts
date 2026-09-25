@@ -4,6 +4,7 @@ import { type Database, type DbExecutor, withTransaction } from '@hv/db';
 import { effectiveReservationStatus, generateOrderNumber, normalizeEmail } from '@hv/domain';
 import { createHash } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { RATE_LIMITS, RateLimiter } from '../auth/rate-limiter';
 import { CartRepository } from '../cart/cart.repository';
 import type { CheckoutIdentity } from '../cart/checkout-identity';
 import { Errors } from '../common/errors';
@@ -44,6 +45,7 @@ export class CheckoutService {
     private readonly terms: TermsService,
     private readonly guests: GuestSessionsService,
     private readonly audit: AuditService,
+    private readonly rateLimiter: RateLimiter,
   ) {}
 
   /**
@@ -63,6 +65,9 @@ export class CheckoutService {
     meta: RequestMeta,
   ): Promise<{ order: Order; replayed: boolean }> {
     const buyer = this.buyerOf(identity);
+    // Before anything is read or written, and fail-closed: a Redis outage
+    // refuses the checkout rather than running it unlimited (B19).
+    await this.rateLimiter.consume(RATE_LIMITS.checkoutPerOwner, ownerKey(identity));
     const digest = fingerprint(market.code, buyer, request);
 
     // A key that has already been used is answered before any work is done,
@@ -462,6 +467,13 @@ interface Line {
 }
 
 type OrderRecordLike = Awaited<ReturnType<OrdersRepository['findByIdempotencyKey']>> & object;
+
+/** One bucket per checkout identity, so a guest and an account never share one. */
+function ownerKey(identity: CheckoutIdentity): string {
+  return identity.kind === 'user'
+    ? `user:${identity.auth.userId}`
+    : `guest:${identity.guest.guestSessionId}`;
+}
 
 /** Thrown when another request claimed the key first; never leaves the service. */
 class IdempotencyRace extends Error {

@@ -19,6 +19,7 @@ import {
   type VerificationEmailPayload,
 } from '@hv/domain';
 import { enableMarketsForTesting, insertFixtureDraw } from '@hv/db/testing';
+import { RATE_LIMITS } from '../src/auth/rate-limiter';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { GUEST_SESSION_COOKIE } from '../src/auth/cookies';
 import {
@@ -29,6 +30,7 @@ import {
   grantRole,
   randomIp,
   registeredClient,
+  startApp,
   startHarness,
   uniqueEmail,
 } from './support';
@@ -735,6 +737,73 @@ describe('creating an order', () => {
       expect(orders.del).toBe(false);
       // Orders keep UPDATE: Phase 6 moves the status.
       expect(orders.upd).toBe(true);
+    });
+  });
+
+  // ---- checkout rate limiting (B19, ADR-0030) ------------------------------
+
+  describe('checkout is rate limited', () => {
+    it('allows checkouts inside the limit', async () => {
+      const client = await readyCustomer(1);
+      expect((await place(client, freshKey(), 1)).statusCode).toBe(201);
+    });
+
+    it('refuses once the owner is over the limit', async () => {
+      const client = await readyCustomer(1);
+      const limit = RATE_LIMITS.checkoutPerOwner.limit;
+      // Most of these fail on an empty basket, which is fine: the limiter runs
+      // before any of that and counts the attempt either way.
+      for (let i = 0; i < limit; i++) await place(client, freshKey(), 1);
+
+      const over = await place(client, freshKey(), 1);
+      expect(over.statusCode).toBe(429);
+      expect(errorCode(over)).toBe('RATE_LIMITED');
+      expect(over.headers['retry-after']).toBeDefined();
+    });
+
+    it('gives each owner its own bucket', async () => {
+      const first = await readyCustomer(1);
+      for (let i = 0; i < RATE_LIMITS.checkoutPerOwner.limit; i++) {
+        await place(first, freshKey(), 1);
+      }
+      expect((await place(first, freshKey(), 1)).statusCode).toBe(429);
+
+      const second = await readyCustomer(1);
+      expect((await place(second, freshKey(), 1)).statusCode).toBe(201);
+    });
+
+    it('refuses rather than checks out when Redis is unreachable', async () => {
+      // Fail closed (B19): without the limiter there is no protection, so the
+      // checkout is refused rather than waved through.
+      // The identity has to exist before Redis goes away: registering or
+      // verifying would itself be refused by the fail-closed limiter. Sessions
+      // live in PostgreSQL, so the same cookie works against a second app on
+      // the same database with an unreachable Redis.
+      const client = await readyCustomer(1);
+      const offline = await startApp(h.database, {
+        ENABLED_MARKETS: 'uk,ie,de',
+        OUTBOX_ENCRYPTION_KEY: KEY,
+        REDIS_URL: 'redis://127.0.0.1:1/0',
+      });
+      try {
+        const response = await offline.inject({
+          method: 'POST',
+          url: '/markets/uk/checkout/orders',
+          remoteAddress: randomIp(),
+          headers: {
+            origin: WEB_ORIGIN,
+            cookie: `hv_session=${client.cookie}`,
+            'idempotency-key': freshKey(),
+          },
+          payload: {
+            items: [{ slug: ukSlug, quantity: 1, optionId: correctOption }],
+            termsVersion,
+          },
+        });
+        expect(response.statusCode).toBe(503);
+      } finally {
+        await offline.close();
+      }
     });
   });
 

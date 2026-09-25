@@ -26,6 +26,14 @@ export const RATE_LIMITS = {
   // Same value and window as reservePerUser: adding to a basket allocates
   // tickets through the same engine and costs the same.
   cartItemsPerOwner: { name: 'cart-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Checkout, which B19 names among the routes that must be limited. Same
+  // value and window as the basket and reservation limits, keyed on the
+  // checkout identity so a guest and an account each get their own bucket.
+  //
+  // It bounds CHECKOUT ATTEMPTS. It is not an answer-attempt counter, and
+  // ADR-0030 deliberately does not introduce one: a caller inside this limit
+  // still has more attempts than a skill question has options.
+  checkoutPerOwner: { name: 'checkout-owner', limit: 30, windowSeconds: 10 * 60 },
   // Guest verification codes per address per hour (ADR-0020). Keyed on the
   // address so one inbox cannot be flooded from many sessions.
   verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },
