@@ -242,7 +242,7 @@ The parameters are in [ADR-0020](adr/0020-guest-email-verification.md#implementa
 
 Specification Part F gives Phase 5 as "per-market basket, guest email verification, skill answer validation, terms acceptance, idempotent order creation, outbox". The outbox (P5-1, P5-2) and guest email verification (P5-3, P5-4) are merged. **Four items remain**, and they are broken down below.
 
-This breakdown was derived on 2026-09-25 from the specification alone. Nothing here adds a requirement the specification does not state; where the specification is silent, it says so.
+This breakdown was derived on 2026-09-25 from the specification alone. Nothing here adds a requirement the specification does not state; where the specification is silent, it says so. The three questions it raised as needing an owner decision were **all settled on 2026-09-25 in [ADR-0031](adr/0031-checkout-cart-terms-and-order-numbers.md)**, so P5-5, P5-6 and P5-7 are no longer blocked on a decision.
 
 ### Why this decomposition, and not one task per remaining item
 
@@ -288,9 +288,11 @@ Out of scope: orders, payment, terms, skill answers.
 
 **Route names are deliberately not specified here.** The implementation task inspects the existing reservation API first and proposes them.
 
-**Migration: yes — `0014`.** The specification names `carts` and `cart_items` and gives their key constraints. The column list beyond that is not specified and must not be invented; the task proposes a schema from the spec and the existing conventions, and the owner approves it before it is applied.
+**Migration: yes — `0014`.** The specification names `carts` and `cart_items` and gives their key constraints (`UNIQUE(cart_id, draw_id)`), and **ADR-0031 fixes the ownership columns**. The column list beyond that is not specified and must not be invented; the task proposes a schema from the spec, ADR-0031 and the existing conventions, and the owner approves it before it is applied.
 
-`OWNER DECISION REQUIRED` — **what "session" means for a cart.** B18 says "Cart per (session, market)". Since ADR-0029 there are two session kinds and they are deliberately different types. Whether a cart keys on `sessions.id`, on `guest_sessions.id`, or on the `user_id` / `guest_session_id` pair (the shape `orders` uses for `user_id` / `guest_email`) is not decided by any committed document. It changes the primary key, the uniqueness constraint and what happens when a guest signs in mid-basket. This is an ADR-sized decision, as ADR-0029 was.
+**OWNER-DECIDED (2026-09-25) — cart ownership. ADR-0031, Decision 1.** A cart carries both `user_id` and `guest_session_id` with a CHECK that **exactly one** is set, plus one `market_id` — the same shape the specification already gives `orders`. "One cart per owner per market" is therefore two partial unique indexes, not one constraint. Cart ownership and order identity differ on purpose: the cart points at a guest **session**, the order records a guest **email**, and the verified email must still be fresh at order creation even though the cart is not.
+
+**Cart merge on sign-in is not decided, because nothing requires it.** ADR-0021's merge is about cap counters, not baskets. What happens to a guest's cart when they sign in is a **P5-5 implementation decision** to be taken from the ownership model and reported at the P5-5 gate; doing nothing is consistent with ADR-0031. If P5-5 concludes a merge is needed, that needs its own ADR.
 
 ### P5-6 — Market terms versions and acceptance
 
@@ -302,7 +304,9 @@ Out of scope: **terms content**, which B12 marks "Content: legal" and Part F ass
 
 **Migration: yes — `0015`** (plus the `market_settings` column). Required before `orders.terms_version_id` can exist.
 
-`OWNER DECISION REQUIRED` — **whether a market must have an active terms version before checkout is allowed.** `market_settings` already refuses to enable a market with NULL compliance values (`hv_market_missing_settings`). Whether the active terms version joins that set — and therefore whether Phase 5 checkout is blocked until legal supplies content — is not stated anywhere.
+**OWNER-DECIDED (2026-09-25) — an active terms version gates checkout. ADR-0031, Decision 2.** A market must have an active terms version before checkout can create an order; the customer accepts that version; the order references the accepted `terms_version_id`; missing active terms prevent order creation, refused by the API rather than the UI; and acceptance is tied to the applicable market and version.
+
+**The gate is on checkout, not on market enablement** — `hv_market_missing_settings` is not extended. A market can be enabled and browsable with no terms version; it simply cannot take an order. Terms content remains Phase 12 and comes from legal; no wording is invented here or in fixtures.
 
 ### P5-7 — Order creation, skill answer and idempotency
 
@@ -321,7 +325,9 @@ Explicitly out of scope, and this is the part the P4 handoff originally got wron
 
 **Migration: yes — `0016`.**
 
-`OWNER DECISION REQUIRED` — **the `order_number` format.** B18 requires `order_number UNIQUE` but does not say what it looks like. It is customer-facing and appears on emails and in support, so it is not a free implementation choice.
+**OWNER-DECIDED (2026-09-25) — `order_number` is an opaque `HV-` identifier. ADR-0031, Decision 3.** `HV-` followed by an uppercase alphanumeric suffix (for example `HV-7F4K92M8`): randomly and collision-resistantly generated with the project's existing `node:crypto` conventions, `UNIQUE` in PostgreSQL, and **never the primary key** — primary keys stay `uuidv7()`. **Not sequential**, which would leak order volume and let a holder guess neighbouring numbers.
+
+**The length is left to P5-7**, since nothing in the specification, schema or tests constrains one; P5-7 records its choice and the reasoning. Worth weighing there: `generateRecoveryCode` is the project's other customer-facing typed-back identifier and uses base32, whose alphabet has no `0`/`O` or `1`/`I` to confuse when read aloud. Either the full alphanumeric range or a narrower one satisfies ADR-0031.
 
 ### P5-8 — Phase 5 integration and gate hardening
 
@@ -402,7 +408,7 @@ These came out of the final review of PR #8. **None of them is reachable in Phas
 
 ## Next task
 
-**Phase 5 (cart and checkout) is under way; P5-0 to P5-4 are merged and the next task is P5-5.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-4 are merged and the next task is P5-5.** Scope is Option A (specification-faithful), ending at `pending_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 

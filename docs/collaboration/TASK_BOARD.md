@@ -57,14 +57,14 @@ _None._
 
 ## READY
 
-Phase 5's remaining work, scoped on 2026-09-25 from the specification. Full scope, constraints and per-task Definition of Done: [PROJECT_STATUS.md](../PROJECT_STATUS.md) ("Phase 5 remaining scope"). **Specified, not yet approved to start** — each needs explicit owner instruction, in order.
+Phase 5's remaining work, scoped on 2026-09-25 from the specification. Full scope, constraints and per-task Definition of Done: [PROJECT_STATUS.md](../PROJECT_STATUS.md) ("Phase 5 remaining scope"). **Specified and unblocked** — the three open decisions were settled on 2026-09-25 by [ADR-0031](../adr/0031-checkout-cart-terms-and-order-numbers.md). Each still needs explicit owner instruction to start, in order.
 
-| ID   | Task                                      | Owner             | Branch | Dependencies | Area                                         | Issue / PR | Notes                                                                                                              |
-| ---- | ----------------------------------------- | ----------------- | ------ | ------------ | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| P5-5 | Guest checkout access + per-market basket | Divyanshu (owner) | —      | P5-4         | `packages/db` (0014), `apps/api`, `apps/web` | —          | **Next.** Opens the purchase path to verified guests; `carts`/`cart_items`, one per market. Open: cart session key |
-| P5-6 | Market terms versions and acceptance      | Divyanshu (owner) | —      | P5-4         | `packages/db` (0015), `apps/api`             | —          | `terms_versions`, `terms_acceptances`, active version per market. Content is Phase 12 (legal)                      |
-| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | —      | P5-5, P5-6   | `packages/db` (0016), `apps/api`, `apps/web` | —          | Ends at `pending_payment`. ADR-0030. No payment, no SOLD. Open: `order_number` format                              |
-| P5-8 | Phase 5 integration and gate hardening    | Divyanshu (owner) | —      | P5-7         | tests, docs                                  | —          | Part F exit criteria + the ADR-0021 guest/registration race. No migration expected                                 |
+| ID   | Task                                      | Owner             | Branch | Dependencies | Area                                         | Issue / PR | Notes                                                                                                                                                             |
+| ---- | ----------------------------------------- | ----------------- | ------ | ------------ | -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P5-5 | Guest checkout access + per-market basket | Divyanshu (owner) | —      | P5-4         | `packages/db` (0014), `apps/api`, `apps/web` | —          | **Next.** Opens the purchase path to verified guests; `carts`/`cart_items`, one per market. Ownership fixed by ADR-0031; cart merge on sign-in is a P5-5 decision |
+| P5-6 | Market terms versions and acceptance      | Divyanshu (owner) | —      | P5-4         | `packages/db` (0015), `apps/api`             | —          | `terms_versions`, `terms_acceptances`, active version per market. Gates checkout (ADR-0031), not enablement. Content is Phase 12 (legal)                          |
+| P5-7 | Order creation, skill answer, idempotency | Divyanshu (owner) | —      | P5-5, P5-6   | `packages/db` (0016), `apps/api`, `apps/web` | —          | Ends at `pending_payment`. ADR-0030, ADR-0031. No payment, no SOLD. `order_number` length chosen by this task                                                     |
+| P5-8 | Phase 5 integration and gate hardening    | Divyanshu (owner) | —      | P5-7         | tests, docs                                  | —          | Part F exit criteria + the ADR-0021 guest/registration race. No migration expected                                                                                |
 
 ## BACKLOG
 

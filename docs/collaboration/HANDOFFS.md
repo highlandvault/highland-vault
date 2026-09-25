@@ -109,7 +109,7 @@ Integration points:
 
 Next developer action:
 
-- **P5-5** (guest checkout access + per-market basket). Its scope, constraints and Definition of Done are in `PROJECT_STATUS.md` ("Phase 5 remaining scope"). It starts only on explicit owner approval, and its first step is to inspect the existing reservation API before proposing any route.
+- **P5-5** (guest checkout access + per-market basket). Its scope, constraints and Definition of Done are in `PROJECT_STATUS.md` ("Phase 5 remaining scope"); cart ownership is fixed by **ADR-0031** (`user_id` XOR `guest_session_id`, one `market_id`). It starts only on explicit owner approval, and its first step is to inspect the existing reservation API before proposing any route. What happens to a guest cart when they sign in is deliberately left to it to decide and report.
 
 ### 2026-09-22 — P4 — Ticket engine + customer entry flow (for Phase 5, checkout)
 
