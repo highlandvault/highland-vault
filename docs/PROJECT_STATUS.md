@@ -11,7 +11,7 @@ _Last updated: 2026-09-25_
 - Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
 - Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- **Phase 5 (cart + checkout) is under way; P5-7 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-4 are merged, with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling. The remaining work is broken down as **P5-5 to P5-8** below. P5-5 (basket, `0014`) and P5-6 (market terms, `0015`) are merged. P5-7 (order creation, `0016`) is implemented and awaiting review; P5-8 is not approved to start.
+- **Phase 5 (cart + checkout) is under way; P5-7 is in review** (owner-approved scope: specification-faithful Option A, ending at `pending_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-6 are merged, along with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling — most recently P5-5 (basket, `0014`) and P5-6 (market terms, `0015`). The remaining work is broken down as **P5-5 to P5-8** below. P5-7 (order creation, `0016`) is implemented and awaiting review; P5-8 is not approved to start.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -199,7 +199,7 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 | P5-4 Guest email verification                      | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`      |
 | P5-5 Guest checkout access + per-market basket     | ✅ merged     | PR #23 (`e61e31a`), migration `0014`, 34 integration tests     |
 | P5-6 Market terms versions and acceptance          | ✅ merged     | PR #24 (`210c217`), migration `0015`, 33 integration tests     |
-| **P5-7 Order creation, skill answer, idempotency** | **in review** | Migration `0016`, `apps/api/src/orders/`, 30 integration tests |
+| **P5-7 Order creation, skill answer, idempotency** | **in review** | Migration `0016`, `apps/api/src/orders/`, 39 integration tests |
 | P5-8 Phase 5 integration and gate hardening        | not started   | Scope below                                                    |
 
 ### P5-1: the outbox (migration 0011)
