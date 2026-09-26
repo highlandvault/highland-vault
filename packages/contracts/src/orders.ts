@@ -86,6 +86,15 @@ export const OrderSchema = z.object({
   termsVersion: z.string(),
   items: z.array(OrderItemSchema),
   createdAt: z.iso.datetime(),
+  /**
+   * The payment deadline (Phase 6, D1 = B). Fixed when the order is placed and
+   * never extended.
+   *
+   * It is always earlier than the holds behind the order expire, so a
+   * countdown to it is honest: it cannot reach zero while the tickets are
+   * already gone. Compare it against `serverTime`, not the browser's clock.
+   */
+  expiresAt: z.iso.datetime(),
   serverTime: z.iso.datetime(),
 });
 export type Order = z.infer<typeof OrderSchema>;

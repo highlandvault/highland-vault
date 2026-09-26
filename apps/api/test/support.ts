@@ -46,7 +46,9 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
 
 export async function startApp(
   database: TestDatabase,
-  overrides: Record<string, string> = {},
+  // `undefined` removes a default, which is how a test asks for an API with
+  // no payment provider at all.
+  overrides: Record<string, string | undefined> = {},
 ): Promise<NestFastifyApplication> {
   const env = parseApiEnv({
     NODE_ENV: 'test',
@@ -60,6 +62,9 @@ export async function startApp(
     // The API seals outbox payloads (ADR-0028); a low-entropy placeholder,
     // the same convention as the MFA key above.
     OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
+    // The fake payment provider (ADR-0006). Present here and refused in
+    // production, where there is no fake provider and no chosen one either.
+    FAKE_PAYMENT_WEBHOOK_SECRET: 'integration-test-webhook-secret',
     ...overrides,
   });
   const app = await createApp(env);

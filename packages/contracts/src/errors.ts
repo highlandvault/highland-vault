@@ -47,6 +47,18 @@ export const ERROR_CODES = [
   'IDEMPOTENCY_KEY_REQUIRED',
   'IDEMPOTENCY_KEY_REUSED',
   'BASKET_EMPTY',
+  // Payments (Phase 6, B10). ORDER_NOT_PAYABLE means the order has already
+  // settled one way or another. The two deadline codes are deliberately
+  // distinct: PAYMENT_DEADLINE_PASSED means the window has gone, while
+  // PAYMENT_WINDOW_TOO_SHORT means it has not yet but there is no longer
+  // enough of it to finish at a provider (D1b) — a different thing to tell a
+  // customer, and the reason it gets its own code rather than sharing one.
+  // PAYMENT_PROVIDER_UNAVAILABLE covers both "none is configured here" and
+  // "the provider could not be reached".
+  'ORDER_NOT_PAYABLE',
+  'PAYMENT_DEADLINE_PASSED',
+  'PAYMENT_WINDOW_TOO_SHORT',
+  'PAYMENT_PROVIDER_UNAVAILABLE',
   'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',

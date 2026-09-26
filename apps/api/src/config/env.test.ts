@@ -107,6 +107,44 @@ describe('parseApiEnv', () => {
       );
     });
 
+    it('pins every value of the payment window', () => {
+      // Locked owner decisions, not tuning knobs. The shorter values exist so
+      // tests can watch a hold run out; production gets the decided ones.
+      expect(() => parseApiEnv({ ...production, PAYMENT_WINDOW_SECONDS: '900' })).toThrow(
+        /PAYMENT_WINDOW_SECONDS: must be 600 \(D1\)/,
+      );
+      expect(() => parseApiEnv({ ...production, PAYMENT_MARGIN_SECONDS: '30' })).toThrow(
+        /PAYMENT_MARGIN_SECONDS: must be 90 \(D1a\)/,
+      );
+      expect(() => parseApiEnv({ ...production, PAYMENT_MIN_WINDOW_SECONDS: '60' })).toThrow(
+        /PAYMENT_MIN_WINDOW_SECONDS: must be 180 \(D1b\)/,
+      );
+      expect(() => parseApiEnv({ ...production, PAYMENT_ATTEMPT_TTL_SECONDS: '300' })).toThrow(
+        /PAYMENT_ATTEMPT_TTL_SECONDS: must be 120 \(D3a\)/,
+      );
+    });
+
+    it('refuses a fake payment provider', () => {
+      // There is no fake provider in production and no chosen one either
+      // (O13). A secret here could only be a misunderstanding, so startup says
+      // so rather than leaving a setting that looks like it configured
+      // something.
+      expect(() =>
+        parseApiEnv({ ...production, FAKE_PAYMENT_WEBHOOK_SECRET: 'x'.repeat(32) }),
+      ).toThrow(/FAKE_PAYMENT_WEBHOOK_SECRET: must not be set in production/);
+    });
+
+    it('accepts the locked payment values', () => {
+      const env = parseApiEnv(production);
+      expect(env).toMatchObject({
+        PAYMENT_WINDOW_SECONDS: 600,
+        PAYMENT_MARGIN_SECONDS: 90,
+        PAYMENT_MIN_WINDOW_SECONDS: 180,
+        PAYMENT_ATTEMPT_TTL_SECONDS: 120,
+      });
+      expect(env.FAKE_PAYMENT_WEBHOOK_SECRET).toBeUndefined();
+    });
+
     it('refuses plain-http origins', () => {
       expect(() => parseApiEnv({ ...production, WEB_ORIGINS: 'http://www.example.com' })).toThrow(
         /WEB_ORIGINS: must all be https/,

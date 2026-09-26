@@ -34,6 +34,14 @@ export const RATE_LIMITS = {
   // ADR-0030 deliberately does not introduce one: a caller inside this limit
   // still has more attempts than a skill question has options.
   checkoutPerOwner: { name: 'checkout-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Starting a payment, per checkout identity (B19, Phase 6). Same value and
+  // window as checkout: it is the step immediately after one, and a caller who
+  // may attempt thirty checkouts may reasonably attempt thirty payments.
+  //
+  // It is not what stops a customer opening several provider sessions — one
+  // live attempt per order is a partial unique index, not a counter. This
+  // bounds the cost of asking.
+  paymentsPerOwner: { name: 'payments-owner', limit: 30, windowSeconds: 10 * 60 },
   // Guest verification codes per address per hour (ADR-0020). Keyed on the
   // address so one inbox cannot be flooded from many sessions.
   verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },

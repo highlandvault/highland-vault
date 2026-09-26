@@ -173,6 +173,10 @@ export interface OrderItems {
 export interface Orders {
   created_at: Generated<Timestamp>;
   currency: string;
+  /**
+   * The payment deadline (D1 = B): min(created_at + 600s, earliest reservation expiry - 90s). Immutable. Not the reservation TTL, and never to be derived from it.
+   */
+  expires_at: Timestamp;
   external_due_minor: number;
   guest_email: string | null;
   id: Generated<string>;
@@ -200,6 +204,32 @@ export interface Outbox {
   payload: Json;
   published_at: Timestamp | null;
   topic: string;
+}
+
+export interface Payments {
+  /**
+   * Equal to orders.external_due_minor by foreign key, not by copy: the client never contributes an amount (I4, I5).
+   */
+  amount_minor: number;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  /**
+   * When this attempt stops being usable (D3a): min(created_at + 120s, orders.expires_at). The order deadline always wins.
+   */
+  expires_at: Timestamp;
+  failure_code: string | null;
+  failure_message: string | null;
+  id: Generated<string>;
+  idempotency_key: string;
+  market_id: string;
+  order_id: string;
+  provider: string;
+  /**
+   * The provider's identifier for this attempt. NULL until the provider answers, then fixed. Never shown to a customer.
+   */
+  provider_reference: string | null;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface Permissions {
@@ -339,6 +369,7 @@ export interface DB {
   order_items: OrderItems;
   orders: Orders;
   outbox: Outbox;
+  payments: Payments;
   permissions: Permissions;
   reservations: Reservations;
   role_permissions: RolePermissions;
