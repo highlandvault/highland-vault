@@ -18,6 +18,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TermsModule } from './terms/terms.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Global()
 @Module({})
@@ -65,6 +66,7 @@ export class AppModule {
         CartModule,
         OrdersModule,
         PaymentsModule,
+        WebhooksModule,
       ],
       controllers: [HealthController],
       providers: [

@@ -818,21 +818,29 @@ describe('creating an order', () => {
       );
       expect(sold.rows[0]!.n).toBe(0);
 
-      // P6-2 added the `payments` table, so this no longer asserts that it is
-      // absent — it asserts the thing that actually matters and did not
-      // change: placing an order starts no payment. An attempt exists only
-      // once the customer asks to pay.
+      // P6-2 added `payments` and P6-3 added `payment_events`, so this no
+      // longer asserts that they are absent — it asserts the thing that
+      // actually matters and has not changed: placing an order starts no
+      // payment and receives no provider event. Both exist only once the
+      // customer asks to pay and a provider answers.
       const attempts = await h.sql.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM payments WHERE order_id = $1`,
         [order.id],
       );
       expect(attempts.rows[0]!.n).toBe(0);
+      const events = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n
+           FROM payment_events e JOIN payments p ON p.id = e.payment_id
+          WHERE p.order_id = $1`,
+        [order.id],
+      );
+      expect(events.rows[0]!.n).toBe(0);
 
-      // The phases that own money and prizes have still not arrived.
+      // The phases that own refunds and the wallet have still not arrived.
       const tables = await h.sql.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM information_schema.tables
           WHERE table_schema = 'public'
-            AND table_name IN ('payment_events', 'refunds', 'wallets', 'wallet_entries')`,
+            AND table_name IN ('refunds', 'wallets', 'wallet_entries')`,
       );
       expect(tables.rows[0]!.n).toBe(0);
 

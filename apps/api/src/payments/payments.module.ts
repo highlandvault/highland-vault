@@ -32,6 +32,9 @@ import { PaymentsService } from './payments.service';
       useFactory: (env: ApiEnv) => createPaymentProvider(env),
     },
   ],
-  exports: [PaymentsRepository, PaymentsService],
+  // The provider itself is exported so webhook intake verifies deliveries with
+  // the same instance that created the payments, rather than building a second
+  // one from the same configuration.
+  exports: [PaymentsRepository, PaymentsService, PAYMENT_PROVIDER],
 })
 export class PaymentsModule {}

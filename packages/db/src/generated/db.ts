@@ -206,6 +206,31 @@ export interface Outbox {
   topic: string;
 }
 
+export interface PaymentEvents {
+  amount_minor: number | null;
+  currency: string | null;
+  event_type: string;
+  id: Generated<string>;
+  last_error: string | null;
+  /**
+   * The original bytes, AES-256-GCM sealed (D7 = B, ADR-0033). Cleared after 90 days by the retention process; never rewritten. Readable only under the payments.reconcile authority.
+   */
+  payload_sealed: Json | null;
+  payment_id: string | null;
+  /**
+   * NULL while the event still needs acting on. P6-3 settles events that need nothing further; one that should move an order is left for finalisation.
+   */
+  processed_at: Timestamp | null;
+  provider: string;
+  provider_event_id: string;
+  provider_reference: string | null;
+  /**
+   * The event's status normalised to Highland Vault's vocabulary. Decisions are taken from this, never from event_type.
+   */
+  provider_status: string | null;
+  received_at: Generated<Timestamp>;
+}
+
 export interface Payments {
   /**
    * Equal to orders.external_due_minor by foreign key, not by copy: the client never contributes an amount (I4, I5).
@@ -369,6 +394,7 @@ export interface DB {
   order_items: OrderItems;
   orders: Orders;
   outbox: Outbox;
+  payment_events: PaymentEvents;
   payments: Payments;
   permissions: Permissions;
   reservations: Reservations;

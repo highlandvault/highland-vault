@@ -66,6 +66,27 @@ export class PaymentsRepository {
     return row ? toPayment(row) : null;
   }
 
+  /**
+   * The attempt a provider's reference names, or null.
+   *
+   * Scoped by provider as well, because `UNIQUE (provider, provider_reference)`
+   * is scoped that way: two providers may legitimately mint the same string,
+   * and one provider must never be able to address another's attempt.
+   */
+  async findByProviderReference(
+    db: DbExecutor,
+    provider: string,
+    providerReference: string,
+  ): Promise<PaymentRecord | null> {
+    const row = await db
+      .selectFrom('payments')
+      .select(PAYMENT_COLUMNS)
+      .where('provider', '=', provider)
+      .where('provider_reference', '=', providerReference)
+      .executeTakeFirst();
+    return row ? toPayment(row) : null;
+  }
+
   async findByIdempotencyKey(db: DbExecutor, key: string): Promise<PaymentRecord | null> {
     const row = await db
       .selectFrom('payments')
