@@ -3,6 +3,14 @@ export * from './email';
 export * from './markets';
 export * from './money';
 export {
+  ORDER_EXPIRED_TOPIC,
+  ORDER_OUTCOME_TOPICS,
+  ORDER_PAID_TOPIC,
+  ORDER_PAYMENT_FAILED_TOPIC,
+  ORDER_UNFULFILLABLE_TOPIC,
+  type OrderOutcomeTopic,
+} from './order-events';
+export {
   ORDER_NUMBER_PREFIX,
   ORDER_NUMBER_SUFFIX_LENGTH,
   generateOrderNumber,
