@@ -35,3 +35,18 @@ export function checkoutIdentity(
     'Sign in, or verify your email address, before using a basket.',
   );
 }
+
+/**
+ * One rate-limit bucket per checkout identity, so a guest and an account never
+ * share one.
+ *
+ * A guest is keyed on their session rather than their address: the address is
+ * their ticket-cap identity, and using it here would let one person's limit
+ * follow them into a different browser, or be spent by someone who merely
+ * knows the address.
+ */
+export function ownerKey(identity: CheckoutIdentity): string {
+  return identity.kind === 'user'
+    ? `user:${identity.auth.userId}`
+    : `guest:${identity.guest.guestSessionId}`;
+}

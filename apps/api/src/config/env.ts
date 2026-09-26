@@ -75,6 +75,40 @@ export const ApiEnvSchema = z
     RESERVATION_TTL_SECONDS: z.coerce.number().int().min(2).max(600).default(600),
     SESSION_COOKIE_SECURE: booleanString.default(true),
 
+    // ---- the payment window (Phase 6, D1 = B, D1a, D1b, D3a) --------------
+    //
+    // Three values that together decide how long a customer has to pay. They
+    // are configurable for the same reason RESERVATION_TTL_SECONDS is: the
+    // test suite runs holds of two and six seconds to observe expiry, and with
+    // the production margin and floor no payment could ever be started there.
+    // Production is pinned to the locked values below.
+
+    /** The intended payment window. In practice the margin term always binds first. */
+    PAYMENT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(600),
+    /**
+     * How far before its hold expires an order's deadline lands (D1a).
+     *
+     * This is exactly how much provider lag is absorbed: a customer who pays a
+     * second before the deadline is still served if the provider confirms
+     * within this long. It is also what lets `hv_expire_reservations` stay
+     * untouched (D11a = B), so lowering it is not a local change.
+     */
+    PAYMENT_MARGIN_SECONDS: z.coerce.number().int().min(1).max(600).default(90),
+    /** Below this much time left, starting a payment is refused rather than begun (D1b). */
+    PAYMENT_MIN_WINDOW_SECONDS: z.coerce.number().int().min(1).max(600).default(180),
+    /** How long one attempt may wait on the provider before it is finished (D3a). */
+    PAYMENT_ATTEMPT_TTL_SECONDS: z.coerce.number().int().min(1).max(600).default(120),
+
+    /**
+     * The fake provider's webhook signing key (ADR-0006).
+     *
+     * Optional, and refused outright in production: there is no production
+     * payment provider yet (O13), so a production deployment simply has none
+     * and payment initiation fails closed. Setting one would be the only way
+     * to get a fake provider into production, and the guard below forbids it.
+     */
+    FAKE_PAYMENT_WEBHOOK_SECRET: z.string().min(16).max(256).optional(),
+
     // AES-256-GCM key for TOTP secrets: 64 hex characters (32 bytes).
     MFA_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters'),
     MFA_ENCRYPTION_KEY_ID: z
@@ -107,6 +141,34 @@ export const ApiEnvSchema = z
         code: 'custom',
         path: ['RESERVATION_TTL_SECONDS'],
         message: 'must be 600 (10 minutes, D11) in production',
+      });
+    }
+    // The payment window is a locked owner decision, not a tuning knob. The
+    // shorter values exist for tests that need to watch a hold run out.
+    const pinned = [
+      ['PAYMENT_WINDOW_SECONDS', env.PAYMENT_WINDOW_SECONDS, 600, 'D1'],
+      ['PAYMENT_MARGIN_SECONDS', env.PAYMENT_MARGIN_SECONDS, 90, 'D1a'],
+      ['PAYMENT_MIN_WINDOW_SECONDS', env.PAYMENT_MIN_WINDOW_SECONDS, 180, 'D1b'],
+      ['PAYMENT_ATTEMPT_TTL_SECONDS', env.PAYMENT_ATTEMPT_TTL_SECONDS, 120, 'D3a'],
+    ] as const;
+    for (const [name, actual, expected, decision] of pinned) {
+      if (actual !== expected) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: `must be ${expected} (${decision}) in production`,
+        });
+      }
+    }
+    // The fake provider refuses to exist in production on its own (its
+    // constructor throws), so a secret here could only be a misunderstanding.
+    // Failing at startup says so, instead of leaving an unused setting that
+    // looks like it configured something.
+    if (env.FAKE_PAYMENT_WEBHOOK_SECRET !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['FAKE_PAYMENT_WEBHOOK_SECRET'],
+        message: 'must not be set in production: there is no fake payment provider there',
       });
     }
     const key = env.MFA_ENCRYPTION_KEY.toLowerCase();

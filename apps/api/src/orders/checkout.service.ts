@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { RATE_LIMITS, RateLimiter } from '../auth/rate-limiter';
 import { CartRepository } from '../cart/cart.repository';
-import type { CheckoutIdentity } from '../cart/checkout-identity';
+import { ownerKey, type CheckoutIdentity } from '../cart/checkout-identity';
+import { API_ENV, type ApiEnv } from '../config/env';
 import { Errors } from '../common/errors';
 import { isUniqueViolation } from '../common/pg-errors';
 import type { MarketContext, RequestMeta } from '../common/request-context';
@@ -38,6 +39,7 @@ const ORDER_NUMBER_ATTEMPTS = 5;
 export class CheckoutService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(API_ENV) private readonly env: ApiEnv,
     private readonly orders: OrdersRepository,
     private readonly carts: CartRepository,
     private readonly draws: DrawsRepository,
@@ -108,6 +110,7 @@ export class CheckoutService {
         totalMinor: total,
         idempotencyKey,
         idempotencyDigest: digest,
+        expiresAt: this.paymentDeadline(lines),
       });
       if (!order) {
         // Another request claimed the key while this transaction was running.
@@ -160,6 +163,43 @@ export class CheckoutService {
 
     const created = await this.orders.findById(this.db, market.id, orderId);
     return { order: await this.toDto(market, created!), replayed: false };
+  }
+
+  /**
+   * When the customer must have paid by (D1 = B, D1a).
+   *
+   *   min(now + PAYMENT_WINDOW_SECONDS, earliest hold expiry - PAYMENT_MARGIN_SECONDS)
+   *
+   * The margin term always wins in practice, because a hold cannot outlive ten
+   * minutes from its own creation and the order is always created after that.
+   * The window term is kept because it states the intended maximum, and
+   * because neither value should be the only thing standing between a customer
+   * and an unbounded deadline.
+   *
+   * The margin is what makes the rest of Phase 6 safe: with it, the hold always
+   * outlives the deadline, so paying on time gets the tickets, and the expiry
+   * sweep is left untouched (D11a = B) because it can never take a hold whose
+   * order is still payable.
+   *
+   * A basket with less than the margin left cannot produce a payable order —
+   * the deadline would already be in the past, and the database refuses an
+   * order that expires before it was created. That is refused here instead,
+   * with the reason the customer needs.
+   */
+  private paymentDeadline(lines: readonly Line[]): Date {
+    const now = Date.now();
+    const earliestHold = Math.min(...lines.map((line) => line.reservationExpiresAt.getTime()));
+    const deadline = Math.min(
+      now + this.env.PAYMENT_WINDOW_SECONDS * 1000,
+      earliestHold - this.env.PAYMENT_MARGIN_SECONDS * 1000,
+    );
+    if (deadline <= now) {
+      throw Errors.conflict(
+        'PAYMENT_WINDOW_TOO_SHORT',
+        'Your hold is about to run out, so there is no time left to pay. Add the tickets to your basket again.',
+      );
+    }
+    return new Date(deadline);
   }
 
   /**
@@ -305,6 +345,7 @@ export class CheckoutService {
         unitPriceMinor: reservation.unitPriceMinor,
         totalMinor: reservation.totalMinor,
         skillAnswerOptionId,
+        reservationExpiresAt: reservation.expiresAt,
       });
     }
 
@@ -324,6 +365,7 @@ export class CheckoutService {
       totalMinor: number;
       idempotencyKey: string;
       idempotencyDigest: Buffer;
+      expiresAt: Date;
     },
   ) {
     for (let attempt = 1; ; attempt++) {
@@ -337,6 +379,7 @@ export class CheckoutService {
           totalMinor: input.totalMinor,
           idempotencyKey: input.idempotencyKey,
           idempotencyDigest: input.idempotencyDigest,
+          expiresAt: input.expiresAt,
         });
       } catch (error) {
         // Fifty bits of randomness: this is the constraint doing its job on a
@@ -450,6 +493,7 @@ export class CheckoutService {
       termsVersion,
       items: dtoItems,
       createdAt: order.createdAt.toISOString(),
+      expiresAt: order.expiresAt.toISOString(),
       serverTime: now.toISOString(),
     };
   }
@@ -464,16 +508,11 @@ interface Line {
   unitPriceMinor: number;
   totalMinor: number;
   skillAnswerOptionId: string | null;
+  /** When this line's hold runs out. The order's deadline is derived from the earliest. */
+  reservationExpiresAt: Date;
 }
 
 type OrderRecordLike = Awaited<ReturnType<OrdersRepository['findByIdempotencyKey']>> & object;
-
-/** One bucket per checkout identity, so a guest and an account never share one. */
-function ownerKey(identity: CheckoutIdentity): string {
-  return identity.kind === 'user'
-    ? `user:${identity.auth.userId}`
-    : `guest:${identity.guest.guestSessionId}`;
-}
 
 /** Thrown when another request claimed the key first; never leaves the service. */
 class IdempotencyRace extends Error {

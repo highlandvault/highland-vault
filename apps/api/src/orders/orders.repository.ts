@@ -18,6 +18,8 @@ export interface OrderRecord {
   readonly idempotencyKey: string;
   readonly idempotencyDigest: Buffer;
   readonly createdAt: Date;
+  /** The payment deadline (D1 = B). Fixed at creation; never extended. */
+  readonly expiresAt: Date;
 }
 
 export interface OrderItemRecord {
@@ -46,6 +48,7 @@ const ORDER_COLUMNS = [
   'idempotency_key',
   'idempotency_digest',
   'created_at',
+  'expires_at',
 ] as const;
 
 @Injectable()
@@ -72,20 +75,21 @@ export class OrdersRepository {
       totalMinor: number;
       idempotencyKey: string;
       idempotencyDigest: Buffer;
+      expiresAt: Date;
     },
   ): Promise<OrderRecord | null> {
     const { rows } = await sql<OrderRow>`
       INSERT INTO orders (
         order_number, market_id, currency, user_id, guest_email, terms_version_id,
         total_minor, wallet_applied_minor, external_due_minor,
-        idempotency_key, idempotency_digest
+        idempotency_key, idempotency_digest, expires_at
       ) VALUES (
         ${order.orderNumber}, ${order.marketId}, ${order.currency},
         ${order.buyer.kind === 'user' ? order.buyer.userId : null}::uuid,
         ${order.buyer.kind === 'guest' ? order.buyer.email : null}::citext,
         ${order.termsVersionId},
         ${order.totalMinor}, 0, ${order.totalMinor},
-        ${order.idempotencyKey}, ${order.idempotencyDigest}
+        ${order.idempotencyKey}, ${order.idempotencyDigest}, ${order.expiresAt}
       )
       ON CONFLICT (idempotency_key) DO NOTHING
       RETURNING ${sql.raw(ORDER_COLUMNS.join(', '))}
@@ -221,6 +225,7 @@ interface OrderRow {
   idempotency_key: string;
   idempotency_digest: Buffer;
   created_at: Date;
+  expires_at: Date;
 }
 
 function toOrder(row: OrderRow): OrderRecord {
@@ -240,5 +245,6 @@ function toOrder(row: OrderRow): OrderRecord {
     idempotencyKey: row.idempotency_key,
     idempotencyDigest: row.idempotency_digest,
     createdAt: row.created_at,
+    expiresAt: row.expires_at,
   };
 }

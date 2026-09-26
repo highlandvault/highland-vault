@@ -809,7 +809,7 @@ describe('creating an order', () => {
 
   // ---- the Phase 5 boundary ------------------------------------------------
 
-  describe('Phase 5 stops before payment', () => {
+  describe('checkout stops before payment', () => {
     it('sells no tickets and records no payment', async () => {
       const order = orderOf(await place(await readyCustomer(2), freshKey(), 2));
 
@@ -818,10 +818,21 @@ describe('creating an order', () => {
       );
       expect(sold.rows[0]!.n).toBe(0);
 
+      // P6-2 added the `payments` table, so this no longer asserts that it is
+      // absent — it asserts the thing that actually matters and did not
+      // change: placing an order starts no payment. An attempt exists only
+      // once the customer asks to pay.
+      const attempts = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM payments WHERE order_id = $1`,
+        [order.id],
+      );
+      expect(attempts.rows[0]!.n).toBe(0);
+
+      // The phases that own money and prizes have still not arrived.
       const tables = await h.sql.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM information_schema.tables
           WHERE table_schema = 'public'
-            AND table_name IN ('payments', 'payment_events', 'refunds', 'wallets', 'wallet_entries')`,
+            AND table_name IN ('payment_events', 'refunds', 'wallets', 'wallet_entries')`,
       );
       expect(tables.rows[0]!.n).toBe(0);
 
