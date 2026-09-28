@@ -3,11 +3,16 @@ import { AuthModule } from '../auth/auth.module';
 import { API_ENV, type ApiEnv } from '../config/env';
 import { GuestsModule } from '../guests/guests.module';
 import { MarketsModule } from '../markets/markets.module';
+import { AuditModule } from '../audit/audit.module';
 import { OrdersModule } from '../orders/orders.module';
+import { TicketsModule } from '../tickets/tickets.module';
 import { PAYMENT_PROVIDER, createPaymentProvider } from './payment-provider.factory';
+import { PaymentFinalizationService } from './payment-finalization.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
 import { PaymentsService } from './payments.service';
+import { RefundsRepository } from './refunds.repository';
+import { RefundsService } from './refunds.service';
 
 /**
  * Payments (P6-2).
@@ -21,11 +26,14 @@ import { PaymentsService } from './payments.service';
  * from the order, and the order repository is the only thing that reads one.
  */
 @Module({
-  imports: [AuthModule, GuestsModule, MarketsModule, OrdersModule],
+  imports: [AuditModule, AuthModule, GuestsModule, MarketsModule, OrdersModule, TicketsModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsRepository,
     PaymentsService,
+    PaymentFinalizationService,
+    RefundsRepository,
+    RefundsService,
     {
       provide: PAYMENT_PROVIDER,
       inject: [API_ENV],
@@ -35,6 +43,13 @@ import { PaymentsService } from './payments.service';
   // The provider itself is exported so webhook intake verifies deliveries with
   // the same instance that created the payments, rather than building a second
   // one from the same configuration.
-  exports: [PaymentsRepository, PaymentsService, PAYMENT_PROVIDER],
+  exports: [
+    PaymentsRepository,
+    PaymentsService,
+    PaymentFinalizationService,
+    RefundsRepository,
+    RefundsService,
+    PAYMENT_PROVIDER,
+  ],
 })
 export class PaymentsModule {}

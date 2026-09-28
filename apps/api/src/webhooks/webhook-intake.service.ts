@@ -12,6 +12,10 @@ import { DATABASE } from '../database/database.module';
 import { Errors } from '../common/errors';
 import { OrdersRepository } from '../orders/orders.repository';
 import { PAYMENT_PROVIDER } from '../payments/payment-provider.factory';
+import {
+  PaymentFinalizationService,
+  type FinalizationOutcome,
+} from '../payments/payment-finalization.service';
 import { PaymentsRepository } from '../payments/payments.repository';
 import { PaymentEventsRepository } from './payment-events.repository';
 
@@ -33,20 +37,36 @@ export type SettledReason =
 export type IntakeOutcome =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'settled'; readonly eventId: string; readonly reason: SettledReason }
-  | { readonly kind: 'awaiting_finalisation'; readonly eventId: string };
+  | {
+      readonly kind: 'finalised';
+      readonly eventId: string;
+      readonly outcome: FinalizationOutcome;
+    };
 
 /** The provider statuses that could move an order, and so are worth acting on. */
-const ACTIONABLE_STATUSES: readonly string[] = ['succeeded', 'failed', 'expired'];
+/**
+ * The one provider status that asks for anything to be done.
+ *
+ * Only a success moves an order. A `failed` or `expired` status is recorded and
+ * acted on by nothing here: the customer may still pay, so the order stays
+ * payable, and announcing those outcomes belongs with the reconciler and the
+ * expiry sweep (P6-5) rather than with a single provider message.
+ *
+ * This was briefly wider, and finalisation was handed `failed` events as well.
+ * A test caught it. Marking an order paid because a payment failed is the worst
+ * thing this code could do, so the narrowing is stated here and checked again
+ * inside finalisation.
+ */
+const FINALISING_STATUS = 'succeeded';
 
 /**
  * Receiving a provider webhook (Revision 2 B10 step 2; ADR-0006; Phase 6
  * decisions D5 = B, D6 = C, D7 = B).
  *
- * **This service stores and acknowledges. It finalises nothing.** No order
- * status moves here, no ticket is sold, no outbox event is written. Deciding
- * that an order was paid is one transaction with its own invariants, and P6-4
- * owns it; separating the two is deliberate, because storing what arrived and
- * acting on it have entirely different failure modes.
+ * **This service decides nothing about money.** It establishes that a delivery
+ * is genuine, records it, and hands the ones that matter to finalisation,
+ * which re-checks everything in its own transaction. Storing what arrived and
+ * acting on it stay separate because they fail in entirely different ways.
  *
  * What this does own is the boundary. Nothing that arrives here is trusted
  * until its signature verifies over the exact bytes, and after that its
@@ -70,6 +90,7 @@ export class WebhookIntakeService {
     private readonly events: PaymentEventsRepository,
     private readonly payments: PaymentsRepository,
     private readonly orders: OrdersRepository,
+    private readonly finalization: PaymentFinalizationService,
   ) {}
 
   /**
@@ -127,11 +148,12 @@ export class WebhookIntakeService {
       return { kind: 'settled', eventId: stored.id, reason: 'unknown_reference' };
     }
 
-    if (!ACTIONABLE_STATUSES.includes(event.state)) {
-      // `pending` and `processing` say the customer is still at the provider,
-      // and an event type we do not recognise arrives here too. Both are kept
-      // and settled rather than dropped: the record says what came, and
-      // nothing is owed on it.
+    if (event.state !== FINALISING_STATUS) {
+      // `pending` and `processing` say the customer is still at the provider;
+      // `failed` and `expired` say they did not pay, which asks for nothing to
+      // be done to the order; an event type we do not recognise arrives here
+      // too. All of them are kept and settled rather than dropped: the record
+      // says what came, and nothing is owed on it.
       await this.events.settle(this.db, stored.id, 'not_actionable');
       return { kind: 'settled', eventId: stored.id, reason: 'not_actionable' };
     }
@@ -146,10 +168,21 @@ export class WebhookIntakeService {
       return { kind: 'settled', eventId: stored.id, reason: mismatch };
     }
 
-    // Left unsettled on purpose. It should move an order, and moving one is
-    // finalisation's job (P6-4), which reads exactly the events that are still
-    // waiting.
-    return { kind: 'awaiting_finalisation', eventId: stored.id };
+    // It should move an order, so finalisation decides — in its own
+    // transaction, re-checking everything this method just checked, because a
+    // stored claim earns no authority by being stored (B10 step 3).
+    //
+    // A failure in there is a failure of ours: it propagates, the route answers
+    // 5xx, and the event is left unsettled so a provider's retry and the
+    // reconciler both still have something to act on.
+    const outcome = await this.finalization.confirm({
+      eventId: stored.id,
+      paymentId: payment.id,
+      state: event.state,
+      amountMinor: event.amount.amountMinor,
+      currency: event.amount.currency,
+    });
+    return { kind: 'finalised', eventId: stored.id, outcome };
   }
 
   // ------------------------------------------------------------- internals

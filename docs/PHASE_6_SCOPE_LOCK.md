@@ -1,7 +1,7 @@
 # Phase 6 — scope lock and architectural decisions
 
 _Locked: 2026-09-25 · audit HEAD `723c7ae` · Phase 5 COMPLETE · documentation only, nothing implemented._
-_Owner decisions D1–D20 and every sub-value recorded: 2026-09-25 — see [§3b](#3b-owner-decisions-recorded). **All nine slices are unblocked with nothing pending.** Items deferred to later phases: [§26](#26-remaining-open-decisions)._
+_Owner decisions D1–D20 and every sub-value recorded: 2026-09-25 — see [§3b](#3b-owner-decisions-recorded). **D21, D22.1, D22.2, D22.3 and D23 were opened on 2026-09-27 by building P6-4, decided by the owner on 2026-09-28, and implemented in P6-4.** No Phase 6 decision is outstanding: [§26](#26-remaining-open-decisions)._
 
 This converts [PHASE_6_AUDIT.md](PHASE_6_AUDIT.md) into an explicit scope and architecture lock. The audit is the primary source; every claim here was re-checked against the repository at `723c7ae` before being written down.
 
@@ -16,9 +16,9 @@ This converts [PHASE_6_AUDIT.md](PHASE_6_AUDIT.md) into an explicit scope and ar
 
 **Eleven contradictions between the instructed decisions and the repository were found.** They are in [§3a](#3a-conflicts-found-during-the-decision-audit) and none of them was silently resolved. **The owner answered all eleven on 2026-09-25**, together with the later decisions OD-2a, OD-4a, OD-6a and O7/O9/O13. The answers are recorded in [§3b](#3b-owner-decisions-recorded) and carried into every affected section below.
 
-**Every Phase 6 decision, value, interpretation and name is now answered, and all nine slices are unblocked.** Nothing in [§26](#26-remaining-open-decisions) blocks Phase 6; what is listed there is deferred to P7, P10 and P14 by design.
+**Every Phase 6 decision, value, interpretation and name is answered, and all nine slices are unblocked.** Nothing in [§26](#26-remaining-open-decisions) blocks Phase 6. What is listed there is deferred to P7, P10 and P14 by design, with **one exception surfaced by P6-4 and not yet decided**: what to do with a provider capture against a **`cancelled`** order. It is recorded, flagged and left unprocessed rather than guessed at (**I24**), and no slice depends on the answer.
 
-One answer produced a finding rather than a clean resolution — D11 = A's predicate cannot fire under D1 = B — and the owner resolved it as **D11a = B**: no migration, dependency recorded instead. **Phase 6 makes no change to the reservation-expiry sweep**, and adds eight migrations, `0019`–`0026`.
+One answer produced a finding rather than a clean resolution — D11 = A's predicate cannot fire under D1 = B — and the owner resolved it as **D11a = B**: no migration, dependency recorded instead. **Phase 6 makes no change to the reservation-expiry sweep.** It was planned to add eight migrations; the owner's 2026-09-28 decisions on D21, D22 and D23 required one that was not foreseen, so it adds **nine**, `0019`–`0027`, of which `0019`–`0024` are applied. See [§17](#17-proposed-migrations).
 
 ---
 
@@ -59,7 +59,7 @@ The order snapshot is immutable: `hv_orders_guard` (`0016`) freezes `market_id`,
 
 payment attempt domain · provider abstraction · deterministic fake provider · payment initiation · payment window · webhook ingestion · webhook verification · webhook idempotency · payment state transitions · order payment finalization · reservation/ticket finalization (`reserved → sold`) · late payment handling · payment failure · payment reconciliation · refund skeleton · customer payment status · required notifications · payment security · concurrency protection · **Gate 4**.
 
-**LOCKED — not in scope:** see [§25](#25-explicit-out-of-scope-list).
+**LOCKED — not in scope:** see [§25](#25-explicit-out-of-scope-list--locked).
 
 **Repository agreement.** Part F row **P6** reads: "`packages/payments`, fake provider, payment records, webhook ingestion, confirm, status poller, late-payment path, refund skeleton | **Gate 4**; the redirect cannot mark paid (test)". The instructed boundary matches it, with two documented deviations (**C6**, **C10**).
 
@@ -241,7 +241,7 @@ This is **not** a defect. OD-3's instruction — "do not invent tickets… use t
 
 **OWNER DECISION — RESOLVED 2026-09-25 (D14 = A).** **Phase 6 implements only the `paid_unfulfillable` + refund branch. Order tickets are never re-allocated.**
 
-The deviation from B10's re-allocation branch is deliberate and must be recorded in an **ADR written with P6-6**, giving the reason: order-line immutability is the stronger position, and the schema enforces it three ways (`hv_order_items_guard`, the `hv_app` revokes, and `UNIQUE (order_id, draw_id)`).
+The deviation from B10's re-allocation branch is deliberate and is recorded in **[ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)**, giving the reason: order-line immutability is the stronger position, and the schema enforces it three ways (`hv_order_items_guard`, the `hv_app` revokes, and `UNIQUE (order_id, draw_id)`). It was scheduled for P6-6; the path it describes shipped in **P6-4**, so the ADR was written with P6-4 instead.
 
 If re-allocation is ever wanted, it needs its own ADR and its own migration, and must not be smuggled into Phase 6.
 
@@ -328,7 +328,7 @@ Coherent with the rest of the design: **D3a** times an attempt out at 120 second
 
 ### The refund-completion topic — P10's, provisional
 
-Recorded "only if the existing architecture requires the topic to be named now". **It does not.** A topic name is needed only when something emits or handles it, and Phase 6 does neither: the dispatcher fails an unregistered topic rather than dropping it (`outbox.service.ts:69`), so an unused name costs nothing and buys nothing. It is recorded in [§20](#20-notification-and-outbox-requirements--locked-od-6-d16--c) as **P10's contract, provisional and non-binding**, and Phase 6 neither emits nor registers it. **D16b's `order.*` standardisation covers the four Phase 6 order-outcome topics and does not bind this one**, which P10 names when it builds the consumer.
+Recorded "only if the existing architecture requires the topic to be named now". **It does not.** A topic name is needed only when something emits or handles it, and Phase 6 does neither: the dispatcher fails an unregistered topic rather than dropping it (`outbox.service.ts:69`), so an unused name costs nothing and buys nothing. It is recorded in [§20](#20-notification-and-outbox-requirements--locked-od-6-d16--c-d16a-d16b) as **P10's contract, provisional and non-binding**, and Phase 6 neither emits nor registers it. **D16b's `order.*` standardisation covers the four Phase 6 order-outcome topics and does not bind this one**, which P10 names when it builds the consumer.
 
 ### D16b — topic namespace **RESOLVED 2026-09-25**
 
@@ -396,7 +396,7 @@ The margin and the floor must therefore be **configurable**, like `RESERVATION_T
 
 - **D12 = A / D12a** makes the reconciler load-bearing rather than a safety net, because **D3 = B** means a stuck attempt blocks the customer's retry. It runs **every 60 s with a 5-minute lookback**, idempotent and safe to overlap.
 - **D13 = B / D13a** separates viewing from acting: viewing reuses the existing **`orders.read`**, and only the acting half is new — **`payments.reconcile`**, sensitive, granted to finance, admin and super_admin. It is also the authority for opening sealed payloads, so **no separate payload permission exists**.
-- **D14 = A** confirms the deviation from B10's re-allocation branch. **ADR needed at P6-6.**
+- **D14 = A** confirms the deviation from B10's re-allocation branch. **Recorded in [ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)** — planned for P6-6, written with **P6-4**, where the path shipped.
 - **D15 = A / D15a / D15b** scope the refund answer to Phase 6: an automatic unfulfillable refund goes to the **original payment instrument**, and **`refunds.actor_id` is nullable**, NULL meaning system-generated.
 - **D16 = C / D16a** define two notifications. Phase 6 **emits `order.unfulfillable`**, which may say a refund was **initiated** and never that it completed. The refund-completion message belongs to **P10**, and Phase 6 builds no consumer for it — an unregistered topic fails the event by design (`outbox.service.ts:69`), so nothing may emit it early.
 - **D17 = A** puts payment configuration under `config.manage`, granted to **`super_admin` only** (`0006:106`) and sensitive, requiring step-up MFA.
@@ -447,15 +447,15 @@ D3 = B with a 120-second attempt timeout, inside a window of at most 510 s (and 
 
 Following the Phase 5 convention — ADRs 0028–0032 were each written **with the slice that implemented them**, not ahead of it — no ADR is written now. The following are expected, at their slice:
 
-| Decision                         | ADR needed          | Why                                                                                               | Slice       |
-| -------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- | ----------- |
-| **D7 = B**                       | yes                 | Deviation from B18's literal "raw payload"; mirrors ADR-0028's reasoning                          | P6-3        |
-| **D1 = B**                       | yes                 | Introduces an order payment deadline as a distinct clock, which the specification does not define | P6-2        |
-| **D4 = C**, **D10 = B**          | likely one combined | Both extend database-enforced state machines; ADR-0011 amendment territory                        | P6-2 / P6-4 |
-| **C10** (when answered)          | yes                 | A recorded deviation from B10's re-allocation branch                                              | P6-6        |
-| D2, D3, D3a, D3b, D5, D6, D8, D9 | no                  | Operational and configuration choices, recorded here and in code comments                         | —           |
+| Decision                         | ADR needed          | Why                                                                                                                        | Slice                                                       |
+| -------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **D7 = B**                       | yes                 | Deviation from B18's literal "raw payload"; mirrors ADR-0028's reasoning                                                   | P6-3                                                        |
+| **D1 = B**                       | yes                 | Introduces an order payment deadline as a distinct clock, which the specification does not define                          | P6-2                                                        |
+| **D4 = C**, **D10 = B**          | likely one combined | Both extend database-enforced state machines; ADR-0011 amendment territory                                                 | P6-2 / P6-4                                                 |
+| **C10** (answered: **D14 = A**)  | yes — **written**   | A recorded deviation from B10's re-allocation branch — **[ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)** | planned P6-6; written with **P6-4**, where the path shipped |
+| D2, D3, D3a, D3b, D5, D6, D8, D9 | no                  | Operational and configuration choices, recorded here and in code comments                                                  | —                                                           |
 
-Next free ADR number: **0033**.
+Next free ADR number: **0035**.
 
 ---
 
@@ -642,6 +642,17 @@ Mechanically this means the sealed column is nullable and is cleared, not that r
 | **I19** | A ticket is never sold from a reservation that is not `active` with `expires_at > now()` | **both** — finalization checks it under `FOR UPDATE`, **and** `hv_tickets_guard` refuses it independently (**D10 = B**) |
 | **I20** | The cap allowance is never returned for a sold ticket                                    | already structural — `0010`'s `GET DIAGNOSTICS` fix. Phase 6 must not undo it by ending reservations before selling     |
 
+**Six further invariants — LOCKED 2026-09-28**, added by the owner's D21, D22 and D23 decisions and implemented in P6-4. They are the parts of those decisions a later slice could most easily undo by accident, so they are written as invariants rather than left inside the decision record ([§26](#26-remaining-open-decisions)).
+
+| #       | Invariant                                                                                                         | Enforcement                                                                                                                                                                                                                                             |
+| ------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **I21** | **A payment attempt that reached a terminal status stays there.** `expired` and `failed` never become `succeeded` | **structural** — `hv_payments_guard` permits only `pending`/`processing` → `processing`/`succeeded`/`failed`/`expired`. D21 and D23 resurrect nothing. An attempt still `processing` may still succeed, which is not a resurrection                     |
+| **I22** | **`expired → paid_unfulfillable` is the only order transition migration `0024` adds**                             | **structural** — `hv_orders_status_guard`. Nothing else leaves `expired` and no other status gained a transition. The cost is that `expired` is no longer terminal, stated in `0024`'s own comment                                                      |
+| **I23** | **A `second_capture` is not ordinary finalization work**                                                          | procedural — finalisation records it and stops. Refunding it is an **invoked** reconciliation action (D22.3) that runs only against an event this system itself flagged, never off the back of a provider message                                       |
+| **I24** | **A capture against a `cancelled` order is recorded and left alone**                                              | procedural — classified `capture_without_settlement` and left unprocessed. **No policy covers it**: D23 answers the `expired` case only, and no code path may decide it without an owner decision                                                       |
+| **I25** | **A refund still at `raised` is money still owed, not a refund that failed**                                      | structural + procedural — `refunds_unsettled_idx` finds them, and sending is best-effort and never throws, so an unreachable provider leaves the obligation visible. **Retry is P6-5's**; until it exists the index is the only thing that surfaces one |
+| **I26** | **A duplicate-capture refund emits no order-outcome event**                                                       | procedural — the order does not change, so none of the four `order.*` topics applies ([§20](#20-notification-and-outbox-requirements--locked-od-6-d16--c-d16a-d16b)). It is audited as `payment.duplicate_capture_refunded` and nothing is emitted      |
+
 ---
 
 ## 6. Payment lifecycle (order-level) — **PROPOSED**
@@ -680,17 +691,18 @@ Mechanically this means the sealed column is nullable and is cleared, not that r
 
 **Transitions Phase 6 implements — LOCKED:**
 
-| From                 | To                   | Trigger                                                         |
-| -------------------- | -------------------- | --------------------------------------------------------------- |
-| `awaiting_payment`   | `paid`               | confirmed payment, fulfilment possible                          |
-| `awaiting_payment`   | `paid_unfulfillable` | confirmed payment, fulfilment impossible                        |
-| `awaiting_payment`   | `failed`             | provider reports definitive failure                             |
-| `awaiting_payment`   | `expired`            | payment deadline passed with no success                         |
-| `paid_unfulfillable` | `refunded`           | refund completes — **P10**, [§11](#11-refund-skeleton-boundary) |
+| From                 | To                   | Trigger                                                                                                      |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `awaiting_payment`   | `paid`               | confirmed payment, fulfilment possible                                                                       |
+| `awaiting_payment`   | `paid_unfulfillable` | confirmed payment, fulfilment impossible                                                                     |
+| `awaiting_payment`   | `failed`             | provider reports definitive failure                                                                          |
+| `awaiting_payment`   | `expired`            | payment deadline passed with no success                                                                      |
+| `expired`            | `paid_unfulfillable` | **added 2026-09-28 by D23**, migration `0024`. A confirmed payment arrives after the order expired (**I22**) |
+| `paid_unfulfillable` | `refunded`           | refund completes — **P10**, [§11](#11-refund-skeleton-boundary)                                              |
 
 **Not implemented in Phase 6:** `created → *` (Phase 5 never writes `created`); `created → cancelled`; `paid → partially_refunded | refunded` (P10); wallet-only `created → paid` (P7).
 
-**Terminal states are never reopened** (I10, **C11**).
+**Terminal states are never reopened — with one exception, added deliberately.** I10 and **C11** still hold for `paid`, `paid_unfulfillable`, `failed`, `cancelled` and `refunded`. **`expired` is no longer terminal**: D23 permits `expired → paid_unfulfillable` and nothing else, so an order that took a customer's money can no longer claim it did not (**I22**). Migration `0024` records the loss of strictness in its own comment.
 
 ---
 
@@ -779,7 +791,11 @@ BEGIN  (READ COMMITTED, as everywhere else in this codebase)
 
  1. SELECT … FROM orders WHERE id = $1 FOR UPDATE          -- lock the aggregate first
  2. IF order.status <> 'awaiting_payment'
-       → already settled; commit and return the existing outcome.  IDEMPOTENT EXIT
+       → already settled. CLASSIFY against the order's single succeeded
+         payment (D22.1): same attempt = ordinary duplicate, settle and exit;
+         different attempt = 'second_capture', left unprocessed (D22.2, I23);
+         nothing succeeded = 'capture_without_settlement', left unprocessed.
+       → EXCEPT status 'expired', which goes to step 8 (D23, I22).  IDEMPOTENT
  3. Verify the event against the ORDER, not the request:
        amount   = orders.external_due_minor      (I4)
        currency = orders.currency                (I6)
@@ -799,10 +815,16 @@ BEGIN  (READ COMMITTED, as everywhere else in this codebase)
     → go to step 9.
 
  8. NOT FULFILLABLE:
-    UPDATE orders SET status='paid_unfulfillable' WHERE id=$1 AND status='awaiting_payment'
+    UPDATE orders SET status='paid_unfulfillable'
+           WHERE id=$1 AND status=$from   -- 'awaiting_payment', or 'expired' (D23)
     UPDATE payments SET status='succeeded' WHERE id=$2
+           -- ONLY if the attempt is not already terminal. An 'expired' or
+           -- 'failed' attempt is left exactly as it is (D21, D23, I21)
+    hv_end_reservation($r, 'released')  FOR ANY STILL-LIVE HOLD
+           -- D21 only: the hold was alive, so tickets AND the cap allowance
+           -- go back to the pool. Nothing was bought
     INSERT refunds (…, idempotency_key = 'refund:order:<id>:unfulfillable')   (I16)
-    -- no ticket is touched; no cap allowance is returned
+    -- no ticket is ever SOLD here
 
  9. INSERT audit_log  (order.paid | order.paid_unfulfillable)
 10. INSERT outbox     (§20)                                  (I14)
@@ -827,7 +849,13 @@ Every Phase 6 path that touches more than one of these takes them in this order,
 
 **Step order is not stylistic — LOCKED (D9 = A + D10 = B).** Steps 5 and 6 may not be swapped. `hv_tickets_guard` now requires the reservation to be `active` and unexpired at the moment of sale, so closing the hold first would make the sale fail. Sell, then close.
 
-**Idempotency.** Steps 2 and 7 are the guards. A second call finds the order out of `awaiting_payment` and exits without touching anything. Combined with I3 and I11, running finalization any number of times has the effect of running it once.
+**Idempotency.** Steps 2 and 7 are the guards. A second call finds the order out of `awaiting_payment` and changes nothing. Combined with I3 and I11, running finalization any number of times has the effect of running it once.
+
+**Reconciled 2026-09-28.** This pseudocode was written before D21, D22 and D23 existed, and steps 2 and 8 above now carry them. Three consequences worth stating where the transaction is described, rather than only in the decision record:
+
+- **A second call is not always a no-op — it is a classification.** D22.1 distinguishes an ordinary duplicate from a genuine `second_capture` and from a `capture_without_settlement`. The latter two are recorded and left **unprocessed** for reconciliation, never acted on here (**I23**, **I24**).
+- **Step 8 is now the only path into `paid_unfulfillable`**, and it reaches it from `awaiting_payment` **or** `expired` (**I22**). It never resurrects a terminal payment attempt (**I21**).
+- **Liveness is assessed before the attempt's own status.** An attempt being `expired` is not what makes an order unfulfillable; a hold being gone is. D21 exists precisely because those two can disagree.
 
 ---
 
@@ -837,16 +865,16 @@ A **late payment** is a confirmation that arrives when the order can no longer b
 
 Because of **C1**, this will not be rare. Because of **C10**, there is exactly one branch:
 
-| Step | Action                                                                                                                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Detected at step 4 of §9 — the reservation is not `active`, or is past `expires_at`                                                                                                   |
-| 2    | The order goes to **`paid_unfulfillable`**. No new status is invented (OD-3)                                                                                                          |
-| 3    | The payment is still recorded as `succeeded` — the customer really did pay, and pretending otherwise would lose money                                                                 |
-| 4    | **No ticket is invented, allocated or re-allocated** (OD-3, **C10**)                                                                                                                  |
-| 5    | A `refunds` row is raised with a derived `idempotency_key`, so raising it twice is impossible (I16)                                                                                   |
-| 6    | `audit_log` records the full before/after and the reason                                                                                                                              |
-| 7    | A `order.unfulfillable` outbox notification is written — **LOCKED (D16 = C, D16a)**. It says a refund has been **initiated**, never completed. The refund-completion message is P10's |
-| 8    | Refund **execution** is P6-6's skeleton plus **O7**; refund **completion** and the admin UI are **P10**                                                                               |
+| Step | Action                                                                                                                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Detected at step 4 of §9 — the reservation is not `active`, or is past `expires_at`                                                                                                                                |
+| 2    | The order goes to **`paid_unfulfillable`**. No new status is invented (OD-3)                                                                                                                                       |
+| 3    | The payment is still recorded as `succeeded` — the customer really did pay, and pretending otherwise would lose money                                                                                              |
+| 4    | **No ticket is invented, allocated or re-allocated** (OD-3, **C10**)                                                                                                                                               |
+| 5    | A `refunds` row is raised with a derived `idempotency_key`, so raising it twice is impossible (I16)                                                                                                                |
+| 6    | `audit_log` records the full before/after and the reason                                                                                                                                                           |
+| 7    | A `order.unfulfillable` outbox notification is written — **LOCKED (D16 = C, D16a)**. It says a refund has been **initiated**, never completed. The refund-completion message is P10's                              |
+| 8    | Refund **execution** is attempted once by P6-4, best-effort, after commit. **Retrying** an obligation still at `raised` is **P6-5** (**I25**); the wider policy is **O7**; completion and the admin UI are **P10** |
 
 **The customer's money is never silently kept, and a ticket is never silently invented.** Those two sentences are the whole rule.
 
@@ -854,13 +882,21 @@ Because of **C1**, this will not be rare. Because of **C10**, there is exactly o
 
 ## 11. Refund skeleton boundary
 
-**In scope — LOCKED:**
+**Built in P6-4, not P6-6 — reconciled 2026-09-28.** The owner's D21, D22.3 and D23 decisions each require a refund **at the moment finalisation decides**, so the refund primitive had to exist in P6-4. What moved is which slice builds it; the boundary itself is unchanged. Migration **`0023`** creates `refunds` — see [§17](#17-proposed-migrations) and [§22](#22-slice-plan-p6-1--p6-9).
 
-- the `refunds` table exactly as B18 specifies it;
-- `PaymentProvider.refund()` in the interface and in the fake provider;
-- a refund **record** raised automatically by the late-payment path;
-- idempotency: `idempotency_key UNIQUE` and `UNIQUE (provider, provider_refund_reference)` (I16);
-- audit on creation.
+**In scope — LOCKED (all built in P6-4):**
+
+- the `refunds` table exactly as B18 specifies it — migration `0023`;
+- `PaymentProvider.refund()` in the interface and in the fake provider — built in P6-1;
+- a refund **record** raised automatically by the late-payment path, and by **D21**, **D22.3** and **D23**;
+- idempotency: `idempotency_key UNIQUE` and `UNIQUE (provider, provider_refund_reference)` (I16), with keys derived from the order or the event so one decision can raise only one refund;
+- audit on creation;
+- one **best-effort** send to the provider after commit, outside any transaction. It never throws, and a refund it could not make stays `raised` (**I25**).
+
+**Not in P6-4, and not invented here:**
+
+- **retrying** refund obligations left at `raised` — **P6-5**, alongside reconciliation and expiry scheduling. `refunds_unsettled_idx` exists for it;
+- the broader refund slice and policy not required by the locked P6-4 outcomes — **P6-6**, bounded by **O7**.
 
 **OUT OF SCOPE — LOCKED:**
 
@@ -1009,7 +1045,7 @@ Every case below must be proven against **real PostgreSQL** with barrier-synchro
 
 **Rows are never deleted, only the payload cleared (OD-7a).** The row is the replay-protection record: `UNIQUE (provider, provider_event_id)` is what makes a duplicated webhook a no-op (**I3**), and deleting rows after 90 days would reopen that for any event a provider re-sends later.
 
-### `refunds`
+### `refunds` — **BUILT in P6-4, migration `0023`**
 
 Exactly B18: `order_id`, `payment_id`, `amount_minor`, `currency`, `destination`, `idempotency_key UNIQUE`, `UNIQUE (provider, provider_refund_reference)`, `status`, `reason`, `actor_id`. Composite market/currency FKs as above. Append-mostly; `status` is the only freely mutable field.
 
@@ -1042,7 +1078,7 @@ Exactly B10: `(market_id, provider_code, config_ref)`. **`config_ref` is a refer
 ### Changes to existing tables
 
 - **`orders.expires_at`** — `timestamptz NOT NULL`, the OD-1 payment deadline, set to `min(created_at + 600s, min(reservation.expires_at) − 90s)` (**D1 = B, D1a**). Added to the `hv_orders_guard` frozen set so it is immutable. A `CHECK (expires_at > created_at)` follows the `guest_sessions` pattern. **LOCKED**
-- **`hv_orders_status_guard`** — **LOCKED (D4 = C)**: enforce the B7 transitions in the database, alongside the application's conditional updates.
+- **`hv_orders_status_guard`** — **LOCKED (D4 = C)**: enforce the B7 transitions in the database, alongside the application's conditional updates. **Extended on 2026-09-28 by migration `0024`** with `expired → paid_unfulfillable` (**D23**) and **no other transition** (**I22**).
 - **`hv_tickets_guard`** — **LOCKED (D10 = B)**: replaced so `reserved → sold` additionally requires the reservation to be `active` with `expires_at > now()`. Gates 1 and 2 re-run in the slice that does this.
 - **`hv_expire_reservations`** — **unchanged. LOCKED (D11a = B).** No payment-specific predicate is added. The D1 = B margin makes one unreachable, and `hv_tickets_guard` under D10 = B independently blocks the sale it would have prevented. The dependency is recorded in [§3b](#3b-owner-decisions-recorded) and must be carried into `reservation-expiry.ts` and `tickets.repository.ts:180`.
 - **`hv_end_reservation`, `hv_reservations_guard`, `reservations_ttl_valid`** — **unchanged (D9 = A, D1 = B)**.
@@ -1053,22 +1089,25 @@ Exactly B10: `(market_id, provider_code, config_ref)`. **`config_ref` is a refer
 
 **PROPOSED.** Next free number is **0019** (`0018_cart_guard_bridged_entrant.sql` is the latest). Migrations are append-only and checksummed; an applied file is never edited (DEVELOPMENT_RULES §3).
 
-| #      | Purpose                                      | Contents                                                                                                                                      | Slice | Blocked by                 |
-| ------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----- | -------------------------- |
-| `0019` | Order payment deadline + order state machine | `orders.expires_at` (**D1 = B, D1a**); replace `hv_orders_guard` to freeze it; add `hv_orders_status_guard` (**D4 = C**)                      | P6-2  | **none — ready**           |
-| `0020` | Payment attempts                             | `payments` with `expires_at` (**D3a**), guard, **both** partial unique indexes (**D3 = B**), `REVOKE DELETE, TRUNCATE`                        | P6-2  | **none — ready**           |
-| `0021` | Provider events                              | `payment_events` with normalized fields + sealed raw payload (**D7 = B**), append-only guard, `processed_at IS NULL` index, revokes per B19   | P6-3  | **none — ready**           |
-| `0022` | Expired-hold backstop                        | replace `hv_tickets_guard` so `reserved → sold` requires a live reservation (**D10 = B**); Gates 1 and 2 re-run                               | P6-4  | **none — ready**           |
-| `0023` | Payment permission                           | seed **`payments.reconcile`** (sensitive) + grants to finance, admin, super_admin (**D13a**). Viewing needs nothing — it reuses `orders.read` | P6-5  | **none — ready**           |
-| `0024` | Refund skeleton                              | `refunds` per B18, `actor_id` **nullable** (**D15b**), `destination` CHECK (**D15a**)                                                         | P6-6  | **none — ready**           |
-| `0025` | Per-market provider config                   | `market_payment_configs`                                                                                                                      | P6-7  | **none — ready (D17 = A)** |
-| `0026` | Order access tokens                          | `order_access_tokens`, `expires_at = orders.expires_at + 30 min` (**D19a**)                                                                   | P6-8  | **none — ready**           |
+| #      | Purpose                                      | Contents                                                                                                                                                                                                       | Slice    | Blocked by                                                    |
+| ------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `0019` | Order payment deadline + order state machine | `orders.expires_at` (**D1 = B, D1a**); replace `hv_orders_guard` to freeze it; add `hv_orders_status_guard` (**D4 = C**)                                                                                       | P6-2     | **none — ready**                                              |
+| `0020` | Payment attempts                             | `payments` with `expires_at` (**D3a**), guard, **both** partial unique indexes (**D3 = B**), `REVOKE DELETE, TRUNCATE`                                                                                         | P6-2     | **none — ready**                                              |
+| `0021` | Provider events                              | `payment_events` with normalized fields + sealed raw payload (**D7 = B**), append-only guard, `processed_at IS NULL` index, revokes per B19                                                                    | P6-3     | **none — ready**                                              |
+| `0022` | Expired-hold backstop                        | replace `hv_tickets_guard` so `reserved → sold` requires a live reservation (**D10 = B**); Gates 1 and 2 re-run                                                                                                | P6-4     | **applied**                                                   |
+| `0023` | Refund persistence                           | `refunds` per B18, `actor_id` **nullable** (**D15b**), `destination` CHECK (**D15a**), `idempotency_key UNIQUE` and `UNIQUE (provider, provider_refund_reference)` (**I16**), guard, `REVOKE DELETE, TRUNCATE` | **P6-4** | **applied** — moved from P6-6 by the locked D21 / D22.3 / D23 |
+| `0024` | Expired order may become unfulfillable       | extend `hv_orders_status_guard` by **`expired → paid_unfulfillable`**, and by nothing else (**D23**, **I22**)                                                                                                  | **P6-4** | **applied** — not foreseen when this table was written        |
+| `0025` | Payment permission                           | seed **`payments.reconcile`** (sensitive) + grants to finance, admin, super_admin (**D13a**). Viewing needs nothing — it reuses `orders.read`                                                                  | P6-5     | **none — ready**                                              |
+| `0026` | Per-market provider config                   | `market_payment_configs`                                                                                                                                                                                       | P6-7     | **none — ready (D17 = A)**                                    |
+| `0027` | Order access tokens                          | `order_access_tokens`, `expires_at = orders.expires_at + 30 min` (**D19a**)                                                                                                                                    | P6-8     | **none — ready**                                              |
 
-**Not created — D11a = B.** The expiry-safety migration that would have replaced `hv_expire_reservations` is **deliberately not written**. Phase 6 therefore adds **eight** migrations, not nine, and makes **no change to the ticket-expiry sweep**. The reasoning and the code comments that must carry it are in [§3b](#3b-owner-decisions-recorded).
+**Not created — D11a = B.** The expiry-safety migration that would have replaced `hv_expire_reservations` is **deliberately not written**, and Phase 6 makes **no change to the ticket-expiry sweep**. The reasoning and the code comments that must carry it are in [§3b](#3b-owner-decisions-recorded).
+
+**Reconciled 2026-09-28.** This table was written before D21, D22 and D23 existed. Locking them changed two things: `refunds` moved forward from P6-6 into **P6-4** as `0023`, because a refund is raised at the moment finalisation decides; and `0024` is an order-state-machine migration nobody had planned. Phase 6 therefore adds **nine** migrations, not eight. `0019`–`0024` are applied; the remaining three keep their purposes and take the next free numbers when their slices land.
 
 **No migration is needed** for the provider port, the fake provider, the webhook route or the outbox topics.
 
-**Numbers are indicative, not reserved.** Slices land in order and each takes the next free number at the time — as P5-8 discovered when a test forced an unplanned `0018`.
+**Numbers are indicative, not reserved.** Slices land in order and each takes the next free number at the time — as P5-8 discovered when a test forced an unplanned `0018`, and as P6-4 discovered again when it consumed both `0023` and `0024`. **A number in this table is a plan, never a reservation.** P6-5's permission migration simply takes `0025` rather than the `0023` once sketched for it, and nothing depends on the number itself.
 
 ---
 
@@ -1150,6 +1189,7 @@ Minimum states:
 | refund completion          | **no — P10's contract, recorded provisionally**       | when the refund actually completes. **Phase 6 neither emits it nor registers a handler (D16a).** P10 names it; D16b's `order.*` standardisation covers order outcomes and does not bind a refund outcome |
 | `refund.initiated`         | **no**                                                | D16 = C asks for _failure_ and _completion_, not a third message when the record is raised. `order.unfulfillable` already carries that moment                                                            |
 | `payment.succeeded`        | **no**                                                | redundant with `order.paid`. One event per business fact                                                                                                                                                 |
+| duplicate-capture refund   | **no — LOCKED 2026-09-28 (D22.3, I26)**               | nothing is emitted. **The order does not change** — it stays `paid` with its tickets sold — so no order-outcome topic applies. It is audited as `payment.duplicate_capture_refunded` instead             |
 
 ### What `order.unfulfillable` may say — LOCKED (D16a)
 
@@ -1225,19 +1265,21 @@ Real PostgreSQL for every integration and concurrency test; one database per fil
 
 **LOCKED structure**, with dependencies validated against the repository. Each slice is one branch, one PR to `develop`, owner-approved before it starts. Slices are not merged together.
 
-| Slice    | Objective                                                                                                                                                                                                                                                                                                      | Migration      | Depends on | Blockers         |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ---------------- |
-| **P6-1** | **Provider port + deterministic fake provider.** `packages/payments`: the B10 interface, the fake implementation with HMAC webhooks able to deliver late, duplicated, out-of-order and never, the production config guard. **No routes, no tables, no API changes.**                                           | none           | —          | **none — ready** |
-| **P6-2** | **Payment attempt persistence + initiation.** `orders.expires_at` (D1/D1a), the 180 s refusal (D1b), `payments` with one-live-attempt (D3/D3a/D3b), `hv_orders_status_guard` (D4), initiation endpoint, rate limit, I1–I7 enforced.                                                                            | `0019`, `0020` | P6-1       | **none — ready** |
-| **P6-3** | **Webhook persistence + verified intake.** Separate webhook pipeline (D5), raw-body capture, signature boundary, failure classification (D6), `payment_events` with sealed raw payload (D7), replay protection. **Stores and acknowledges; does not finalize.**                                                | `0021`         | P6-2       | **none — ready** |
-| **P6-4** | **Atomic finalization.** `confirmPayment`: order lock, conditional transition, `reserved → sold` **then** `hv_end_reservation(…, 'released')` (D9), the `hv_tickets_guard` backstop (D10), cap correctness, audit, outbox. **Gate 4 lives here, as scoped by D8.**                                             | `0022`         | P6-3       | **none — ready** |
-| **P6-5** | **Status / reconciliation.** `getPaymentStatus`, the 60 s reconciler (**D12a**), the viewing and acting endpoints (**D13a**), sealed-payload opening under `payments.reconcile`, and the **comment corrections** recording why the sweep needs no predicate (**D11a = B**). **No change to the expiry sweep.** | `0023`         | P6-4       | **none — ready** |
-| **P6-6** | **Late payment + refund skeleton.** `paid_unfulfillable` (**D14 = A**), automatic refund to the original instrument (**D15a**, **D15b**), `order.unfulfillable` notification (**D16a**).                                                                                                                       | `0024`         | P6-4       | **none — ready** |
-| **P6-7** | **Per-market payment configuration.** `market_payment_configs`, provider selection per market, writes under `config.manage` (**D17 = A**).                                                                                                                                                                     | `0025`         | P6-1       | **none — ready** |
-| **P6-8** | **Web payment flow.** Pay / live attempt / pending / paid / failed / too-late / expired / unfulfillable, countdown, guest and authenticated, order access tokens (**D18 = B**, **D19a**).                                                                                                                      | `0026`         | P6-4, P6-6 | **none — ready** |
-| **P6-9** | **Hardening / Gate 4 sign-off.** Full concurrency matrix, e2e, docs, Phase 6 DoD, Gate 1 and Gate 2 re-run after D10.                                                                                                                                                                                          | none           | all        | —                |
+| Slice    | Objective                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Migration      | Depends on | Blockers         |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ---------------- |
+| **P6-1** | **Provider port + deterministic fake provider.** `packages/payments`: the B10 interface, the fake implementation with HMAC webhooks able to deliver late, duplicated, out-of-order and never, the production config guard. **No routes, no tables, no API changes.**                                                                                                                                                                                            | none           | —          | **none — ready** |
+| **P6-2** | **Payment attempt persistence + initiation.** `orders.expires_at` (D1/D1a), the 180 s refusal (D1b), `payments` with one-live-attempt (D3/D3a/D3b), `hv_orders_status_guard` (D4), initiation endpoint, rate limit, I1–I7 enforced.                                                                                                                                                                                                                             | `0019`, `0020` | P6-1       | **none — ready** |
+| **P6-3** | **Webhook persistence + verified intake.** Separate webhook pipeline (D5), raw-body capture, signature boundary, failure classification (D6), `payment_events` with sealed raw payload (D7), replay protection. **Stores and acknowledges; does not finalize.**                                                                                                                                                                                                 | `0021`         | P6-2       | **none — ready** |
+| **P6-4** | **Atomic finalization.** `confirmPayment`: order lock, conditional transition, `reserved → sold` **then** `hv_end_reservation(…, 'released')` (D9), the `hv_tickets_guard` backstop (D10), cap correctness, audit, outbox. **Gate 4 lives here, as scoped by D8.** Also carries the locked **D21**, **D22.1–3** and **D23** outcomes and the `refunds` primitive they require.                                                                                  | `0022`–`0024`  | P6-3       | **none — ready** |
+| **P6-5** | **Status / reconciliation.** `getPaymentStatus`, the 60 s reconciler (**D12a**), the viewing and acting endpoints (**D13a**), sealed-payload opening under `payments.reconcile`, and the **comment corrections** recording why the sweep needs no predicate (**D11a = B**). **No change to the expiry sweep.** Also **retries refund obligations still at `raised`** (**I25**) and calls the D22.3 duplicate-capture action.                                    | `0025`         | P6-4       | **none — ready** |
+| **P6-6** | **Broader refund slice and policy** — whatever is not required by the locked P6-4 outcomes, bounded by **O7**. Everything this row originally listed — `paid_unfulfillable` (**D14 = A**), automatic refund to the original instrument (**D15a**, **D15b**), `order.unfulfillable` (**D16a**) — **is built in P6-4**, because D21/D22.3/D23 need it there. **No new requirement is invented here**; whether P6-6 survives as a distinct slice is an owner call. | —              | P6-4       | **none — ready** |
+| **P6-7** | **Per-market payment configuration.** `market_payment_configs`, provider selection per market, writes under `config.manage` (**D17 = A**).                                                                                                                                                                                                                                                                                                                      | `0026`         | P6-1       | **none — ready** |
+| **P6-8** | **Web payment flow.** Pay / live attempt / pending / paid / failed / too-late / expired / unfulfillable, countdown, guest and authenticated, order access tokens (**D18 = B**, **D19a**).                                                                                                                                                                                                                                                                       | `0027`         | P6-4       | **none — ready** |
+| **P6-9** | **Hardening / Gate 4 sign-off.** Full concurrency matrix, e2e, docs, Phase 6 DoD, Gate 1 and Gate 2 re-run after D10.                                                                                                                                                                                                                                                                                                                                           | none           | all        | —                |
 
-**All nine slices are unblocked, with no outstanding decision of any kind.** The items in [§26](#26-remaining-open-decisions) are deferred beyond Phase 6 by design, not pending.
+**All nine slices were unblocked by the 2026-09-25 decisions.** Building P6-4 then opened **D21, D22.1, D22.2, D22.3 and D23** — late provider success against an attempt or an order that has moved on. **The owner locked all of them on 2026-09-28 and P6-4 implements them**, so nothing in [§26](#26-remaining-open-decisions) is outstanding for Phase 6.
+
+**Two boundaries moved when those decisions landed — reconciled 2026-09-28.** A refund is raised at the moment finalisation decides, so the `refunds` primitive had to be built in **P6-4** (migration `0023`) rather than P6-6, and `0024` added the one order transition D23 needs. **P6-5 keeps reconciliation and expiry scheduling, and gains the retry of refund obligations still at `raised`.** **P6-6 keeps the broader refund slice and policy not required by these locked outcomes.** Migration numbers shift accordingly and were never reservations: [§17](#17-proposed-migrations).
 
 **Why P6-3 and P6-4 stay separate — LOCKED.** Storing an event and acting on it have entirely different failure modes. P5-8 demonstrated how much a slice's own tests reveal before the next one depends on it; merging these two would hide exactly that.
 
@@ -1257,7 +1299,7 @@ Every P6-x PR, before review:
 - [ ] No provider name hard-coded. No secret committed. `.env.example` placeholders only.
 - [ ] No plaintext sensitive payload logged; new sensitive headers added to redaction.
 - [ ] `hv_app` privileges asserted for real — the P5-6 lesson: before `global-setup.ts` was fixed, every "cannot DELETE" assertion passed vacuously.
-- [ ] ADRs written for decisions made inside the slice (next free number: **0033**).
+- [ ] ADRs written for decisions made inside the slice (next free number: **0035** — `0033` was taken by P6-3 for sealed provider payloads, `0034` by P6-4 for the **C10 / D14 = A** re-allocation deviation, **[ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)**). **None outstanding.**
 - [ ] `PROJECT_STATUS.md`, `TASK_BOARD.md`, `ACTIVE_WORK.md`, `CHANGELOG.md` updated; `ACTIVE_WORK` entry removed by the completing PR.
 - [ ] CI green. Branch → PR → `develop`. **No direct push to `develop` or `main`; no merge without owner approval** (DEVELOPMENT_RULES §4).
 - [ ] Known flakes are **not** used to dismiss a failure. A red run is investigated, not re-run.
@@ -1308,13 +1350,13 @@ Justified by Part F's phase sequence, not by general practice:
 
 **All twenty questionnaire decisions are answered.** D1–D10 and D11–D20 are recorded in [§3b](#3b-owner-decisions-recorded). Every conflict from §3a — **C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11** — now has an owner answer.
 
-**Nothing in Phase 6's design is undecided, and no slice is blocked.**
+**Decisions were opened later, on 2026-09-27, by building P6-4** — D21, D22.1, D22.2, D22.3 and D23, all about a provider confirming a payment after our own attempt or the order has moved on. They are not questionnaire items and not O7 items; they arise from D3 = B and D3a, which the specification never contemplated. **The owner decided all of them on 2026-09-28 and P6-4 implements them. None is an open decision.** See [Opened on 2026-09-27](#opened-on-2026-09-27-by-p6-4--late-provider-success--closed-2026-09-28).
 
 **D11a was resolved as B on 2026-09-25:** no expiry-safety migration. `hv_expire_reservations` is untouched, and the dependency that makes it unnecessary is recorded in [§3b](#3b-owner-decisions-recorded), to be carried into `reservation-expiry.ts` and `tickets.repository.ts:180` during P6-5.
 
-**Every decision, value, interpretation and name is answered** and recorded in [§3b](#3b-owner-decisions-recorded): D1–D20, **D11a** (no expiry migration) · **D12a** (60 s / 5 min, confirmed) · **D13a** (`orders.read` + `payments.reconcile`) · **D15a** (original instrument) · **D15b** (nullable `actor_id`) · **D16a** (`order.unfulfillable`, refund initiated only) · **D16b** (`order.*` namespace) · **D19a** (30-minute tail) · **OD-7a** (90-day retention).
+**Every decision, value, interpretation and name is answered** and recorded in [§3b](#3b-owner-decisions-recorded): D1–D20, **D11a** (no expiry migration) · **D12a** (60 s / 5 min, confirmed) · **D13a** (`orders.read` + `payments.reconcile`) · **D15a** (original instrument) · **D15b** (nullable `actor_id`) · **D16a** (`order.unfulfillable`, refund initiated only) · **D16b** (`order.*` namespace) · **D19a** (30-minute tail) · **OD-7a** (90-day retention) · and, from 2026-09-28, **D21**, **D22.1**, **D22.2**, **D22.3** and **D23**.
 
-**Every Phase 6 slice is unblocked, with nothing pending.** What follows is the record of what closed, and what is deferred to later phases by design.
+**Every Phase 6 decision that was raised as a decision is closed, including the five P6-4 opened.** What follows is the record of what closed, how the P6-4 decisions were resolved and where they are implemented, what is deferred to later phases by design, and the **one reconciliation case P6-4 surfaced without deciding** — a capture against a `cancelled` order.
 
 ### Closed on 2026-09-25 — nothing outstanding for Phase 6
 
@@ -1323,6 +1365,88 @@ Justified by Part F's phase sequence, not by general practice:
 | **D12a**  | **Confirmed.** Every 60 s, examining payments whose **last state change** falls within the previous 5 minutes; older cases go to the operator endpoint                                                                                                               |
 | **D16b**  | **Resolved.** All four order-outcome topics under `order.*` — `order.paid`, `order.payment_failed`, `order.expired`, `order.unfulfillable`. **No aliases, no dual names.** The refund-completion topic is a refund outcome, belongs to P10, and is not bound by this |
 | **OD-7a** | **Closed in both halves.** Access is `payments.reconcile` (D13a); encrypted payloads are retained **90 days**, then cleared by the operator/retention process, and never exposed by an ordinary order or customer API                                                |
+
+### Opened on 2026-09-27 by P6-4 — late provider success · **CLOSED 2026-09-28**
+
+**Status: owner-decided on 2026-09-28, implemented in P6-4, no longer open decisions.** D21, D22.1, D22.2, D22.3 and D23 are all closed. Migrations `0023` (refunds) and `0024` (`expired → paid_unfulfillable`) belong to that implementation, and the invariants the decisions carry are **I21–I26** in [§5](#5-architectural-invariants).
+
+| Ref       | Resolution — **LOCKED 2026-09-28**                                                                                                                                                        | Implemented |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **D21**   | **Option i-d.** Order → `paid_unfulfillable`; attempt stays `expired` and is **not** resurrected; tickets released; **automatic full refund** to the original provider payment instrument | **P6-4**    |
+| **D22.1** | Detection as built on 2026-09-27, unchanged                                                                                                                                               | **P6-4**    |
+| **D22.2** | **No second succeeded payment row**, no synthetic row, no new payment status, no migration                                                                                                | **P6-4**    |
+| **D22.3** | **Refunded in full** to the original provider payment instrument; an **invoked** reconciliation action, not an automatic one                                                              | **P6-4**    |
+| **D23**   | **Option iv-b.** `expired → paid_unfulfillable` via migration `0024`; automatic full refund; the original attempt is **not** resurrected                                                  | **P6-4**    |
+
+**The option tables below are kept exactly as they were written on 2026-09-27.** The record of what was considered is worth more than a tidy page; each decision now carries the owner's answer beneath it, and nothing about the options has been edited except where a statement had become factually false.
+
+The cases arose because they follow from **D3 = B and D3a** — one live attempt, 120-second timeout — rather than from anything B10 or O7 describes. B10's late-payment rule is triggered by _the reservation having been released_; these are triggered by the state of our own **payment attempt**, which is a different thing and can happen with the hold perfectly intact.
+
+They were recorded here as owner decisions on 2026-09-27 with **no policy chosen and no new language** — each option as stated in the P6-4 investigation. **The owner chose on 2026-09-28**, and the chosen option is recorded beneath each one below. No option was reworded to fit the answer.
+
+#### D21 — late success, attempt expired, hold still live
+
+The state: order `awaiting_payment` · attempt `expired` · reservation `active` and unexpired · tickets `reserved`. The customer has paid, the tickets they paid for are sitting available, and finalisation declines to hand them over because our own attempt row is terminal.
+
+| Option                                                         | Schema                                                    | State machine                                                                            | Immutable history                                                                                                                                       | Tickets                                               | Refund  |
+| -------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
+| **i-a** Finalise anyway, leave the attempt `expired`           | none                                                      | none                                                                                     | preserved; `payments` becomes an incomplete account — a paid order with no succeeded attempt                                                            | sold to the customer who paid                         | no      |
+| **i-b** Permit `expired`/`failed` → `succeeded`, then finalise | none                                                      | **one function migration** to `hv_payments_guard`; contradicts §7 "terminal is terminal" | preserved; the account is complete                                                                                                                      | sold                                                  | no      |
+| **i-c** Insert a **new** attempt row already `succeeded`       | none                                                      | none — inserts are unguarded                                                             | preserved, adds rather than edits; `provider_reference` must be **NULL**, because `UNIQUE (provider, provider_reference)` collides with the expired row | sold                                                  | no      |
+| **i-d** Treat as unfulfillable and refund                      | `refunds` (planned **P6-6**; **built in P6-4** as `0023`) | none                                                                                     | preserved                                                                                                                                               | **released to the pool although they were available** | **yes** |
+
+**LOCKED 2026-09-28 — option i-d. Implemented in P6-4.** The order goes to **`paid_unfulfillable`**. The payment attempt **remains `expired` and is not resurrected** (**I21**). The still-live hold is **released** with `hv_end_reservation(…, 'released')`, so the tickets and the cap allowance both return to the pool. An **automatic full refund** is raised to the **original provider payment instrument** (**D15a**), and `order.unfulfillable` is written in the same transaction.
+
+**The cost is stated plainly, because the owner accepted it.** Tickets that were sitting available are returned to the pool rather than handed to the customer who paid for them. That is what option i-d costs, and it was chosen over editing a terminal attempt row (i-b) or inserting a succeeded payment with a NULL provider reference (i-c).
+
+#### D22 — provider success after the order is already paid
+
+Three separable decisions:
+
+| Ref       | Question                                                                                               | Status                                                |
+| --------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| **D22.1** | Detecting a second capture, so it is not silently indistinguishable from an ordinary duplicate webhook | **Implemented in P6-4.** See below                    |
+| **D22.2** | Whether a second capture gets an accounting record of its own, and where                               | **LOCKED 2026-09-28. Implemented in P6-4.** See below |
+| **D22.3** | What happens to money captured twice, and to which instrument it returns                               | **LOCKED 2026-09-28. Implemented in P6-4.** See below |
+
+**D22.1 as built:** finalisation no longer returns on the order's status alone. It looks up the order's single succeeded payment — `payments_one_succeeded_per_order_idx` makes that a definite thing — and classifies: the same attempt again is an ordinary duplicate and is settled; a **different** attempt of the same order is recorded as `second_capture`; an order settled by nothing successful is recorded as `capture_without_settlement`. The latter two are left **unprocessed** on purpose, so the reconciler's own `payment_events_unprocessed_idx` finds them. No payment row is created, no status moves, no ticket is touched, and no migration was needed.
+
+**D22.2 — LOCKED 2026-09-28, implemented in P6-4.** A second capture gets **no payment row of its own**. No second `succeeded` payment, no synthetic row with a NULL provider reference, no new payment status, and **no migration**. `payments_one_succeeded_per_order_idx` is untouched. The second capture is represented **entirely by its `payment_event`**, flagged `second_capture` and left unprocessed — which is exactly what D22.1 already built.
+
+This is why the structural awkwardness noted on 2026-09-27 stands as a reason rather than a problem: a second capture cannot be a second `succeeded` payment, the unique index forbids it correctly, and representing it as a payment row at all would need a status meaning "captured and not applied" that `payments_status_valid` does not have. Recording it only on the event needs none of that.
+
+**D22.3 — LOCKED 2026-09-28, implemented in P6-4.** Money captured twice is **refunded in full to the original provider payment instrument**, consistent with D15a. The refund is raised against the attempt that took the _duplicate_ money, keyed `refund:event:<paymentEventId>:duplicate_capture` so that two genuine duplicate captures get two refunds and ten deliveries of one get one.
+
+It is an **invoked** action — `RefundsService.refundDuplicateCapture(paymentEventId)` — and never fires from a provider message. It acts only on an event this system itself classified `second_capture` (**I23**). The order stays `paid`, the tickets are untouched, and the order still has exactly one succeeded payment. **No order-outcome event is emitted**, because the order did not change (**I26**); the audit action is `payment.duplicate_capture_refunded`.
+
+#### D23 — late success after the order has expired
+
+The state: order `expired` · reservation and tickets already released.
+
+**Not equivalent to D21**, for two reasons. The tickets are gone by definition, so "finalise anyway" is not available at all. And `hv_orders_status_guard` **then** permitted no transition out of `expired`, deliberately — so unlike D21, some options here needed a migration to the order state machine. Option iv-b was chosen, and that migration is `0024`.
+
+| Option                                                         | Notes                                                                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **iv-a** Same policy as D21                                    | Only coherent if D21 chooses unfulfillable; the tickets are definitely gone here                                          |
+| **iv-b** Separate: `expired → paid_unfulfillable` — **CHOSEN** | Needs a **migration** to `hv_orders_status_guard`, which then treated `expired` as terminal. That migration is **`0024`** |
+| **iv-c** Leave `expired`, record the refund against it         | No order-status migration; the order's status then understates what happened                                              |
+
+**LOCKED 2026-09-28 — option iv-b. Implemented in P6-4.** The order moves `expired → paid_unfulfillable`, permitted by migration **`0024`**, which extends `hv_orders_status_guard` by **that one transition and no other** (**I22**). An **automatic full refund** goes to the original provider payment instrument. The tickets stay released — they were gone before the confirmation arrived. **The original payment attempt is not resurrected** (**I21**): a terminal attempt stays terminal, and only an attempt still `processing` is allowed to record that it took the money.
+
+**`expired` is therefore no longer a terminal order status.** That is a real loss of strictness, and migration `0024` says so in its own comment. What it buys is an order that can no longer assert a customer never paid when they did.
+
+**A `cancelled` order is deliberately not covered.** D23 answers the `expired` case only. A capture against a cancelled order stays classified `capture_without_settlement` and unprocessed, because **nobody has decided it** — see **I24**, and the reconciliation gap listed below.
+
+**P6-5 makes this reachable at volume**, because the expiry sweep it introduces is what creates the `expired` order in the first place.
+
+#### Still unresolved after these decisions
+
+Two things the 2026-09-28 lock deliberately did **not** settle. Neither blocks Phase 6, and neither may be decided by an implementer.
+
+| Gap                                                                      | State                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A capture against a `cancelled` order** (`capture_without_settlement`) | **OPEN — owner decision required.** Recorded, flagged and left unprocessed so the reconciler finds it. D23 covers `expired` only, and extending it to `cancelled` would be inventing policy (**I24**) |
+| **Retrying a refund obligation left at `raised`**                        | **Not open — scheduled.** The obligation is visible through `refunds_unsettled_idx`; the job that retries it is **P6-5** (**I25**). Until it exists, the index is the only thing that surfaces one    |
 
 ### Deferred beyond Phase 6 by design
 

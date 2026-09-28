@@ -262,6 +262,33 @@ export interface Permissions {
   description: string;
 }
 
+export interface Refunds {
+  /**
+   * NULL for a refund the system raised with no human involved, which is every refund Phase 6 writes (D15b).
+   */
+  actor_id: string | null;
+  amount_minor: number;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  /**
+   * Where the money goes. Phase 6 writes only 'provider' — back to the instrument it came from (D15a).
+   */
+  destination: Generated<string>;
+  id: Generated<string>;
+  /**
+   * Derived deterministically from what is being refunded (an order, or a provider event), so a repeated webhook or reconciliation action writes one row and the provider issues one refund.
+   */
+  idempotency_key: string;
+  market_id: string;
+  order_id: string;
+  payment_id: string | null;
+  provider: string;
+  provider_refund_reference: string | null;
+  reason: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Reservations {
   created_at: Generated<Timestamp>;
   currency: string;
@@ -397,6 +424,7 @@ export interface DB {
   payment_events: PaymentEvents;
   payments: Payments;
   permissions: Permissions;
+  refunds: Refunds;
   reservations: Reservations;
   role_permissions: RolePermissions;
   roles: Roles;

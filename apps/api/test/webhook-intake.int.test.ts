@@ -622,18 +622,23 @@ describe('receiving a provider webhook', () => {
       await deliverEvent(body);
 
       const [event] = await eventsFor(body.id);
-      // Unsettled on purpose: it should move an order, and moving one is P6-4's.
-      expect(event!.processed_at).toBeNull();
+      // Settled by finalisation, in the same transaction as the change it
+      // describes. Before P6-4 this was left waiting, because intake had
+      // nothing to hand it to.
+      expect(event!.processed_at).not.toBeNull();
       expect(event!.last_error).toBeNull();
-      // And P6-3 did not move it.
-      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+      expect(await orderStatus(order.id)).toBe('paid');
     });
   });
 
-  // ---- P6-3 finalises nothing ---------------------------------------------
+  // ---- intake decides nothing itself --------------------------------------
+  //
+  // P6-4 gave intake somewhere to hand an actionable event, so an order does
+  // now move — but only through finalisation, and only for an event that says
+  // the payment succeeded. Everything else still changes nothing.
 
-  describe('intake finalises nothing', () => {
-    it('sells no ticket and moves no order, however the event reads', async () => {
+  describe('intake decides nothing itself', () => {
+    it('sells no ticket and moves no order for a status that decides nothing', async () => {
       const soldBefore = Number(
         (
           await h.sql.query<{ n: number }>(
@@ -642,7 +647,10 @@ describe('receiving a provider webhook', () => {
         ).rows[0]!.n,
       );
 
-      for (const state of ['succeeded', 'failed', 'expired'] as const) {
+      // A failed or expired provider status is recorded and acted on by
+      // nothing: the customer may still pay, so the order stays payable.
+      // Announcing those outcomes is P6-5's and P6-6's.
+      for (const state of ['failed', 'expired'] as const) {
         const { order, reference } = await readyAttempt(2);
         await deliverEvent(eventBody({ reference, state, amountMinor: 500 }));
         expect(await orderStatus(order.id)).toBe('awaiting_payment');
@@ -658,22 +666,22 @@ describe('receiving a provider webhook', () => {
       expect(soldAfter).toBe(soldBefore);
     });
 
-    it('leaves the payment attempt where it was', async () => {
+    it('leaves the payment attempt alone when the event decides nothing', async () => {
       const { payment, reference } = await readyAttempt(2);
-      await deliverEvent(eventBody({ reference, amountMinor: 500 }));
+      await deliverEvent(eventBody({ reference, state: 'processing', amountMinor: 500 }));
       const { rows } = await h.sql.query<{ status: string }>(
         `SELECT status FROM payments WHERE id = $1`,
         [payment.id],
       );
-      // Confirming a payment is finalisation's job, and it has not run.
       expect(rows[0]!.status).toBe('processing');
     });
 
-    it('writes no outbox event', async () => {
+    it('writes no outbox event for a mismatched amount', async () => {
       const before = await outboxCount();
       const { reference } = await readyAttempt(2);
-      await deliverEvent(eventBody({ reference, amountMinor: 500 }));
-      // Announcing an outcome belongs with deciding one (P6-4).
+      // Perfectly signed, and refused: nothing is announced because nothing
+      // happened.
+      await deliverEvent(eventBody({ reference, amountMinor: 1 }));
       expect(await outboxCount()).toBe(before);
     });
   });
@@ -703,13 +711,21 @@ describe('receiving a provider webhook', () => {
       }
     });
 
-    it('registers no Phase 6 topic in the outbox yet', async () => {
-      const { rows } = await h.sql.query<{ topic: string }>(
-        `SELECT DISTINCT topic FROM outbox WHERE topic LIKE 'order.%' OR topic LIKE '%refund%'`,
-      );
-      // P6-3 writes none of them; a row here would mean intake had started
-      // announcing outcomes it does not decide.
-      expect(rows).toEqual([]);
+    it('writes only names from the locked vocabulary, and no refund topic', async () => {
+      const { order, reference } = await readyAttempt(2);
+      await deliverEvent(eventBody({ reference, amountMinor: 500 }));
+      expect(await orderStatus(order.id)).toBe('paid');
+
+      const { rows } = await h.sql.query<{ topic: string }>(`SELECT DISTINCT topic FROM outbox`);
+      const written = rows.map((r) => r.topic).filter((t) => t !== 'email.verification_code');
+      // Gate 4.11: every topic this phase emits is one of the four, none is
+      // about a refund completing, and none is under payment.*.
+      expect(written.length).toBeGreaterThan(0);
+      for (const topic of written) {
+        expect(ORDER_OUTCOME_TOPICS).toContain(topic);
+        expect(topic).not.toContain('refund');
+        expect(topic.startsWith('payment.')).toBe(false);
+      }
     });
   });
 

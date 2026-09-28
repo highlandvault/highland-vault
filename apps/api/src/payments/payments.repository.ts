@@ -87,6 +87,23 @@ export class PaymentsRepository {
     return row ? toPayment(row) : null;
   }
 
+  /**
+   * The attempt that succeeded for this order, or null.
+   *
+   * There can only ever be one: `payments_one_succeeded_per_order_idx` makes
+   * that structural, which is what lets this return a single row rather than a
+   * list and lets a caller treat "the settling payment" as a definite thing.
+   */
+  async findSucceededForOrder(db: DbExecutor, orderId: string): Promise<PaymentRecord | null> {
+    const row = await db
+      .selectFrom('payments')
+      .select(PAYMENT_COLUMNS)
+      .where('order_id', '=', orderId)
+      .where('status', '=', 'succeeded')
+      .executeTakeFirst();
+    return row ? toPayment(row) : null;
+  }
+
   async findByIdempotencyKey(db: DbExecutor, key: string): Promise<PaymentRecord | null> {
     const row = await db
       .selectFrom('payments')
