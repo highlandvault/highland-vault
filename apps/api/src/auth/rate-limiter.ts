@@ -42,6 +42,27 @@ export const RATE_LIMITS = {
   // live attempt per order is a partial unique index, not a counter. This
   // bounds the cost of asking.
   paymentsPerOwner: { name: 'payments-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Reading a payment's status, per checkout identity (B19 "endpoint abuse",
+  // Phase 6 P6-5). Keyed the same way as payment initiation, so a customer and
+  // the order they are paying for share one bucket however they identified.
+  //
+  // **Higher than the limits above, and for a different reason.** Those bound
+  // how often a customer may START something. This bounds how often they may
+  // ASK — and asking is a page refresh, so the honest ceiling is generous.
+  //
+  // It is here because the status route may make a TRUSTED PROVIDER STATUS
+  // CHECK (OD-5), which is a network call to the provider on our merchant
+  // account. Without a limit one customer polling their own order could spend
+  // the provider's rate budget and degrade payments for everybody else. The
+  // limit is what bounds that, not any assumption about how often a browser
+  // chooses to poll: P6-8's return page polls by design, and a client-side
+  // interval is a courtesy, never a control.
+  //
+  // 120 in 10 minutes is one request every 5 seconds sustained, which is
+  // comfortably above any sensible poll and far below a budget-exhausting
+  // loop. An attempt only lives 120 seconds (D3a), so a single attempt can
+  // cost at most a fraction of this.
+  paymentStatusPerOwner: { name: 'payment-status-owner', limit: 120, windowSeconds: 10 * 60 },
   // Guest verification codes per address per hour (ADR-0020). Keyed on the
   // address so one inbox cannot be flooded from many sessions.
   verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },

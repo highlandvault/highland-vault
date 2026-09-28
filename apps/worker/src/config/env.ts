@@ -32,13 +32,34 @@ export const WorkerEnvSchema = z
       .string()
       .regex(/^[A-Za-z0-9_-]{1,32}$/)
       .default('k1'),
+
+    // The API's internal listener (P6-5, K-a). The reconciler calls it; the
+    // API owns the provider call, so THESE ARE THE ONLY PAYMENT-RELATED
+    // SETTINGS THE WORKER EVER HOLDS. No provider secret reaches this process,
+    // and a test asserts that this schema has no key that could carry one.
+    //
+    // Optional here so development and the existing tests run without them, in
+    // which case the reconciler is simply not scheduled. Production requires
+    // both (below), because a production worker that cannot reconcile would
+    // leave customers' stuck payments blocking their own retries.
+    INTERNAL_API_URL: z
+      .url()
+      .refine((v) => /^https?:\/\//.test(v), 'must be an http:// or https:// URL')
+      .optional(),
+    INTERNAL_API_TOKEN: z.string().min(32).max(256).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
     // Fail closed: a production worker without mail configuration would accept
     // verification events it can never deliver. O14 has not chosen a provider,
     // so this is the gate that stops it shipping unnoticed.
-    for (const key of ['SMTP_URL', 'MAIL_FROM', 'OUTBOX_ENCRYPTION_KEY'] as const) {
+    for (const key of [
+      'SMTP_URL',
+      'MAIL_FROM',
+      'OUTBOX_ENCRYPTION_KEY',
+      'INTERNAL_API_URL',
+      'INTERNAL_API_TOKEN',
+    ] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production' });
       }

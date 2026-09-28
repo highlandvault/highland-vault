@@ -50,6 +50,12 @@ export const E2E_API_ENV = {
   // Required since P5-4, because the API seals verification codes. A local
   // placeholder, which production refuses.
   OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
+  // Required since P6-5: the API opens its internal reconciliation listener at
+  // startup and will not boot without a token. A dedicated port so a running
+  // `pnpm dev` (4001) is never bound twice, and the local placeholder, which
+  // production refuses.
+  INTERNAL_API_TOKEN: 'x'.repeat(32),
+  INTERNAL_API_PORT: '4101',
   RESERVATION_TTL_SECONDS: String(E2E_RESERVATION_TTL_SECONDS),
 } as const;
 

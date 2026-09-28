@@ -129,6 +129,25 @@ export class RefundsService {
     }
     const refund = await this.refunds.findById(this.db, refundId);
     if (!refund || refund.status !== 'raised') return;
+    if (this.provider.code !== refund.provider) {
+      // The refund names a provider that is not the one configured here, so
+      // the money did not come from the instrument this process can reach.
+      // Sending it anyway would ask the wrong provider to return somebody
+      // else's money — so nothing is called and the row stays `raised`, which
+      // is the truth: it is still owed, by a provider this deployment cannot
+      // currently talk to.
+      //
+      // Unreachable while O13 leaves exactly one provider configured. It is
+      // here because P6-7 introduces `market_payment_configs` and per-market
+      // providers, at which point it stops being unreachable. The reconciler
+      // already makes the same check against the payment it is about to ask
+      // after (`payments-reconcile.service.ts`), and the two should not
+      // disagree about whether provider identity matters.
+      this.logger.error(
+        `refund ${refund.id} is for provider ${refund.provider}, not ${this.provider.code}`,
+      );
+      return;
+    }
     if (!refund.paymentId) {
       this.logger.error(`refund ${refund.id} has no payment to return money to`);
       return;
@@ -154,10 +173,45 @@ export class RefundsService {
       });
     } catch (error) {
       const kind = error instanceof PaymentProviderError ? error.kind : 'unknown';
+      if (kind === 'provider_rejected') {
+        // K-2: the provider understood the request and refused it. That is an
+        // answer, not a failure to ask, and repeating it verbatim would get the
+        // same refusal forever — the port says as much: "not retryable without
+        // changing something". So the obligation becomes terminal and goes to
+        // a person. No new key is generated and no second row is raised; what
+        // should happen next is an operator policy that does not exist yet.
+        await this.refunds.settle(this.db, refund.id, { status: 'failed' });
+        this.logger.error(`refund ${refund.id} was refused by the provider`);
+        return;
+      }
       // Left `raised`, deliberately. A refund we could not make is not a refund
-      // that failed — it is one still owed.
+      // that failed — it is one still owed, and `refunds_unsettled_idx` finds
+      // it for the retry sweep.
       this.logger.error(`refund ${refund.id} could not be sent: ${kind}`);
     }
+  }
+
+  /**
+   * Retries every refund still owed (K-2, I25).
+   *
+   * `raised` means the money has not gone back yet and somebody is owed it.
+   * Each attempt reuses the row's **own deterministic key**, so however many
+   * times this runs the customer is refunded once: the key is unique in our
+   * table and idempotent at the provider (B10).
+   *
+   * Nothing new is ever raised here. A refund that the provider refused is
+   * `failed` and terminal, and this does not see it — `refunds_unsettled_idx`
+   * is partial on `status = 'raised'` precisely so that the work outstanding
+   * and the work finished cannot be confused.
+   */
+  async retryUnsettled(limit = 100): Promise<{ attempted: number }> {
+    const { rows } = await sql<{ id: string }>`
+      SELECT id FROM refunds WHERE status = 'raised' ORDER BY created_at LIMIT ${limit}
+    `.execute(this.db);
+    // Sequential, and each one swallows its own failure: a provider that is
+    // down for one refund says nothing about the next, and `send` never throws.
+    for (const row of rows) await this.send(row.id);
+    return { attempted: rows.length };
   }
 
   /** The event, if it is a capture this system flagged as a duplicate. */

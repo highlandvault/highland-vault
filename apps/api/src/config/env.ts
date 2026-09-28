@@ -6,6 +6,9 @@ const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'
 /** The local-development placeholder in .env.example. Refused in production. */
 export const DEV_PLACEHOLDER_MFA_KEY = '0'.repeat(64);
 
+/** The local-development internal-listener token in .env.example. Refused in production. */
+export const DEV_PLACEHOLDER_INTERNAL_TOKEN = 'x'.repeat(32);
+
 const booleanString = z
   .enum(['true', 'false'], { message: 'must be "true" or "false"' })
   .transform((value) => value === 'true');
@@ -23,6 +26,30 @@ export const ApiEnvSchema = z
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+
+    /**
+     * The internal listener (P6-5, owner decision K-a).
+     *
+     * A second socket, serving one route, which the worker's reconciler calls.
+     * It is separate from the public listener rather than hidden behind a path
+     * rule on it, so the customer session pipeline and the CSRF origin hook are
+     * not merely bypassed for it — they were never attached to it. A cookie
+     * cannot authenticate here because nothing here reads cookies.
+     *
+     * The default host is loopback. A deployment that needs it reachable from a
+     * sibling container sets this, and is then responsible for the network
+     * boundary; the token below is required either way and is never the only
+     * thing standing between the internet and this port.
+     */
+    INTERNAL_API_HOST: z.string().min(1).default('127.0.0.1'),
+    /** 0 asks the operating system for a free port. Tests use it; nothing else should. */
+    INTERNAL_API_PORT: z.coerce.number().int().min(0).max(65535).default(4001),
+    /**
+     * The shared secret the worker presents. At least 32 bytes, compared in
+     * constant time, and refused in production if it is the placeholder or has
+     * no entropy — the same treatment MFA_ENCRYPTION_KEY gets.
+     */
+    INTERNAL_API_TOKEN: z.string().min(32).max(256),
     DATABASE_URL: z.url().refine((v) => /^postgres(ql)?:\/\//.test(v), 'must be a postgres:// URL'),
     REDIS_URL: z
       .url()
@@ -169,6 +196,29 @@ export const ApiEnvSchema = z
         code: 'custom',
         path: ['FAKE_PAYMENT_WEBHOOK_SECRET'],
         message: 'must not be set in production: there is no fake payment provider there',
+      });
+    }
+    // The internal listener's token (K-a). The placeholder and any repeating
+    // pattern are refused for the same reason the keys below are: a secret that
+    // ships in an example file is a secret everybody has. Length is already
+    // enforced by the schema; this catches 32 bytes of nothing.
+    if (
+      env.INTERNAL_API_TOKEN === DEV_PLACEHOLDER_INTERNAL_TOKEN ||
+      /^(..)\1+$/.test(env.INTERNAL_API_TOKEN)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INTERNAL_API_TOKEN'],
+        message: 'must be a real random secret in production, not the placeholder',
+      });
+    }
+    // Asking the operating system for a port is a testing convenience. In
+    // production the worker has to be told a fixed one.
+    if (env.INTERNAL_API_PORT === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INTERNAL_API_PORT'],
+        message: 'must be a fixed port in production, not 0',
       });
     }
     const key = env.MFA_ENCRYPTION_KEY.toLowerCase();

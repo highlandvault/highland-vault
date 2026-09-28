@@ -173,7 +173,22 @@ export class TicketsRepository {
     };
   }
 
-  /** Expires due reservations (of one draw, or all). Own transaction per call. */
+  /**
+   * Expires due reservations (of one draw, or all). Own transaction per call.
+   *
+   * **No provider status check happens first (D11a = B).** B9's safety rule
+   * would have consulted the provider before expiring a hold whose order has a
+   * payment in flight; it is not implemented, because under **D1 = B** it
+   * could never fire. An order's deadline is `min(created_at + 600s, earliest
+   * reservation expiry − 90s)`, so a hold outlives its order's payability by at
+   * least the 90-second margin, and **D10 = B** independently makes
+   * `hv_tickets_guard` refuse a sale from a hold that is not live.
+   *
+   * **Re-evaluate if that relationship changes** — a smaller
+   * `PAYMENT_MARGIN_SECONDS`, or a deadline no longer derived from the earliest
+   * reservation expiry, brings the case back. The same note is on the worker's
+   * sweep in `reservation-expiry.ts`, which is the other caller.
+   */
   async expireDue(db: DbExecutor, drawId: string | null, limit: number): Promise<number> {
     const { rows } = await sql<{
       expired: number;
