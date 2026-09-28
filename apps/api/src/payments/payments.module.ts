@@ -7,9 +7,12 @@ import { AuditModule } from '../audit/audit.module';
 import { OrdersModule } from '../orders/orders.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { PAYMENT_PROVIDER, createPaymentProvider } from './payment-provider.factory';
+import { AdminPaymentsController } from './admin-payments.controller';
+import { AdminPaymentsService } from './admin-payments.service';
 import { PaymentFinalizationService } from './payment-finalization.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
+import { PaymentsReconcileService } from './payments-reconcile.service';
 import { PaymentsService } from './payments.service';
 import { RefundsRepository } from './refunds.repository';
 import { RefundsService } from './refunds.service';
@@ -27,11 +30,13 @@ import { RefundsService } from './refunds.service';
  */
 @Module({
   imports: [AuditModule, AuthModule, GuestsModule, MarketsModule, OrdersModule, TicketsModule],
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, AdminPaymentsController],
   providers: [
+    AdminPaymentsService,
     PaymentsRepository,
     PaymentsService,
     PaymentFinalizationService,
+    PaymentsReconcileService,
     RefundsRepository,
     RefundsService,
     {
@@ -47,6 +52,7 @@ import { RefundsService } from './refunds.service';
     PaymentsRepository,
     PaymentsService,
     PaymentFinalizationService,
+    PaymentsReconcileService,
     RefundsRepository,
     RefundsService,
     PAYMENT_PROVIDER,

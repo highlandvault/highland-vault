@@ -10,6 +10,7 @@ import { SecretBox } from '@hv/domain';
 import type { Queue, Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { WORKER_ENV, type WorkerEnv } from '../config/env';
+import { orderOutcomeHandlers } from './order-outcomes';
 import { UnconfiguredMailer, type MailPort } from '../mail/mail.port';
 import { SmtpMailer } from '../mail/smtp-mailer';
 import {
@@ -45,6 +46,32 @@ import {
  * existing tests run without SMTP; a worker without it refuses to send rather
  * than appearing to work, and production refuses to start at all (config).
  */
+/**
+ * **The dispatcher's registration, as it actually ships.**
+ *
+ * Every topic this worker can handle is named here and nowhere else, so the
+ * live map is a value a test can hold rather than a local inside a lifecycle
+ * hook. That matters because an unregistered topic FAILS its event
+ * (`createTopicDispatcher`): a missing entry is not a feature that quietly does
+ * nothing, it is a queue that stops. G4.11 asserts against this function.
+ *
+ * All four `order.*` topics are registered together (K-4). P6-4 began writing
+ * two of them before anything accepted them, and those events failed and backed
+ * off from the moment it merged — which is exactly the failure this shape is
+ * meant to make impossible to reintroduce silently.
+ */
+export function outboxHandlers(
+  relay: OutboxHandler,
+  logger?: Parameters<typeof orderOutcomeHandlers>[0],
+): Record<string, OutboxHandler> {
+  return {
+    [VERIFICATION_EMAIL_TOPIC]: relay,
+    // See order-outcomes.ts for what these do and, more importantly, what they
+    // deliberately do not do.
+    ...orderOutcomeHandlers(logger),
+  };
+}
+
 @Injectable()
 export class OutboxService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxService.name);
@@ -66,7 +93,7 @@ export class OutboxService implements OnApplicationBootstrap, OnModuleDestroy {
 
     this.outboxQueue = createOutboxQueue(this.redis);
     const relay = createNotificationRelay(this.notificationsQueue);
-    const handlers: Record<string, OutboxHandler> = { [VERIFICATION_EMAIL_TOPIC]: relay };
+    const handlers = outboxHandlers(relay, { log: (message) => this.logger.log(message) });
     this.outboxWorker = createOutboxWorker({
       connection: this.redis,
       db: this.db,

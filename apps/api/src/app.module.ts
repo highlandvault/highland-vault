@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { DrawsModule } from './draws/draws.module';
 import { GuestsModule } from './guests/guests.module';
 import { HealthController } from './health/health.controller';
+import { InternalModule } from './internal/internal.module';
 import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
 import { RbacModule } from './rbac/rbac.module';
@@ -67,6 +68,7 @@ export class AppModule {
         OrdersModule,
         PaymentsModule,
         WebhooksModule,
+        InternalModule,
       ],
       controllers: [HealthController],
       providers: [

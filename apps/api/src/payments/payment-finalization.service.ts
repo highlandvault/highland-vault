@@ -81,13 +81,28 @@ export type RefusalReason =
 
 /** What finalisation is asked to act on: a verified, stored provider claim. */
 export interface ConfirmationClaim {
-  /** The `payment_events` row this came from, so it can be settled with the rest. */
-  readonly eventId: string;
+  /**
+   * The `payment_events` row this came from, so it can be settled with the rest.
+   *
+   * **NULL for a trusted status check** (P6-5): the reconciler asked the
+   * provider directly and there is no delivery to settle. Synthesising an event
+   * row would be worse than none — `UNIQUE (provider, provider_event_id)` is
+   * the phase's replay protection, and filling it with rows the provider never
+   * sent would weaken the one thing that makes a duplicate webhook a no-op.
+   */
+  readonly eventId: string | null;
   readonly paymentId: string;
   /** What the provider says happened, normalised. Only `succeeded` finalises anything. */
   readonly state: string;
   readonly amountMinor: number;
   readonly currency: string;
+}
+
+/** Where a claim came from, for a log line. Never a provider reference. */
+function describeClaim(claim: ConfirmationClaim): string {
+  return claim.eventId === null
+    ? `status check for payment ${claim.paymentId}`
+    : `event ${claim.eventId}`;
 }
 
 /**
@@ -400,7 +415,7 @@ export class PaymentFinalizationService {
     // B. A different attempt, and the order is already paid for. Two captures.
     if (settlingPayment) {
       this.logger.error(
-        `possible second capture on order ${order.id}: event ${claim.eventId} names payment ` +
+        `possible second capture on order ${order.id}: ${describeClaim(claim)} names payment ` +
           `${payment.id}, but the order was settled by ${settlingPayment.id}`,
       );
       await this.flagEvent(trx, claim.eventId, 'second_capture');
@@ -438,7 +453,7 @@ export class PaymentFinalizationService {
     // to do with money against an order somebody cancelled would be inventing
     // policy rather than applying it.
     this.logger.error(
-      `capture with no settlement on order ${order.id} (${order.status}): event ${claim.eventId}`,
+      `capture with no settlement on order ${order.id} (${order.status}): ${describeClaim(claim)}`,
     );
     await this.flagEvent(trx, claim.eventId, 'capture_without_settlement');
     return {
@@ -607,7 +622,7 @@ export class PaymentFinalizationService {
       order: { id: string; orderNumber: string; marketId: string };
       action: 'order.paid' | 'order.paid_unfulfillable';
       topic: string;
-      eventId: string;
+      eventId: string | null;
       reason: string | null;
     },
   ): Promise<void> {
@@ -636,7 +651,7 @@ export class PaymentFinalizationService {
     claim: ConfirmationClaim,
     reason: RefusalReason,
   ): Promise<FinalizationOutcome> {
-    this.logger.warn(`refused to finalise event ${claim.eventId}: ${reason}`);
+    this.logger.warn(`refused to finalise ${describeClaim(claim)}: ${reason}`);
     await this.settleEvent(trx, claim.eventId, reason);
     return { kind: 'refused', reason };
   }
@@ -653,7 +668,11 @@ export class PaymentFinalizationService {
    * `hv_payment_events_guard` lets `last_error` move freely and never lets the
    * event itself change, so this needs no schema of its own.
    */
-  private async flagEvent(trx: DbExecutor, eventId: string, reason: string): Promise<void> {
+  private async flagEvent(trx: DbExecutor, eventId: string | null, reason: string): Promise<void> {
+    // A trusted status check has no delivery to flag. The outcome is still
+    // returned and logged; there is simply nothing to write it on, and a
+    // second capture reaches us as a webhook in any case.
+    if (eventId === null) return;
     await sql`
       UPDATE payment_events SET last_error = ${reason}
        WHERE id = ${eventId}::uuid AND processed_at IS NULL
@@ -668,9 +687,11 @@ export class PaymentFinalizationService {
    */
   private async settleEvent(
     trx: DbExecutor,
-    eventId: string,
+    eventId: string | null,
     reason: string | null,
   ): Promise<void> {
+    // Nothing arrived, so nothing is owed on anything. See `ConfirmationClaim`.
+    if (eventId === null) return;
     await sql`
       UPDATE payment_events SET processed_at = now(), last_error = ${reason}
        WHERE id = ${eventId}::uuid AND processed_at IS NULL

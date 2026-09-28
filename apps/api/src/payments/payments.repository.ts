@@ -17,6 +17,13 @@ export interface PaymentRecord {
   readonly expiresAt: Date;
   readonly failureCode: string | null;
   readonly createdAt: Date;
+  /**
+   * When the row last changed — which, for this table, is when its STATUS last
+   * changed. Every statement that updates a payment is a conditional status
+   * transition, so a no-op matches no row and the trigger never fires. That is
+   * what makes this D12a's "last state change", and it is asserted by a test.
+   */
+  readonly updatedAt: Date;
 }
 
 const PAYMENT_COLUMNS = [
@@ -32,6 +39,7 @@ const PAYMENT_COLUMNS = [
   'expires_at',
   'failure_code',
   'created_at',
+  'updated_at',
 ] as const;
 
 @Injectable()
@@ -232,6 +240,7 @@ interface PaymentRow {
   expires_at: Date;
   failure_code: string | null;
   created_at: Date;
+  updated_at: Date;
 }
 
 function toPayment(row: PaymentRow): PaymentRecord {
@@ -248,5 +257,6 @@ function toPayment(row: PaymentRow): PaymentRecord {
     expiresAt: row.expires_at,
     failureCode: row.failure_code,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

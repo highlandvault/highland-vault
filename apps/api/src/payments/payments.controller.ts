@@ -1,9 +1,11 @@
-import { Body, Controller, Headers, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import {
   CreatePaymentRequestSchema,
   OrderIdParamSchema,
+  PaymentIdParamSchema,
   type CreatePaymentRequest,
   type PaymentResponse,
+  type PaymentStatusResponse,
 } from '@hv/contracts';
 import { z } from 'zod';
 import { checkoutIdentity } from '../cart/checkout-identity';
@@ -22,6 +24,7 @@ import { Public } from '../rbac/access';
 import { PaymentsService } from './payments.service';
 
 const OrderParam = new ZodValidationPipe(OrderIdParamSchema);
+const PaymentParam = new ZodValidationPipe(PaymentIdParamSchema);
 /** B5: every mutating endpoint accepts an Idempotency-Key. Here it is required. */
 const IdempotencyKey = z.string().trim().min(8).max(255);
 
@@ -64,6 +67,31 @@ export class PaymentsController {
     }
     const identity = checkoutIdentity(auth, guest);
     const payment = await this.payments.initiate(market, identity, params.order, key.data);
+    return { payment };
+  }
+
+  /**
+   * Where an attempt stands (§18).
+   *
+   * A read, so it is a GET and carries no idempotency key. It may cause a
+   * trusted status check and therefore a finalisation, which is why it is here
+   * rather than being served from a cache — but it never reports an outcome
+   * the database has not already committed.
+   *
+   * OD-2's order access token, which will also open this route, arrives with
+   * `order_access_tokens` in P6-8. Until it exists the ownership rules are
+   * exactly the ones checkout already applies.
+   */
+  @Get(':payment')
+  @Public({ identify: true })
+  async status(
+    @Param(PaymentParam) params: { order: string; payment: string },
+    @CurrentMarket() market: MarketContext,
+    @OptionalAuth() auth: AuthContext | null,
+    @CurrentGuest() guest: GuestContext | null,
+  ): Promise<PaymentStatusResponse> {
+    const identity = checkoutIdentity(auth, guest);
+    const payment = await this.payments.status(market, identity, params.order, params.payment);
     return { payment };
   }
 }

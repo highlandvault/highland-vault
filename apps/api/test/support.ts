@@ -9,7 +9,11 @@ import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { createApp } from '../src/app';
 import { base32Decode, hotp, totpStep } from '../src/auth/totp';
-import { DEV_PLACEHOLDER_MFA_KEY, parseApiEnv } from '../src/config/env';
+import {
+  DEV_PLACEHOLDER_INTERNAL_TOKEN,
+  DEV_PLACEHOLDER_MFA_KEY,
+  parseApiEnv,
+} from '../src/config/env';
 
 export const WEB_ORIGIN = 'http://127.0.0.1:3000';
 export const PASSWORD = 'correct horse battery staple';
@@ -65,6 +69,10 @@ export async function startApp(
     // The fake payment provider (ADR-0006). Present here and refused in
     // production, where there is no fake provider and no chosen one either.
     FAKE_PAYMENT_WEBHOOK_SECRET: 'integration-test-webhook-secret',
+    // The internal listener (K-a). Port 0 asks the operating system for a
+    // free one, so many test apps can run at once without fighting over 4001.
+    INTERNAL_API_TOKEN: DEV_PLACEHOLDER_INTERNAL_TOKEN,
+    INTERNAL_API_PORT: '0',
     ...overrides,
   });
   const app = await createApp(env);

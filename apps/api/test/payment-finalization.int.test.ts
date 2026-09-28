@@ -1216,20 +1216,35 @@ describe('finalising a payment', () => {
       ).rejects.toThrow(/refund status cannot change/);
     });
 
-    it('stays raised when the provider will not make it, rather than lying', async () => {
-      // The provider never saw this payment complete, so it refuses. The
-      // decision is already durable; the row stays `raised` and
-      // `refunds_unsettled_idx` is what finds it.
+    it('goes terminal when the provider refuses it outright', async () => {
+      // **Updated for K-2 (2026-09-28).** This test previously asserted that
+      // the row stayed `raised` here, because P6-4 treated every provider error
+      // the same way. The owner then separated them: a provider that could not
+      // be REACHED leaves money still owed and is retried with the same key,
+      // while one that understood and REFUSED has given an answer, and
+      // repeating it verbatim would earn the same refusal forever.
+      //
+      // This is the second case. The provider never saw this payment complete,
+      // so it refuses — `provider_rejected`, which the port itself documents as
+      // "not retryable without changing something". The refund becomes terminal
+      // and goes to a person; what happens next is an operator policy that does
+      // not exist yet and is deliberately not invented.
+      //
+      // The first case — an unreachable provider, which must stay `raised` —
+      // is covered in refund-retry.int.test.ts.
       const { order, reference, reservationIds } = await readyToPay(2);
       await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
       await deliver(successBody(order, reference));
 
       const [refund] = await refundRows(order.id);
-      expect(refund!.status).toBe('raised');
+      expect(refund!.status).toBe('failed');
+      // No money moved, so no reference was ever named.
       expect(refund!.provider_refund_reference).toBeNull();
-      // And the order outcome still stands: a refund we could not send is one
-      // still owed, not one that failed to be decided.
+      // And the order outcome stands regardless. What the provider said about
+      // the refund has no bearing on what the order records about the customer.
       expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      // Exactly one row. A refusal never produces a second attempt or key.
+      expect(await refundRows(order.id)).toHaveLength(1);
     });
 
     it('gives hv_app no way to erase one', async () => {

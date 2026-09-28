@@ -1,6 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { DEV_PLACEHOLDER_MFA_KEY, EnvValidationError, parseApiEnv } from './env';
+import {
+  DEV_PLACEHOLDER_INTERNAL_TOKEN,
+  DEV_PLACEHOLDER_MFA_KEY,
+  EnvValidationError,
+  parseApiEnv,
+} from './env';
 
 const valid = {
   DATABASE_URL: 'postgres://hv_app:secret@127.0.0.1:5432/highland_vault',
@@ -11,6 +16,9 @@ const valid = {
   // Required since P5-4: the API seals verification codes with it, so a boot
   // without it would only fail later, one request at a time.
   OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
+  // Required since P6-5: the internal listener will not open without it, and
+  // a boot that skipped it would leave the reconciler unable to reach the API.
+  INTERNAL_API_TOKEN: DEV_PLACEHOLDER_INTERNAL_TOKEN,
 };
 
 const production = {
@@ -20,6 +28,7 @@ const production = {
   // Generated per run: no key-like literal ever lands in the repository.
   MFA_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
   OUTBOX_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
+  INTERNAL_API_TOKEN: randomBytes(24).toString('hex'),
 };
 
 describe('parseApiEnv', () => {
@@ -132,6 +141,44 @@ describe('parseApiEnv', () => {
       expect(() =>
         parseApiEnv({ ...production, FAKE_PAYMENT_WEBHOOK_SECRET: 'x'.repeat(32) }),
       ).toThrow(/FAKE_PAYMENT_WEBHOOK_SECRET: must not be set in production/);
+    });
+
+    it('refuses a placeholder internal-listener token (K-a)', () => {
+      // The token is the credential on the internal reconciliation route. A
+      // placeholder that ships in .env.example is a secret everybody has, so
+      // production refuses it the way it refuses the MFA key's placeholder.
+      expect(() =>
+        parseApiEnv({ ...production, INTERNAL_API_TOKEN: DEV_PLACEHOLDER_INTERNAL_TOKEN }),
+      ).toThrow(/INTERNAL_API_TOKEN: must be a real random secret in production/);
+      // 32 bytes of nothing is long enough for the schema and still not a secret.
+      expect(() => parseApiEnv({ ...production, INTERNAL_API_TOKEN: 'ab'.repeat(20) })).toThrow(
+        /INTERNAL_API_TOKEN: must be a real random secret in production/,
+      );
+    });
+
+    it('requires an internal-listener token of at least 32 bytes', () => {
+      const { INTERNAL_API_TOKEN: _omitted, ...without } = production;
+      expect(() => parseApiEnv(without)).toThrow(/INTERNAL_API_TOKEN/);
+      expect(() => parseApiEnv({ ...production, INTERNAL_API_TOKEN: 'short' })).toThrow(
+        /INTERNAL_API_TOKEN/,
+      );
+    });
+
+    it('refuses an ephemeral internal port in production', () => {
+      // Port 0 asks the operating system for whatever is free, which is a
+      // testing convenience. A worker has to be told a fixed one.
+      expect(() => parseApiEnv({ ...production, INTERNAL_API_PORT: '0' })).toThrow(
+        /INTERNAL_API_PORT: must be a fixed port in production/,
+      );
+    });
+
+    it('defaults the internal listener to loopback', () => {
+      // The network boundary belongs to the deployment; the default must not
+      // quietly expose the port if nobody sets one.
+      expect(parseApiEnv(production)).toMatchObject({
+        INTERNAL_API_HOST: '127.0.0.1',
+        INTERNAL_API_PORT: 4001,
+      });
     });
 
     it('accepts the locked payment values', () => {
