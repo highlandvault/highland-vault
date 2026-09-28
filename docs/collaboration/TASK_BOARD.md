@@ -1,6 +1,6 @@
 # Task Board
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-28_
 
 The shared view of every task and its state. It answers the question for a new developer or Claude session: **"What am I supposed to work on?"**
 
@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                                   | Owner             | Branch                          | Dependencies | Area                                   | Issue / PR | Notes                                                                                                     |
-| ---- | -------------------------------------- | ----------------- | ------------------------------- | ------------ | -------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------- |
-| P5-8 | Phase 5 integration and gate hardening | Divyanshu (owner) | `feature/p5-8-phase5-hardening` | P5-7         | `packages/db` (0017, 0018), `apps/api` | none yet   | ADR-0021 cap bridging, B19 checkout limit, integrated journeys. Closes Phase 5. Next free migration: 0019 |
+| ID   | Task                             | Owner             | Branch                               | Dependencies | Area                                                 | Issue / PR | Notes                                                                                                                    |
+| ---- | -------------------------------- | ----------------- | ------------------------------------ | ------------ | ---------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| P6-7 | Per-market payment configuration | Divyanshu (owner) | `feature/p6-7-market-payment-config` | P6-1         | `packages/db` (0026), `apps/api` payments + webhooks | none yet   | B10 + D17 = A. `market_payment_configs`, per-market provider resolution, admin config surface. Next free migration: 0027 |
 
 ## BLOCKED
 

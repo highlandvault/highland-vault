@@ -106,8 +106,15 @@ describe('markets (database layer)', () => {
 
   describe('market definition', () => {
     it('rejects an invalid currency/market combination', async () => {
+      // Both rows that hang off a market have to go before the market can:
+      // its compliance settings (0004) and, since P6-7, its payment
+      // configuration (0026). Each is one row per market, created by its own
+      // migration, and each holds a foreign key to it.
       await client.query(
         `DELETE FROM market_settings WHERE market_id = (SELECT id FROM markets WHERE code = 'ie')`,
+      );
+      await client.query(
+        `DELETE FROM market_payment_configs WHERE market_id = (SELECT id FROM markets WHERE code = 'ie')`,
       );
       await client.query(`DELETE FROM markets WHERE code = 'ie'`);
       for (const [code, currency, locale] of [

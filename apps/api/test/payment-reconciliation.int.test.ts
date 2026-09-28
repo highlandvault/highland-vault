@@ -24,7 +24,7 @@ import { INTERNAL_TOKEN_HEADER, tokenMatches } from '../src/internal/internal-li
 import type { Redis } from 'ioredis';
 import { RATE_LIMITS } from '../src/auth/rate-limiter';
 import { REDIS } from '../src/redis/redis.module';
-import { PAYMENT_PROVIDER } from '../src/payments/payment-provider.factory';
+import { PAYMENT_PROVIDERS } from '../src/payments/payment-provider.factory';
 import { DEV_PLACEHOLDER_INTERNAL_TOKEN } from '../src/config/env';
 import {
   type Client,
@@ -148,7 +148,8 @@ describe('payment reconciliation', () => {
     return { client, order, payment, reference: rows[0]!.provider_reference };
   }
 
-  const provider = () => h.app.get<FakePaymentProvider>(PAYMENT_PROVIDER);
+  const provider = () =>
+    h.app.get<ReadonlyMap<string, FakePaymentProvider>>(PAYMENT_PROVIDERS).get('fake')!;
 
   /** A real HTTP call to the internal socket. Never an injection. */
   async function internal(

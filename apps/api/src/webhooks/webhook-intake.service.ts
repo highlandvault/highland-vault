@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Database } from '@hv/db';
 import { SecretBox, sealPayload } from '@hv/domain';
 import {
@@ -11,7 +11,7 @@ import { API_ENV, type ApiEnv } from '../config/env';
 import { DATABASE } from '../database/database.module';
 import { Errors } from '../common/errors';
 import { OrdersRepository } from '../orders/orders.repository';
-import { PAYMENT_PROVIDER } from '../payments/payment-provider.factory';
+import { PaymentProviderRegistry } from '../payments/payment-provider.registry';
 import {
   PaymentFinalizationService,
   type FinalizationOutcome,
@@ -86,7 +86,7 @@ export class WebhookIntakeService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(API_ENV) private readonly env: ApiEnv,
-    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
+    private readonly providers: PaymentProviderRegistry,
     private readonly events: PaymentEventsRepository,
     private readonly payments: PaymentsRepository,
     private readonly orders: OrdersRepository,
@@ -187,13 +187,25 @@ export class WebhookIntakeService {
 
   // ------------------------------------------------------------- internals
 
+  /**
+   * The provider this delivery claims to be from.
+   *
+   * **Resolved from the environment alone, never from `market_payment_configs`**
+   * (P6-7). That is deliberate and is the reason the registry has a separate
+   * `byCode` lookup: if this consulted the market configuration, a delivery for
+   * a configured provider and one for an unconfigured provider would answer
+   * differently, and anybody could enumerate which markets this deployment has
+   * configured by sending unsigned rubbish at this route. Resolving from the
+   * environment keeps the answer identical for every code we cannot speak.
+   *
+   * Unknown, or none configured. A 404 with no detail: a caller learns nothing
+   * about which providers this deployment speaks to, and nothing about which
+   * markets use them.
+   */
   private resolveProvider(code: string): PaymentProvider {
-    if (!this.provider || this.provider.code !== code) {
-      // Unknown, or none configured. A 404 with no detail: a caller learns
-      // nothing about which providers this deployment speaks to.
-      throw Errors.notFound('Webhook');
-    }
-    return this.provider;
+    const provider = this.providers.byCode(code);
+    if (!provider) throw Errors.notFound('Webhook');
+    return provider;
   }
 
   /**

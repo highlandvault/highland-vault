@@ -17,7 +17,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DATABASE } from '../src/database/database.module';
-import { PAYMENT_PROVIDER } from '../src/payments/payment-provider.factory';
+import { PAYMENT_PROVIDERS } from '../src/payments/payment-provider.factory';
 import { RefundsService } from '../src/payments/refunds.service';
 import { RefundsRepository, refundKeys } from '../src/payments/refunds.repository';
 import {
@@ -135,7 +135,8 @@ describe('refunds after the decision', () => {
     return { client, order, payment, reference: rows[0]!.provider_reference };
   }
 
-  const provider = () => h.app.get<FakePaymentProvider>(PAYMENT_PROVIDER);
+  const provider = () =>
+    h.app.get<ReadonlyMap<string, FakePaymentProvider>>(PAYMENT_PROVIDERS).get('fake')!;
   const refundsService = () => h.app.get(RefundsService);
   const refundsRepo = () => h.app.get(RefundsRepository);
 

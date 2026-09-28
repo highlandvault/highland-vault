@@ -171,3 +171,49 @@ export const AdminRefundDuplicateResponseSchema = z.object({
   refundId: z.uuid().nullable(),
 });
 export type AdminRefundDuplicateResponse = z.infer<typeof AdminRefundDuplicateResponseSchema>;
+
+/**
+ * A market's payment configuration (B10, D17 = A, P6-7).
+ *
+ * `configRef` names which credential set the provider uses. It is a
+ * **reference, never a secret** (I15) — the credentials themselves live in the
+ * environment, and nothing in this shape could build a provider on its own.
+ * It reaches staff holding `config.manage` and no customer route.
+ */
+export const AdminPaymentConfigSchema = z.object({
+  market: MarketCodeSchema,
+  /** NULL until a provider is chosen for this market (OPEN O13). */
+  providerCode: z.string().nullable(),
+  configRef: z.string().nullable(),
+  /** Whether this deployment can actually build the configured provider. */
+  resolvable: z.boolean(),
+  /**
+   * Every provider code this deployment can build, so an operator can see what
+   * is available rather than guessing. Operator-only; no provider is named in
+   * the schema or seeded anywhere (Gate 4.9).
+   */
+  availableProviders: z.array(z.string()),
+  updatedAt: z.iso.datetime(),
+});
+export type AdminPaymentConfig = z.infer<typeof AdminPaymentConfigSchema>;
+
+export const AdminPaymentConfigResponseSchema = z.object({ config: AdminPaymentConfigSchema });
+export type AdminPaymentConfigResponse = z.infer<typeof AdminPaymentConfigResponseSchema>;
+
+/**
+ * PUT /admin/markets/:market/payment-config
+ *
+ * Both values move together or neither does: a provider without its
+ * configuration reference is not a configuration, and the database enforces the
+ * same pairing. Sending both as null clears the configuration, which stops that
+ * market taking payments.
+ */
+export const UpdatePaymentConfigRequestSchema = z.strictObject({
+  providerCode: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{1,31}$/, 'must be a lowercase provider code')
+    .nullable(),
+  configRef: z.string().trim().min(1).max(200).nullable(),
+  reason: ReasonSchema,
+});
+export type UpdatePaymentConfigRequest = z.infer<typeof UpdatePaymentConfigRequestSchema>;

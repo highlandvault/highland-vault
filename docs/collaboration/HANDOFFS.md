@@ -61,6 +61,43 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-28 — P6-7 — Per-market payment configuration (for P6-8 and P6-9)
+
+Status: OPEN
+
+Task: P6-7
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p6-7-market-payment-config` (not merged)
+Status of the work: DONE, awaiting review
+
+**Note on the gap in this log.** P6-1 through P6-5 were merged without handoff entries. They are not reconstructed here — writing them now from memory would put invented recollection into a record whose value is that it was written at the time. What those slices did is in the CHANGELOG and, authoritatively, in [PHASE_6_SCOPE_LOCK.md](../PHASE_6_SCOPE_LOCK.md).
+
+What was completed:
+
+- `0026_market_payment_configs` — one row per market, created by the migration, `REVOKE INSERT, DELETE, TRUNCATE`, a guard that keeps a configuration with its market, and a CHECK making provider and reference all-or-nothing.
+- `apps/api/src/payments/payment-provider.registry.ts` and a factory that now builds a **map** of providers by code rather than one instance.
+- Per-market resolution in payment initiation, reconciliation and refunds; webhook intake resolves by code from the environment.
+- `GET`/`PUT /admin/markets/:market/payment-config` under `config.manage`, the write sensitive and audited.
+- `market-payment-config.int.test.ts` (33 tests).
+
+Important implementation details — read these before P6-8 and P6-9:
+
+- **Webhook resolution must not read `market_payment_configs`.** It resolves by provider code from the environment alone, and `PaymentProviderRegistry` has a separate `byCode` lookup for exactly this. If it consulted the table, a delivery for a configured provider and one for an unconfigured provider would answer differently, and anyone could enumerate which markets are configured by sending unsigned rubbish at the route. There is a test asserting the answer is identical with every market's configuration cleared. **Do not "simplify" the two lookups into one.**
+- **A market with no payment configuration cannot take a payment.** That is the correct state for every market in production until O13 is answered, and it is why `enableMarketsForTesting` now also calls `configurePaymentsForTesting`. A new test that enables a market and expects to pay must configure one.
+- **`config_ref` is a reference, never a secret** (I15). Nothing reads it yet: no production provider exists to have credential sets. When one does, the credential lookup keyed by it belongs with that provider, not in the database.
+- **The customer-facing refusal is deliberately ambiguous.** "No provider for this market" and "this deployment cannot build that provider" both answer `PAYMENT_PROVIDER_UNAVAILABLE`, with a test asserting they are indistinguishable. Either answer alone would tell a customer something about how the deployment is configured.
+- **No provider is named in the schema** (Gate 4.9). The CHECK describes a code's shape. Whether a code can be built is the application's question, asked against what the environment configured.
+- **Nothing in this slice touches the payment or order state machines**, and nothing touches P6-3's raw-body, signature, idempotency or sealed-payload behaviour.
+
+Open decisions this slice did **not** touch, and must not be read as having settled:
+
+- **K-3** — a capture against a `cancelled` order. Still OPEN, owner decision required.
+- **K-c** — what makes an ORDER failed. `order.payment_failed` still has a handler and no producer.
+- **O13** — which production provider. This slice builds the mechanism, not the choice.
+
+Next:
+Owner review of the P6-7 PR. Then **P6-8** (web payment flow, `order_access_tokens`, migration `0027`) or **P6-9** (hardening and Gate 4 sign-off), at the owner's direction.
+
 ### 2026-09-25 — P5-8 — Phase 5 integration and gate hardening (closes Phase 5; for Phase 6)
 
 Status: OPEN

@@ -17,7 +17,7 @@ import { enableMarketsForTesting, insertFixtureDraw } from '@hv/db/testing';
 import { ORDER_OUTCOME_TOPICS } from '@hv/domain';
 import { FAKE_SIGNATURE_HEADER, signWebhook, type FakePaymentProvider } from '@hv/payments';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { PAYMENT_PROVIDER } from '../src/payments/payment-provider.factory';
+import { PAYMENT_PROVIDERS } from '../src/payments/payment-provider.factory';
 import { RefundsService } from '../src/payments/refunds.service';
 import {
   type Client,
@@ -243,7 +243,9 @@ describe('finalising a payment', () => {
    * stays `pending`; any test that needs the refund actually sent has to say so.
    */
   const completeAtProvider = (providerReference: string) => {
-    const provider = h.app.get<FakePaymentProvider>(PAYMENT_PROVIDER);
+    const provider = h.app
+      .get<ReadonlyMap<string, FakePaymentProvider>>(PAYMENT_PROVIDERS)
+      .get('fake')!;
     provider.complete(providerReference);
     // The provider's own queued webhook is discarded: these tests deliver their
     // own bodies, and leaving it queued would leak into a later `takeWebhooks`.

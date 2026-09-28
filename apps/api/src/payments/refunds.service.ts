@@ -1,9 +1,9 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Database, sql, withTransaction } from '@hv/db';
-import { PaymentProviderError, type PaymentProvider } from '@hv/payments';
+import { PaymentProviderError } from '@hv/payments';
 import { AuditService } from '../audit/audit.service';
 import { DATABASE } from '../database/database.module';
-import { PAYMENT_PROVIDER } from './payment-provider.factory';
+import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaymentsRepository } from './payments.repository';
 import { RefundsRepository, refundKeys } from './refunds.repository';
 
@@ -40,7 +40,7 @@ export class RefundsService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
-    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
+    private readonly providers: PaymentProviderRegistry,
     private readonly refunds: RefundsRepository,
     private readonly payments: PaymentsRepository,
     private readonly audit: AuditService,
@@ -123,13 +123,17 @@ export class RefundsService {
    * idempotent on that row's key.
    */
   async send(refundId: string): Promise<void> {
-    if (!this.provider) {
-      this.logger.warn(`refund ${refundId} raised with no provider configured`);
-      return;
-    }
     const refund = await this.refunds.findById(this.db, refundId);
     if (!refund || refund.status !== 'raised') return;
-    if (this.provider.code !== refund.provider) {
+
+    // P6-7: resolved from the refund's own MARKET (B10), not from a single
+    // deployment-wide provider.
+    const provider = await this.providers.forMarket(this.db, refund.marketId);
+    if (!provider) {
+      this.logger.warn(`refund ${refund.id} is for a market with no provider configured`);
+      return;
+    }
+    if (provider.code !== refund.provider) {
       // The refund names a provider that is not the one configured here, so
       // the money did not come from the instrument this process can reach.
       // Sending it anyway would ask the wrong provider to return somebody
@@ -144,7 +148,7 @@ export class RefundsService {
       // after (`payments-reconcile.service.ts`), and the two should not
       // disagree about whether provider identity matters.
       this.logger.error(
-        `refund ${refund.id} is for provider ${refund.provider}, not ${this.provider.code}`,
+        `refund ${refund.id} is for provider ${refund.provider}, not ${provider.code}`,
       );
       return;
     }
@@ -161,7 +165,7 @@ export class RefundsService {
     }
 
     try {
-      const result = await this.provider.refund({
+      const result = await provider.refund({
         providerReference: payment.providerReference,
         amount: { amountMinor: refund.amountMinor, currency: refund.currency },
         idempotencyKey: refund.idempotencyKey,

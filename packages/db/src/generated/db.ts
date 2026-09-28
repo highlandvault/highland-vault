@@ -121,6 +121,20 @@ export interface GuestSessions {
   verified_email_at: Timestamp | null;
 }
 
+export interface MarketPaymentConfigs {
+  /**
+   * Which credential set the provider uses — a reference, NEVER a secret (I15). Credentials live in the environment.
+   */
+  config_ref: string | null;
+  created_at: Generated<Timestamp>;
+  market_id: string;
+  /**
+   * The provider's stable code, matching payments.provider. Format-checked only: no provider is named in the schema (Gate 4.9, ADR-0006).
+   */
+  provider_code: string | null;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Markets {
   code: string;
   created_at: Generated<Timestamp>;
@@ -415,6 +429,7 @@ export interface DB {
   draws: Draws;
   guest_email_verifications: GuestEmailVerifications;
   guest_sessions: GuestSessions;
+  market_payment_configs: MarketPaymentConfigs;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Payment, PaymentStatus } from '@hv/contracts';
 import { type Database, type DbExecutor, sql, withTransaction } from '@hv/db';
 import { PaymentProviderError, type PaymentProvider } from '@hv/payments';
@@ -10,7 +10,7 @@ import type { MarketContext } from '../common/request-context';
 import { DATABASE } from '../database/database.module';
 import { GuestSessionsService } from '../guests/guest-sessions.service';
 import { type OrderBuyer, OrdersRepository } from '../orders/orders.repository';
-import { PAYMENT_PROVIDER } from './payment-provider.factory';
+import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaymentsReconcileService } from './payments-reconcile.service';
 import { type PaymentRecord, PaymentsRepository } from './payments.repository';
 
@@ -40,12 +40,12 @@ export class PaymentsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(API_ENV) private readonly env: ApiEnv,
-    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
     private readonly payments: PaymentsRepository,
     private readonly orders: OrdersRepository,
     private readonly guests: GuestSessionsService,
     private readonly rateLimiter: RateLimiter,
     private readonly reconcile: PaymentsReconcileService,
+    private readonly providers: PaymentProviderRegistry,
   ) {}
 
   /**
@@ -136,7 +136,9 @@ export class PaymentsService {
     // Fail-closed before anything is read or written: a Redis outage refuses
     // the payment rather than running it unlimited (B19).
     await this.rateLimiter.consume(RATE_LIMITS.paymentsPerOwner, ownerKey(identity));
-    const provider = this.requireProvider();
+    // P6-7: the provider is the MARKET’s, not the deployment’s (B10). Resolved
+    // before anything is written, so a market with none refuses immediately.
+    const provider = await this.providers.requireForMarket(this.db, market.id);
 
     // A key already used is answered before any work, as checkout does it.
     const replay = await this.payments.findByIdempotencyKey(this.db, idempotencyKey);
@@ -273,15 +275,6 @@ export class PaymentsService {
       'PAYMENT_PROVIDER_UNAVAILABLE',
       'Payments are temporarily unavailable. Try again in a moment.',
     );
-  }
-
-  private requireProvider(): PaymentProvider {
-    if (!this.provider) {
-      // No provider is configured — the correct state in production until O13
-      // is answered. Fail closed and say so.
-      throw Errors.badRequest('PAYMENT_PROVIDER_UNAVAILABLE', 'Payments are not available yet.');
-    }
-    return this.provider;
   }
 
   /** The order is still open for payment, and there is enough time left to try. */
