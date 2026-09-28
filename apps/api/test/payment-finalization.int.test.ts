@@ -15,8 +15,10 @@
 import { ErrorResponseSchema, OrderResponseSchema, PaymentResponseSchema } from '@hv/contracts';
 import { enableMarketsForTesting, insertFixtureDraw } from '@hv/db/testing';
 import { ORDER_OUTCOME_TOPICS } from '@hv/domain';
-import { FAKE_SIGNATURE_HEADER, signWebhook } from '@hv/payments';
+import { FAKE_SIGNATURE_HEADER, signWebhook, type FakePaymentProvider } from '@hv/payments';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PAYMENT_PROVIDER } from '../src/payments/payment-provider.factory';
+import { RefundsService } from '../src/payments/refunds.service';
 import {
   type Client,
   type Harness,
@@ -219,6 +221,52 @@ describe('finalising a payment', () => {
     (
       await h.sql.query<{ topic: string; payload: { orderId?: string } }>(
         `SELECT topic, payload FROM outbox WHERE payload->>'orderId' = $1`,
+        [orderId],
+      )
+    ).rows;
+
+  /**
+   * The refund service as the running app has it.
+   *
+   * D22.3 is an invoked action, not something a provider message triggers, so
+   * it is exercised the way reconciliation will call it — through the real
+   * container, with the real provider wired in.
+   */
+  const refundsService = () => h.app.get(RefundsService);
+
+  /**
+   * Tells the provider the customer finished paying.
+   *
+   * The fake keeps its own view of every payment, and it will not refund one it
+   * never saw succeed — which is exactly what a real provider does. Most tests
+   * here hand-craft a signed event without driving the provider, so its view
+   * stays `pending`; any test that needs the refund actually sent has to say so.
+   */
+  const completeAtProvider = (providerReference: string) => {
+    const provider = h.app.get<FakePaymentProvider>(PAYMENT_PROVIDER);
+    provider.complete(providerReference);
+    // The provider's own queued webhook is discarded: these tests deliver their
+    // own bodies, and leaving it queued would leak into a later `takeWebhooks`.
+    provider.takeWebhooks();
+  };
+
+  const refundRows = async (orderId: string) =>
+    (
+      await h.sql.query<{
+        id: string;
+        payment_id: string | null;
+        amount_minor: string;
+        currency: string;
+        destination: string;
+        status: string;
+        reason: string;
+        actor_id: string | null;
+        idempotency_key: string;
+        provider_refund_reference: string | null;
+      }>(
+        `SELECT id, payment_id, amount_minor, currency, destination, status, reason, actor_id,
+                idempotency_key, provider_refund_reference
+           FROM refunds WHERE order_id = $1 ORDER BY created_at`,
         [orderId],
       )
     ).rows;
@@ -457,24 +505,130 @@ describe('finalising a payment', () => {
       expect(rows[0]!.last_error).toBe('currency_mismatch');
     });
 
-    it('refuses to act on an attempt already given up on', async () => {
+    it('D21: an expired attempt with a LIVE hold is unfulfillable and refunded', async () => {
       const { order, payment, reference, reservationIds } = await readyToPay(2);
-      // The customer clicked Pay again and this attempt timed out. It cannot
-      // become the successful one, and what to do about money taken against it
-      // is the late-payment question (OPEN O7) — so nothing is decided.
+      // The customer clicked Pay again, so this attempt timed out, and then the
+      // provider confirmed it anyway. The tickets are still here — and they are
+      // not going to this customer, because the payment that would have bought
+      // them is one we had already given up on (D21).
+      await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
+
+      // Stated explicitly: a LIVE hold is the whole difference between this case
+      // and the one below it.
+      expect((await reservationRow(reservationIds[0]!)).status).toBe('active');
+      const capBefore = await capCount(reservationIds[0]!);
+      expect(capBefore).toBe(2);
+
+      await deliver(successBody(order, reference));
+
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      // The terminal attempt is NOT resurrected.
+      expect(await paymentStatus(payment.id)).toBe('expired');
+      // The tickets go back to the pool, and the cap allowance with them: this
+      // customer bought nothing.
+      expect((await reservationRow(reservationIds[0]!)).status).toBe('released');
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([]);
+      expect(await capCount(reservationIds[0]!)).toBe(0);
+
+      // Refunded in full, to the instrument the money came from.
+      const refunds = await refundRows(order.id);
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0]!.reason).toBe('unfulfillable');
+      expect(refunds[0]!.destination).toBe('provider');
+      expect(refunds[0]!.payment_id).toBe(payment.id);
+      expect(refunds[0]!.actor_id).toBeNull();
+      expect(Number(refunds[0]!.amount_minor)).toBe(order.totalMinor);
+
+      const outbox = await outboxRows(order.id);
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]!.topic).toBe('order.unfulfillable');
+      expect(
+        (await auditRows(order.id)).filter((r) => r.action === 'order.paid_unfulfillable'),
+      ).toHaveLength(1);
+    });
+
+    it('D21: a duplicate late-success delivery refunds once', async () => {
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
+
+      // Three separate event ids, so replay protection cannot answer and the
+      // idempotency of the decision itself has to.
+      await deliver(successBody(order, reference));
+      await deliver(successBody(order, reference));
+      await deliver(successBody(order, reference));
+
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      expect(await refundRows(order.id)).toHaveLength(1);
+      expect(await outboxRows(order.id)).toHaveLength(1);
+      expect(
+        (await auditRows(order.id)).filter((r) => r.action === 'order.paid_unfulfillable'),
+      ).toHaveLength(1);
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([]);
+    });
+
+    it('reaches the unfulfillable path when the hold is gone AND the attempt expired', async () => {
+      // The correction. Both things are wrong at once: the tickets have gone and
+      // the attempt had already been given up on.
+      //
+      // Whether the tickets can still be delivered is a fact about the world;
+      // whether our attempt row is live is a fact about our bookkeeping. Asking
+      // the bookkeeping question first reported this as `attempt_not_live` and
+      // never reached the `paid_unfulfillable` outcome B10 already defines for
+      // it — so the order sat `awaiting_payment` with the money taken and the
+      // tickets gone, and nothing downstream knew.
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
       await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
 
       const body = successBody(order, reference);
       await deliver(body);
 
-      expect((await orderRow(order.id)).status).toBe('awaiting_payment');
-      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'reserved', n: 2 }]);
-      const { rows } = await h.sql.query<{ last_error: string | null }>(
-        `SELECT last_error FROM payment_events WHERE provider_event_id = $1`,
+      // The order now records the truth: paid, and not deliverable.
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      const outbox = await outboxRows(order.id);
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]!.topic).toBe('order.unfulfillable');
+      const audit = (await auditRows(order.id)).filter(
+        (r) => r.action === 'order.paid_unfulfillable',
+      );
+      expect(audit).toHaveLength(1);
+
+      // The attempt itself stays terminal: `hv_payments_guard` refuses to
+      // revive it, and the conditional update leaves it alone rather than
+      // failing the transaction. The ORDER carries the outcome, which is what
+      // the customer and the refund both need.
+      expect(await paymentStatus(payment.id)).toBe('expired');
+
+      // The event was handled, so it carries no error — `last_error` says why
+      // something could NOT be done, and an unfulfillable outcome is a decision
+      // rather than a failure. Why it could not be fulfilled is on the audit
+      // row, which is where an operator would look.
+      const { rows } = await h.sql.query<{ processed_at: Date | null; last_error: string | null }>(
+        `SELECT processed_at, last_error FROM payment_events WHERE provider_event_id = $1`,
         [body.id],
       );
-      // Recorded and visible, so reconciliation has something to find.
-      expect(rows[0]!.last_error).toBe('attempt_not_live');
+      expect(rows[0]!.processed_at).not.toBeNull();
+      expect(rows[0]!.last_error).toBeNull();
+
+      const reasons = await h.sql.query<{ reason: string | null }>(
+        `SELECT reason FROM audit_log
+          WHERE entity_id = $1 AND action = 'order.paid_unfulfillable'`,
+        [order.id],
+      );
+      expect(reasons.rows[0]!.reason).toBe('reservation_ended');
+    });
+
+    it('reaches the unfulfillable path for a released hold with a live attempt', async () => {
+      // The same outcome by the other route, so the correction did not make
+      // fulfillability depend on the attempt in the opposite direction either.
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'released')`, [reservationIds[0]!]);
+
+      await deliver(successBody(order, reference));
+
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      // A live attempt CAN carry the money, so here it does.
+      expect(await paymentStatus(payment.id)).toBe('succeeded');
     });
 
     it('does nothing to an order that is already paid', async () => {
@@ -522,19 +676,22 @@ describe('finalising a payment', () => {
       expect(outbox[0]!.topic).toBe('order.unfulfillable');
     });
 
-    it('creates no refund record, because that is a later slice', async () => {
-      const { order, reference, reservationIds } = await readyToPay(2);
+    it('raises exactly one full refund to the original instrument', async () => {
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
       await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
       await deliver(successBody(order, reference));
       expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
 
-      // P6-6 owns the refund record, and where the money goes is OPEN O7.
-      const { rows } = await h.sql.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM information_schema.tables
-          WHERE table_schema = 'public' AND table_name = 'refunds'`,
-      );
-      expect(rows[0]!.n).toBe(0);
-      void order;
+      // The three properties that together say "the system sent this person's
+      // money back the way it arrived" (D15a, D15b).
+      const refunds = await refundRows(order.id);
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0]!.destination).toBe('provider');
+      expect(refunds[0]!.payment_id).toBe(payment.id);
+      expect(refunds[0]!.actor_id).toBeNull();
+      expect(Number(refunds[0]!.amount_minor)).toBe(order.totalMinor);
+      // Derived from the order, so it can only ever be raised once.
+      expect(refunds[0]!.idempotency_key).toBe(`refund:order:${order.id}:unfulfillable`);
     });
 
     it('refuses the sale in the database when the hold has expired but not been swept', async () => {
@@ -649,6 +806,439 @@ describe('finalising a payment', () => {
       await expect(
         h.sql.query(`UPDATE payments SET status = 'pending' WHERE id = $1`, [payment.id]),
       ).rejects.toThrow(/payment status cannot change/);
+    });
+  });
+
+  // ---- D22.1: telling a duplicate from a second capture -------------------
+  //
+  // A duplicate webhook and a second capture arrive in exactly the same shape:
+  // a verified success for an order that is already paid. Deciding on the
+  // order's status alone made them indistinguishable, and the second one —
+  // money taken twice — left no trace in `payments` at all.
+  //
+  // These tests are about DETECTION. What happens to money captured twice is
+  // D22.3 and how it is accounted for is D22.2; neither is decided here, and
+  // nothing below expects a refund or a second payment row.
+
+  describe('D22.1: a success for an order that is already settled', () => {
+    /** The event rows for one provider event id. */
+    const eventRows = async (providerEventId: string) =>
+      (
+        await h.sql.query<{ processed_at: Date | null; last_error: string | null }>(
+          `SELECT processed_at, last_error FROM payment_events WHERE provider_event_id = $1`,
+          [providerEventId],
+        )
+      ).rows;
+
+    const succeededCount = async (orderId: string) =>
+      Number(
+        (
+          await h.sql.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM payments WHERE order_id = $1 AND status = 'succeeded'`,
+            [orderId],
+          )
+        ).rows[0]!.n,
+      );
+
+    it('A: the same attempt again is an ordinary duplicate', async () => {
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await deliver(successBody(order, reference));
+      expect((await orderRow(order.id)).status).toBe('paid');
+
+      const auditBefore = await auditRows(order.id);
+      const outboxBefore = await outboxRows(order.id);
+
+      // A second, DIFFERENT event id for the SAME attempt, so replay protection
+      // cannot answer and the classification has to.
+      const again = successBody(order, reference);
+      const response = await deliver(again);
+      expect(response.statusCode).toBe(200);
+
+      expect((await orderRow(order.id)).status).toBe('paid');
+      expect(await succeededCount(order.id)).toBe(1);
+      expect(await paymentStatus(payment.id)).toBe('succeeded');
+      expect(await auditRows(order.id)).toHaveLength(auditBefore.length);
+      expect(await outboxRows(order.id)).toHaveLength(outboxBefore.length);
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'sold', n: 2 }]);
+
+      // Nothing is owed on it, so it is settled with no error.
+      const [event] = await eventRows(again.id);
+      expect(event!.processed_at).not.toBeNull();
+      expect(event!.last_error).toBeNull();
+    });
+
+    it('B: a DIFFERENT attempt after the order is paid is flagged as a second capture', async () => {
+      const { client, order, payment, reference, reservationIds } = await readyToPay(2);
+
+      // A second attempt for the same order, which is only possible once the
+      // first is terminal. The customer clicked Pay again; attempt one timed
+      // out; and then BOTH were captured at the provider.
+      await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
+      const second = paymentOf(
+        await client.request(
+          'POST',
+          `/markets/uk/checkout/orders/${order.id}/payments`,
+          {},
+          { 'idempotency-key': freshKey() },
+        ),
+      );
+      const { rows: secondRef } = await h.sql.query<{ provider_reference: string }>(
+        `SELECT provider_reference FROM payments WHERE id = $1`,
+        [second.id],
+      );
+
+      // The second attempt succeeds and settles the order.
+      await deliver(successBody(order, secondRef[0]!.provider_reference));
+      expect((await orderRow(order.id)).status).toBe('paid');
+      expect(await paymentStatus(second.id)).toBe('succeeded');
+
+      const auditBefore = await auditRows(order.id);
+      const outboxBefore = await outboxRows(order.id);
+
+      // Now the FIRST attempt's capture arrives. Same shape as a duplicate.
+      const late = successBody(order, reference);
+      const response = await deliver(late);
+      expect(response.statusCode).toBe(200);
+
+      // Detected, named, and left for someone to deal with.
+      const [event] = await eventRows(late.id);
+      expect(event!.last_error).toBe('second_capture');
+      // Unprocessed on purpose: something is owed on this, and the
+      // reconciler's index is what should find it.
+      expect(event!.processed_at).toBeNull();
+
+      // And nothing was resolved, because resolving it is D22.2 and D22.3.
+      expect((await orderRow(order.id)).status).toBe('paid');
+      expect(await succeededCount(order.id)).toBe(1);
+      expect(await paymentStatus(payment.id)).toBe('expired');
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'sold', n: 2 }]);
+      expect(await auditRows(order.id)).toHaveLength(auditBefore.length);
+      expect(await outboxRows(order.id)).toHaveLength(outboxBefore.length);
+    });
+
+    it('B: is distinguishable from A in one query', async () => {
+      // The point of the whole change: an operator, or the reconciler, can ask
+      // for second captures without reading every event ever received.
+      const { rows } = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM payment_events
+          WHERE last_error = 'second_capture' AND processed_at IS NULL`,
+      );
+      expect(rows[0]!.n).toBeGreaterThan(0);
+    });
+
+    it('C: a capture against an order settled by nothing is named too', async () => {
+      // The order was cancelled before the provider spoke, so the capture
+      // matches no settlement at all. Distinct from a second capture: there is
+      // no other payment, and nothing was delivered either.
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [order.id]);
+
+      const late = successBody(order, reference);
+      expect((await deliver(late)).statusCode).toBe(200);
+
+      const [event] = await eventRows(late.id);
+      expect(event!.last_error).toBe('capture_without_settlement');
+      expect(event!.processed_at).toBeNull();
+
+      // Safely recorded, and nothing touched.
+      expect((await orderRow(order.id)).status).toBe('cancelled');
+      expect(await succeededCount(order.id)).toBe(0);
+      expect(await paymentStatus(payment.id)).toBe('processing');
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'reserved', n: 2 }]);
+      expect(await outboxRows(order.id)).toHaveLength(0);
+    });
+
+    it('creates no payment row for any of them', async () => {
+      // D22.2 decides whether a second capture gets an accounting record. Until
+      // it does, detection invents nothing.
+      const { rows } = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM payments WHERE provider_reference IS NULL`,
+      );
+      expect(rows[0]!.n).toBe(0);
+    });
+  });
+
+  // ---- D22.3 and D23: refunding what cannot be kept -----------------------
+
+  describe('D22.3: refunding a confirmed duplicate capture', () => {
+    /** An order paid by attempt two, with attempt one's capture arriving late. */
+    async function orderWithDuplicateCapture() {
+      const { client, order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
+      const second = paymentOf(
+        await client.request(
+          'POST',
+          `/markets/uk/checkout/orders/${order.id}/payments`,
+          {},
+          { 'idempotency-key': freshKey() },
+        ),
+      );
+      const { rows } = await h.sql.query<{ provider_reference: string }>(
+        `SELECT provider_reference FROM payments WHERE id = $1`,
+        [second.id],
+      );
+      await deliver(successBody(order, rows[0]!.provider_reference));
+      expect((await orderRow(order.id)).status).toBe('paid');
+
+      // Now attempt one's capture, which D22.1 flags.
+      const late = successBody(order, reference);
+      await deliver(late);
+      const { rows: events } = await h.sql.query<{ id: string; last_error: string | null }>(
+        `SELECT id, last_error FROM payment_events WHERE provider_event_id = $1`,
+        [late.id],
+      );
+      expect(events[0]!.last_error).toBe('second_capture');
+      return { order, firstPayment: payment, second, eventId: events[0]!.id, reservationIds };
+    }
+
+    it('refunds it in full, once, and leaves the order paid', async () => {
+      const { order, firstPayment, second, eventId, reservationIds } =
+        await orderWithDuplicateCapture();
+
+      const outcome = await refundsService().refundDuplicateCapture(eventId);
+      expect(outcome.kind).toBe('raised');
+
+      const refunds = await refundRows(order.id);
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0]!.reason).toBe('duplicate_capture');
+      expect(refunds[0]!.destination).toBe('provider');
+      // Against the instrument that took the DUPLICATE money, not the one that
+      // settled the order.
+      expect(refunds[0]!.payment_id).toBe(firstPayment.id);
+      expect(Number(refunds[0]!.amount_minor)).toBe(order.totalMinor);
+      expect(refunds[0]!.idempotency_key).toBe(`refund:event:${eventId}:duplicate_capture`);
+
+      // The order is untouched: this money was never another payment for it.
+      expect((await orderRow(order.id)).status).toBe('paid');
+      expect(await paymentStatus(second.id)).toBe('succeeded');
+      expect(await paymentStatus(firstPayment.id)).toBe('expired');
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'sold', n: 2 }]);
+      // Still exactly one succeeded payment.
+      const succeeded = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM payments WHERE order_id = $1 AND status = 'succeeded'`,
+        [order.id],
+      );
+      expect(succeeded.rows[0]!.n).toBe(1);
+    });
+
+    it('is idempotent when invoked again', async () => {
+      const { order, eventId } = await orderWithDuplicateCapture();
+      const first = await refundsService().refundDuplicateCapture(eventId);
+      const again = await refundsService().refundDuplicateCapture(eventId);
+      const third = await refundsService().refundDuplicateCapture(eventId);
+
+      expect(first.kind).toBe('raised');
+      expect(again.kind).toBe('already_raised');
+      expect(third.kind).toBe('already_raised');
+      expect(await refundRows(order.id)).toHaveLength(1);
+      // And no order outcome was announced: the order did not change.
+      expect(await outboxRows(order.id)).toHaveLength(1);
+      expect(
+        (await auditRows(order.id)).filter(
+          (r) => r.action === 'payment.duplicate_capture_refunded',
+        ),
+      ).toHaveLength(1);
+    });
+
+    it('settles the exception, so it stops showing as work outstanding', async () => {
+      const { eventId } = await orderWithDuplicateCapture();
+      const before = await h.sql.query<{ processed_at: Date | null }>(
+        `SELECT processed_at FROM payment_events WHERE id = $1`,
+        [eventId],
+      );
+      expect(before.rows[0]!.processed_at).toBeNull();
+
+      await refundsService().refundDuplicateCapture(eventId);
+      const after = await h.sql.query<{ processed_at: Date | null; last_error: string | null }>(
+        `SELECT processed_at, last_error FROM payment_events WHERE id = $1`,
+        [eventId],
+      );
+      expect(after.rows[0]!.processed_at).not.toBeNull();
+      // The classification stays: the record of what it was does not change.
+      expect(after.rows[0]!.last_error).toBe('second_capture');
+    });
+
+    it('refuses to refund an event that is not a flagged duplicate', async () => {
+      // A plain successful payment's event. Nothing about it says duplicate, so
+      // this action will not touch it — which is what keeps an ordinary
+      // duplicate webhook and a genuine second capture apart here too.
+      const { order, reference } = await readyToPay(1);
+      const body = successBody(order, reference);
+      await deliver(body);
+      const { rows } = await h.sql.query<{ id: string }>(
+        `SELECT id FROM payment_events WHERE provider_event_id = $1`,
+        [body.id],
+      );
+
+      const outcome = await refundsService().refundDuplicateCapture(rows[0]!.id);
+      expect(outcome.kind).toBe('not_a_duplicate_capture');
+      expect(await refundRows(order.id)).toHaveLength(0);
+    });
+  });
+
+  describe('D23: a success that arrives after the order expired', () => {
+    /** An order that lapsed unpaid, with its holds gone, then a late capture. */
+    async function expiredOrderWithLateCapture() {
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      // The holds go first, as they would when the sweep collects them.
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
+      // Then the order lapses. This is the state P6-5's sweep will create.
+      await h.sql.query(`UPDATE orders SET status = 'expired' WHERE id = $1`, [order.id]);
+      return { order, payment, reference, reservationIds };
+    }
+
+    it('records it as paid and unfulfillable, and refunds it', async () => {
+      const { order, payment, reference, reservationIds } = await expiredOrderWithLateCapture();
+
+      await deliver(successBody(order, reference));
+
+      // The order stops standing as a record of a customer who never paid.
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      // This attempt was never terminal — the deadline passed, but nothing
+      // expired the attempt itself — so recording that it took the money is not
+      // a resurrection. The next test covers the attempt that WAS terminal.
+      expect(await paymentStatus(payment.id)).toBe('succeeded');
+      // The tickets went when the order did, and stay gone.
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([]);
+
+      const refunds = await refundRows(order.id);
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0]!.reason).toBe('unfulfillable');
+      expect(refunds[0]!.destination).toBe('provider');
+      expect(refunds[0]!.payment_id).toBe(payment.id);
+
+      const outbox = await outboxRows(order.id);
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]!.topic).toBe('order.unfulfillable');
+      expect(
+        (await auditRows(order.id)).filter((r) => r.action === 'order.paid_unfulfillable'),
+      ).toHaveLength(1);
+    });
+
+    it('does not resurrect a terminal attempt', async () => {
+      // The other half of D23: the customer clicked Pay again at some point, so
+      // this attempt is terminal, and then the deadline passed and the provider
+      // confirmed it. `hv_payments_guard` refuses to revive it and the owner
+      // decided it stays refused — the ORDER carries the outcome instead.
+      const { order, payment, reference, reservationIds } = await expiredOrderWithLateCapture();
+      await h.sql.query(`UPDATE payments SET status = 'expired' WHERE id = $1`, [payment.id]);
+
+      await deliver(successBody(order, reference));
+
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      expect(await paymentStatus(payment.id)).toBe('expired');
+      expect(await refundRows(order.id)).toHaveLength(1);
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([]);
+    });
+
+    it('is idempotent across repeated deliveries', async () => {
+      const { order, reference } = await expiredOrderWithLateCapture();
+      await deliver(successBody(order, reference));
+      await deliver(successBody(order, reference));
+      await deliver(successBody(order, reference));
+
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+      expect(await refundRows(order.id)).toHaveLength(1);
+      expect(await outboxRows(order.id)).toHaveLength(1);
+      expect(
+        (await auditRows(order.id)).filter((r) => r.action === 'order.paid_unfulfillable'),
+      ).toHaveLength(1);
+    });
+
+    it('permits expired -> paid_unfulfillable and nothing else out of expired', async () => {
+      // The exact invariant migration 0024 changed, and its limits.
+      const { order } = await expiredOrderWithLateCapture();
+      for (const status of ['paid', 'failed', 'cancelled', 'refunded']) {
+        await expect(
+          h.sql.query(`UPDATE orders SET status = $2 WHERE id = $1`, [order.id, status]),
+        ).rejects.toThrow(/order status cannot change/);
+      }
+      await h.sql.query(`UPDATE orders SET status = 'paid_unfulfillable' WHERE id = $1`, [
+        order.id,
+      ]);
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+    });
+
+    it('leaves a cancelled order alone, because nobody decided that case', async () => {
+      const { order, payment, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [order.id]);
+
+      const body = successBody(order, reference);
+      await deliver(body);
+
+      // Recorded for a person. Guessing at money against an order somebody
+      // cancelled would be inventing policy, and D23 covers only `expired`.
+      const { rows } = await h.sql.query<{ last_error: string | null; processed_at: Date | null }>(
+        `SELECT last_error, processed_at FROM payment_events WHERE provider_event_id = $1`,
+        [body.id],
+      );
+      expect(rows[0]!.last_error).toBe('capture_without_settlement');
+      expect(rows[0]!.processed_at).toBeNull();
+      expect((await orderRow(order.id)).status).toBe('cancelled');
+      expect(await refundRows(order.id)).toHaveLength(0);
+      expect(await paymentStatus(payment.id)).toBe('processing');
+      expect(await ticketStatuses(reservationIds[0]!)).toEqual([{ status: 'reserved', n: 2 }]);
+    });
+  });
+
+  describe('refund records keep their shape', () => {
+    it('cannot be rewritten once raised', async () => {
+      const { order, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
+      await deliver(successBody(order, reference));
+      const [refund] = await refundRows(order.id);
+
+      await expect(
+        h.sql.query(`UPDATE refunds SET amount_minor = 1 WHERE id = $1`, [refund!.id]),
+      ).rejects.toThrow(/fixed when it is raised/);
+      await expect(
+        h.sql.query(`UPDATE refunds SET reason = 'something else' WHERE id = $1`, [refund!.id]),
+      ).rejects.toThrow(/fixed when it is raised/);
+    });
+
+    it('is settled by the provider, and moves out of raised exactly once', async () => {
+      const { order, reference, reservationIds } = await readyToPay(2);
+      // The customer really did complete the payment at the provider, so the
+      // provider will agree to refund it. Without this the fake refuses — it
+      // will not refund a payment it never saw succeed — and the refund stays
+      // `raised`, which is correct behaviour and would test nothing about
+      // settlement.
+      completeAtProvider(reference);
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
+      await deliver(successBody(order, reference));
+
+      const [refund] = await refundRows(order.id);
+      expect(refund!.status).toBe('succeeded');
+      expect(refund!.provider_refund_reference).not.toBeNull();
+      // One move out of `raised`, and no coming back.
+      await expect(
+        h.sql.query(`UPDATE refunds SET status = 'failed' WHERE id = $1`, [refund!.id]),
+      ).rejects.toThrow(/refund status cannot change/);
+    });
+
+    it('stays raised when the provider will not make it, rather than lying', async () => {
+      // The provider never saw this payment complete, so it refuses. The
+      // decision is already durable; the row stays `raised` and
+      // `refunds_unsettled_idx` is what finds it.
+      const { order, reference, reservationIds } = await readyToPay(2);
+      await h.sql.query(`SELECT hv_end_reservation($1::uuid, 'expired')`, [reservationIds[0]!]);
+      await deliver(successBody(order, reference));
+
+      const [refund] = await refundRows(order.id);
+      expect(refund!.status).toBe('raised');
+      expect(refund!.provider_refund_reference).toBeNull();
+      // And the order outcome still stands: a refund we could not send is one
+      // still owed, not one that failed to be decided.
+      expect((await orderRow(order.id)).status).toBe('paid_unfulfillable');
+    });
+
+    it('gives hv_app no way to erase one', async () => {
+      const { rows } = await h.sql.query<{ del: boolean; upd: boolean }>(
+        `SELECT has_table_privilege('hv_app', 'refunds', 'DELETE') AS del,
+                has_table_privilege('hv_app', 'refunds', 'UPDATE') AS upd`,
+      );
+      expect(rows[0]!.del).toBe(false);
+      expect(rows[0]!.upd).toBe(true);
     });
   });
 

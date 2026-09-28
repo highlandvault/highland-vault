@@ -836,11 +836,20 @@ describe('creating an order', () => {
       );
       expect(events.rows[0]!.n).toBe(0);
 
-      // The phases that own refunds and the wallet have still not arrived.
+      // P6-4 added `refunds` too, when D21/D22.3/D23 locked outcomes that need
+      // one. So this asserts the behaviour rather than the absence: placing an
+      // order owes nobody any money back.
+      const refunds = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM refunds WHERE order_id = $1`,
+        [order.id],
+      );
+      expect(refunds.rows[0]!.n).toBe(0);
+
+      // The wallet is still Phase 7's.
       const tables = await h.sql.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM information_schema.tables
           WHERE table_schema = 'public'
-            AND table_name IN ('refunds', 'wallets', 'wallet_entries')`,
+            AND table_name IN ('wallets', 'wallet_entries')`,
       );
       expect(tables.rows[0]!.n).toBe(0);
 
