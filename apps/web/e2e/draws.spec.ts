@@ -1,5 +1,23 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { registerCustomer } from './fixtures';
+
+/**
+ * The three seeded UK draws, in no particular order.
+ *
+ * `admin-draws.spec.ts` publishes a draw of its own into this same market —
+ * "E2E test draw", £1.50, opening tomorrow — and it may or may not exist
+ * depending on which spec ran first. So the ordering assertions below read the
+ * positions of these three relative to each other and ignore anything else,
+ * rather than trusting an absolute index that another spec can move.
+ */
+const FIXTURES = ['Highland lodge escape', 'Last tickets', 'Vintage whisky collection'] as const;
+
+async function fixtureOrder(list: Locator): Promise<string[]> {
+  const cards = await list.getByTestId('draw-card').allTextContents();
+  return cards
+    .map((text) => FIXTURES.find((title) => text.includes(title)))
+    .filter((title): title is (typeof FIXTURES)[number] => title !== undefined);
+}
 
 // Seeded by `pnpm --filter @hv/db e2e:prepare` (test fixtures, not real draws):
 //   uk: highland-lodge-escape (open, 4,000 tickets), last-tickets (open, 4 tickets),
@@ -16,13 +34,23 @@ test('customer opens a market, browses draws, opens one and sees its skill quest
 
   await page.getByRole('link', { name: 'Browse draws' }).click();
   await expect(page).toHaveURL(/\/uk\/draws$/);
-  await expect(page.getByRole('heading', { name: 'Draws', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Competitions worth entering.', level: 1 }),
+  ).toBeVisible();
+  // The market's own name and currency, from the API rather than the URL.
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText(
+    'United Kingdom',
+  );
 
   const open = page.getByTestId('open-draws');
   await expect(open.getByTestId('draw-card')).toHaveCount(2);
   await expect(open).toContainText('Highland lodge escape');
   await expect(open).toContainText('£2.99');
   await expect(page.getByTestId('upcoming-draws')).toContainText('Vintage whisky collection');
+  // Counted from what is actually on the page. Only the open count is ours to
+  // predict — another spec publishes an upcoming draw into this market.
+  await expect(page.getByTestId('result-summary')).toContainText('2 open');
+  await expect(page.getByTestId('result-summary')).toContainText('competitions');
 
   await open.getByRole('link', { name: 'Highland lodge escape' }).click();
   await expect(page).toHaveURL(/\/uk\/draws\/highland-lodge-escape$/);
@@ -113,7 +141,12 @@ test('an upcoming draw shows when it opens and does not offer entry', async ({ p
 test('a market without draws shows the empty state', async ({ page }) => {
   const response = await page.goto('/ie/draws');
   expect(response?.status()).toBe(200);
-  await expect(page.getByTestId('no-draws')).toBeVisible();
+  const empty = page.getByTestId('no-draws');
+  await expect(empty).toBeVisible();
+  // Named from the market data, not from the URL segment.
+  await expect(empty).toContainText('Ireland');
+  // Nothing to filter, so the "no matches" state must not appear instead.
+  await expect(page.getByTestId('no-matches')).toHaveCount(0);
 });
 
 for (const path of [
@@ -127,6 +160,161 @@ for (const path of [
     expect(response?.status()).toBe(404);
   });
 }
+
+/**
+ * The catalogue controls (UI-2).
+ *
+ * Every one of these is a URL. The toolbar is a plain `<form method="get">`,
+ * so the filtered view is reachable by typing the address, by the back button
+ * and with JavaScript disabled — and the assertions below go through the
+ * address bar to prove exactly that.
+ *
+ * The listing API takes no query string of its own; all of this is applied in
+ * the web layer to the one answer it gives.
+ */
+test('status filtering narrows the listing to one group', async ({ page }) => {
+  await page.goto('/uk/draws?status=open');
+  const results = page.getByTestId('draw-results');
+  await expect(results.getByTestId('draw-card')).toHaveCount(2);
+  await expect(results).toContainText('Highland lodge escape');
+  await expect(results).toContainText('Last tickets');
+  await expect(results).not.toContainText('Vintage whisky collection');
+  await expect(page.getByTestId('result-summary')).toContainText('2 open');
+  await expect(page.getByTestId('result-summary')).not.toContainText('opening soon');
+  // Grouping collapses: a single status has nothing to group by.
+  await expect(page.getByTestId('open-draws')).toHaveCount(0);
+
+  await page.goto('/uk/draws?status=upcoming');
+  const upcoming = page.getByTestId('draw-results');
+  await expect(upcoming).toContainText('Vintage whisky collection');
+  await expect(upcoming).not.toContainText('Highland lodge escape');
+  await expect(upcoming).not.toContainText('Last tickets');
+  await expect(page.getByTestId('result-summary')).toContainText('opening soon');
+});
+
+test('sorting by price orders every result, not each group', async ({ page }) => {
+  await page.goto('/uk/draws?sort=price-asc');
+  // Vintage whisky £2.50, Highland lodge £2.99, Last tickets £5.00.
+  expect(await fixtureOrder(page.getByTestId('draw-results'))).toEqual([
+    'Vintage whisky collection',
+    'Highland lodge escape',
+    'Last tickets',
+  ]);
+
+  await page.goto('/uk/draws?sort=price-desc');
+  expect(await fixtureOrder(page.getByTestId('draw-results'))).toEqual([
+    'Last tickets',
+    'Highland lodge escape',
+    'Vintage whisky collection',
+  ]);
+});
+
+test('sorting by closing time puts the open draws first', async ({ page }) => {
+  await page.goto('/uk/draws?sort=closing-soon');
+  // Both open draws close in 7 days and the upcoming one in 9, so the only
+  // relation the fixtures fix is that the whisky comes last of the three.
+  const order = await fixtureOrder(page.getByTestId('draw-results'));
+  expect(order).toHaveLength(3);
+  expect(order[2]).toBe('Vintage whisky collection');
+});
+
+test('searching the title finds a partial, case-insensitive match', async ({ page }) => {
+  await page.goto('/uk/draws?q=lodge');
+  await expect(page.getByTestId('draw-card')).toHaveCount(1);
+  await expect(page.getByTestId('open-draws')).toContainText('Highland lodge escape');
+  await expect(page.getByTestId('result-summary')).toHaveText('1 competition · 1 open');
+  await expect(page.getByTestId('clear-filters')).toBeVisible();
+
+  // Case is not a filter.
+  await page.goto('/uk/draws?q=LODGE');
+  await expect(page.getByTestId('draw-card')).toHaveCount(1);
+
+  // Whitespace is not a search term.
+  await page.goto('/uk/draws?q=%20%20whisky%20%20');
+  await expect(page.getByTestId('draw-card')).toHaveCount(1);
+  await expect(page.getByTestId('upcoming-draws')).toContainText('Vintage whisky collection');
+});
+
+test('a search with no matches says so, and offers a way back', async ({ page }) => {
+  await page.goto('/uk/draws?q=nothing-matches-this');
+  // Distinct from "this market has no competitions", which would be untrue.
+  await expect(page.getByTestId('no-matches')).toBeVisible();
+  await expect(page.getByTestId('no-draws')).toHaveCount(0);
+  await expect(page.getByTestId('draw-card')).toHaveCount(0);
+  await expect(page.getByTestId('result-summary')).toHaveText('0 competitions');
+
+  await page.getByTestId('no-matches').getByRole('link', { name: 'Clear filters' }).click();
+  await expect(page).toHaveURL(/\/uk\/draws$/);
+  await expect(page.getByTestId('open-draws').getByTestId('draw-card')).toHaveCount(2);
+});
+
+test('clear filters returns to the default grouped view', async ({ page }) => {
+  await page.goto('/uk/draws?status=open&sort=price-desc&q=tickets');
+  await expect(page.getByTestId('draw-results')).toContainText('Last tickets');
+
+  await page.getByTestId('clear-filters').click();
+  await expect(page).toHaveURL(/\/uk\/draws$/);
+  await expect(page.getByTestId('open-draws')).toBeVisible();
+  await expect(page.getByTestId('upcoming-draws')).toBeVisible();
+  // Gone, because there is nothing left to clear.
+  await expect(page.getByTestId('clear-filters')).toHaveCount(0);
+});
+
+test('the toolbar submits without JavaScript and produces a shareable URL', async ({ browser }) => {
+  // The whole reason it is a GET form rather than client state — and the
+  // reason this segment has no `loading.tsx`. A Suspense boundary here streams
+  // the results in after the shell, and without scripting they never arrive:
+  // the page rendered the word "Loading" and stopped. See the page's docstring.
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  try {
+    await page.goto('/uk/draws');
+    await page.getByLabel('Search competitions').fill('whisky');
+    await page.getByLabel('Show').selectOption('upcoming');
+    await page.getByRole('button', { name: 'Apply' }).click();
+
+    await expect(page).toHaveURL(/q=whisky/);
+    await expect(page).toHaveURL(/status=upcoming/);
+    await expect(page.getByTestId('draw-results')).toContainText('Vintage whisky collection');
+    await expect(page.getByTestId('draw-card')).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});
+
+test('nonsense query parameters fall back to the default view', async ({ page }) => {
+  // A URL gets typed, truncated and edited by hand. None of this is worth an
+  // error page, and none of it may change what a customer is allowed to see.
+  for (const query of [
+    '?sort=nonsense',
+    '?status=deleted',
+    '?sort=&status=',
+    '?sort[]=price-asc',
+    '?status=open&status=all',
+    '?q=' + 'x'.repeat(500),
+  ]) {
+    const response = await page.goto('/uk/draws' + query);
+    expect(response?.status(), query).toBe(200);
+    // Either the default grouped view, or an honest "no matches" - never a crash.
+    const crashed = await page.getByText('Application error').count();
+    expect(crashed, query).toBe(0);
+  }
+
+  // And the plainly invalid ones land on the default view itself.
+  await page.goto('/uk/draws?sort=nonsense&status=deleted');
+  await expect(page.getByTestId('open-draws').getByTestId('draw-card')).toHaveCount(2);
+  await expect(page.getByTestId('upcoming-draws')).toBeVisible();
+  await expect(page.getByTestId('clear-filters')).toHaveCount(0);
+});
+
+test('a filter can never surface a draw the API does not list', async ({ page }) => {
+  // The gate is the API's, and no arrangement of the query string moves it.
+  for (const query of ['?q=secret', '?q=withdrawn', '?q=draft', '?status=all&sort=price-asc']) {
+    await page.goto('/uk/draws' + query);
+    await expect(page.getByText('Secret draft')).toHaveCount(0);
+    await expect(page.getByText('Withdrawn draw')).toHaveCount(0);
+  }
+});
 
 test('unpublished draws never appear in the listing', async ({ page }) => {
   await page.goto('/uk/draws');
