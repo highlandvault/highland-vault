@@ -482,16 +482,22 @@ describe('payment reconciliation', () => {
   describe('the customer status route', () => {
     it('reports the order, not just the attempt', async () => {
       const { client, order, payment, reference } = await readyToPay();
-      provider().complete(reference);
+      // Settled by the authoritative path, which is the only thing that
+      // settles anything. This test used to call `provider().complete` and
+      // then rely on the GET itself to discover it; ADR-0035 took that
+      // authority away, so the fact is established first and the route is
+      // asked to report it.
+      await deliver(successBody(order, reference));
 
       const response = await client.get(
         `/markets/uk/checkout/orders/${order.id}/payments/${payment.id}`,
       );
       expect(response.statusCode).toBe(200);
       const body = response.json<{ payment: { status: string; order: { status: string } } }>();
-      // The check ran because the attempt was live, and the answer came from
-      // the database afterwards.
       expect(body.payment.status).toBe('succeeded');
+      // The ORDER's status travels with the attempt, which is the point of the
+      // test and is unchanged: an attempt the provider called succeeded has
+      // delivered nothing until the order says so.
       expect(body.payment.order.status).toBe('paid');
     });
 
@@ -532,6 +538,146 @@ describe('payment reconciliation', () => {
     });
   });
 
+  // ---- the customer status route is a read (ADR-0035) ----------------------
+
+  /**
+   * What this block exists to prevent coming back.
+   *
+   * `status` used to call `reconcile` whenever the attempt was pending or
+   * processing. That is an outbound call on our merchant account followed by
+   * `finalization.confirm` — the same code a verified webhook reaches — so a
+   * customer refreshing their own page could capture money, sell tickets,
+   * release holds, raise a refund and write the outbox row that becomes an
+   * email. None of that is what a GET promises, and none of it was needed:
+   * the webhook and the P6-5 reconciler already advance payments.
+   *
+   * Every assertion here is about an absence, which is the hardest kind to
+   * keep. The provider's own counter is used rather than a spy, so this holds
+   * even if the call moves somewhere a spy would not be watching.
+   */
+  describe('the customer status route performs no provider work', () => {
+    const statusUrl = (o: { id: string }, p: { id: string }) =>
+      `/markets/uk/checkout/orders/${o.id}/payments/${p.id}`;
+
+    it('asks the provider nothing, however often it is asked', async () => {
+      const { client, order, payment } = await readyToPay();
+      // Live, which is exactly the condition that used to trigger a check.
+      expect(await paymentStatus(payment.id)).toBe('processing');
+
+      const before = provider().statusCheckCount;
+      for (let i = 0; i < 5; i++) {
+        expect((await client.get(statusUrl(order, payment))).statusCode).toBe(200);
+      }
+      expect(provider().statusCheckCount).toBe(before);
+    });
+
+    it('does not settle an order the provider has already succeeded', async () => {
+      const { client, order, payment, reference } = await readyToPay();
+      // The money is taken and the webhook has not arrived. This is the window
+      // a customer refreshes in, and the window in which the old behaviour
+      // finalised the order from a GET.
+      provider().complete(reference);
+      provider().takeWebhooks('withheld');
+
+      const beforeAudits = (
+        await h.sql.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM audit_log WHERE entity_id = $1`,
+          [order.id],
+        )
+      ).rows[0]!.n;
+      // Every outbox row in this database, not only this order's: a read has
+      // no business writing any of them, and an unfiltered count cannot be
+      // fooled by a payload shape changing.
+      const outboxRows = async () =>
+        (await h.sql.query<{ n: number }>(`SELECT count(*)::int AS n FROM outbox`)).rows[0]!.n;
+      const beforeOutbox = await outboxRows();
+      const beforePayment = (
+        await h.sql.query<{ status: string; updated_at: Date; provider_reference: string }>(
+          `SELECT status, updated_at, provider_reference FROM payments WHERE id = $1`,
+          [payment.id],
+        )
+      ).rows[0];
+
+      for (let i = 0; i < 5; i++) {
+        const body = (await client.get(statusUrl(order, payment))).json<{
+          payment: { status: string; order: { status: string } };
+        }>();
+        // It reports the database's answer, not the provider's.
+        expect(body.payment.status).toBe('processing');
+        expect(body.payment.order.status).toBe('awaiting_payment');
+      }
+
+      // The order did not move.
+      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+      // The payment row is byte-identical, updated_at included.
+      expect(
+        (
+          await h.sql.query<{ status: string; updated_at: Date; provider_reference: string }>(
+            `SELECT status, updated_at, provider_reference FROM payments WHERE id = $1`,
+            [payment.id],
+          )
+        ).rows[0],
+      ).toEqual(beforePayment);
+      // No ticket sold, and none released either.
+      const tickets = await h.sql.query<{ status: string; n: number }>(
+        `SELECT t.status, count(*)::int AS n FROM tickets t
+           JOIN order_items oi ON oi.reservation_id = t.reservation_id
+          WHERE oi.order_id = $1 GROUP BY t.status`,
+        [order.id],
+      );
+      expect(tickets.rows.map((r) => r.status).sort()).toEqual(['reserved']);
+      // No refund, no audit record, no outbox event.
+      expect(
+        (
+          await h.sql.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM refunds WHERE order_id = $1`,
+            [order.id],
+          )
+        ).rows[0]!.n,
+      ).toBe(0);
+      expect(
+        (
+          await h.sql.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM audit_log WHERE entity_id = $1`,
+            [order.id],
+          )
+        ).rows[0]!.n,
+      ).toBe(beforeAudits);
+      expect(await outboxRows()).toBe(beforeOutbox);
+    });
+
+    it('still lets the webhook settle the very same payment afterwards', async () => {
+      const { client, order, payment, reference } = await readyToPay();
+      provider().complete(reference);
+      provider().takeWebhooks('withheld');
+      for (let i = 0; i < 3; i++) await client.get(statusUrl(order, payment));
+      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+
+      // Nothing the reads did gets in the authoritative path's way.
+      await deliver(successBody(order, reference));
+      expect(await orderStatus(order.id)).toBe('paid');
+      expect(await paymentStatus(payment.id)).toBe('succeeded');
+
+      const body = (await client.get(statusUrl(order, payment))).json<{
+        payment: { status: string; order: { status: string } };
+      }>();
+      expect(body.payment.status).toBe('succeeded');
+      expect(body.payment.order.status).toBe('paid');
+    });
+
+    it('still lets the scheduled reconciliation settle it', async () => {
+      const { client, order, payment, reference } = await readyToPay();
+      provider().complete(reference);
+      provider().takeWebhooks('withheld');
+      for (let i = 0; i < 3; i++) await client.get(statusUrl(order, payment));
+      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+
+      // The other authoritative path, reached the way the worker reaches it.
+      expect((await internal(payment.id)).status).toBe(200);
+      expect(await orderStatus(order.id)).toBe('paid');
+    });
+  });
+
   // ---- D-1: the status route's provider-call budget ------------------------
 
   describe('the status route is rate limited (B19 endpoint abuse)', () => {
@@ -540,20 +686,23 @@ describe('payment reconciliation', () => {
       const limit = RATE_LIMITS.paymentStatusPerOwner.limit;
       const url = `/markets/uk/checkout/orders/${order.id}/payments/${payment.id}`;
 
-      for (let i = 0; i < limit; i++) expect((await client.get(url)).statusCode).toBe(200);
-
-      // Watch the real provider, calling through. The assertion is about
-      // whether it is reached at all once the caller is refused.
+      // Watching from the FIRST call, not only from the one that is refused.
+      // The old version installed the spy after the loop, so it could only say
+      // that a 429 stops short of the provider. Since ADR-0035 the stronger
+      // statement is available and worth making: none of the calls reaches the
+      // provider, whether they are allowed or refused.
       const watch = vi.spyOn(provider(), 'getPaymentStatus');
       try {
+        for (let i = 0; i < limit; i++) expect((await client.get(url)).statusCode).toBe(200);
+        expect(watch, 'an allowed read must not reach the provider').not.toHaveBeenCalled();
+
         const over = await client.get(url);
         expect(over.statusCode).toBe(429);
         expect(errorCode(over)).toBe('RATE_LIMITED');
         expect(over.headers['retry-after']).toBeDefined();
 
-        // The whole point: a refused caller never reaches the provider. The
-        // limiter runs before ownership, before the row is read, and long
-        // before any network call.
+        // The limiter still runs before ownership and before the row is read,
+        // which is what fail-closed depends on.
         expect(watch).not.toHaveBeenCalled();
       } finally {
         watch.mockRestore();
@@ -634,13 +783,22 @@ describe('payment reconciliation', () => {
       expect(await orderStatus(order.id)).toBe('cancelled');
     });
 
-    it('audits an anomaly the customer status route discovers', async () => {
+    it('is not discovered by the customer status route, which no longer looks', async () => {
       const { client, order, secondPaymentId } = await withSecondCapture();
+      // This used to assert the opposite: a customer refreshing their own page
+      // was how a second capture got found, and the row was written with
+      // actor 'system' because no human had looked. ADR-0035 ends that. The
+      // route answers, and finds nothing, because it asks nobody.
       const response = await client.get(
         `/markets/uk/checkout/orders/${order.id}/payments/${secondPaymentId}`,
       );
       expect(response.statusCode).toBe(200);
+      expect(await anomalyRows(order.id)).toHaveLength(0);
 
+      // The anomaly is still found, by the path that is supposed to find it.
+      // Nothing is lost by the route not looking — it is only found later, by
+      // a scheduled check rather than by whoever happened to refresh.
+      expect((await internal(secondPaymentId)).status).toBe(200);
       const rows = await anomalyRows(order.id);
       expect(rows).toHaveLength(1);
       expect(rows[0]!.actor_type).toBe('system');

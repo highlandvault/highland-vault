@@ -447,15 +447,16 @@ D3 = B with a 120-second attempt timeout, inside a window of at most 510 s (and 
 
 Following the Phase 5 convention — ADRs 0028–0032 were each written **with the slice that implemented them**, not ahead of it — no ADR is written now. The following are expected, at their slice:
 
-| Decision                         | ADR needed          | Why                                                                                                                        | Slice                                                       |
-| -------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **D7 = B**                       | yes                 | Deviation from B18's literal "raw payload"; mirrors ADR-0028's reasoning                                                   | P6-3                                                        |
-| **D1 = B**                       | yes                 | Introduces an order payment deadline as a distinct clock, which the specification does not define                          | P6-2                                                        |
-| **D4 = C**, **D10 = B**          | likely one combined | Both extend database-enforced state machines; ADR-0011 amendment territory                                                 | P6-2 / P6-4                                                 |
-| **C10** (answered: **D14 = A**)  | yes — **written**   | A recorded deviation from B10's re-allocation branch — **[ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)** | planned P6-6; written with **P6-4**, where the path shipped |
-| D2, D3, D3a, D3b, D5, D6, D8, D9 | no                  | Operational and configuration choices, recorded here and in code comments                                                  | —                                                           |
+| Decision                                | ADR needed          | Why                                                                                                                                 | Slice                                                       |
+| --------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **D7 = B**                              | yes                 | Deviation from B18's literal "raw payload"; mirrors ADR-0028's reasoning                                                            | P6-3                                                        |
+| **D1 = B**                              | yes                 | Introduces an order payment deadline as a distinct clock, which the specification does not define                                   | P6-2                                                        |
+| **D4 = C**, **D10 = B**                 | likely one combined | Both extend database-enforced state machines; ADR-0011 amendment territory                                                          | P6-2 / P6-4                                                 |
+| **C10** (answered: **D14 = A**)         | yes — **written**   | A recorded deviation from B10's re-allocation branch — **[ADR-0034](adr/0034-late-payment-never-re-allocates-tickets.md)**          | planned P6-6; written with **P6-4**, where the path shipped |
+| D2, D3, D3a, D3b, D5, D6, D8, D9        | no                  | Operational and configuration choices, recorded here and in code comments                                                           | —                                                           |
+| **The customer status route is a read** | yes — **written**   | A GET could reach finalisation, which no HTTP method should hide — **[ADR-0035](adr/0035-customer-payment-status-is-read-only.md)** | **P6-9 (WP-3)**, where it shipped                           |
 
-Next free ADR number: **0035**.
+Next free ADR number: **0036**.
 
 ---
 
@@ -498,16 +499,16 @@ Next free ADR number: **0035**.
 
 **Mechanism — an opaque order access token. LOCKED in scope and lifetime shape (D18 = B, D19 = A).** The repository already contains this pattern twice, so nothing is invented:
 
-| Property           | Value                                                                                                                                                   | Precedent                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Form               | opaque random token, given once to the client                                                                                                           | `guest_sessions.token` (ADR-0029)                                                       |
-| Storage            | **SHA-256 only**, `bytea` with `CHECK (octet_length(token_hash) = 32)`, `UNIQUE`                                                                        | `guest_sessions_token_hash_sha256` (`0012:42`)                                          |
-| Scope              | **exactly one order** — the token is bound to `order_id`, nothing else                                                                                  | new                                                                                     |
-| Grants             | **read-only: payment and order status, plus the order's detail** (draws, quantities, amounts), and the right to trigger a trusted provider status check | **D18 = B**; B10: "the return page may _trigger_ a check but never marks anything paid" |
-| **Does not** grant | **initiating a payment**, any session, any cap identity, any basket, any other order, any mutation of order state                                       | **D18 = B**, OD-2                                                                       |
-| Lifetime           | **`orders.expires_at` + 30 minutes**                                                                                                                    | **D19 = A, D19a**                                                                       |
-| Delivery           | in the provider **return URL**, so the browser need not have stayed anywhere                                                                            | OD-2                                                                                    |
-| Revocation         | `revoked_at`, mirroring `guest_sessions`                                                                                                                | `0012`                                                                                  |
+| Property           | Value                                                                                                                                                                                                                      | Precedent                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Form               | opaque random token, given once to the client                                                                                                                                                                              | `guest_sessions.token` (ADR-0029)                                                       |
+| Storage            | **SHA-256 only**, `bytea` with `CHECK (octet_length(token_hash) = 32)`, `UNIQUE`                                                                                                                                           | `guest_sessions_token_hash_sha256` (`0012:42`)                                          |
+| Scope              | **exactly one order** — the token is bound to `order_id`, nothing else                                                                                                                                                     | new                                                                                     |
+| Grants             | **read-only: payment and order status, plus the order's detail** (draws, quantities, amounts). ~~and the right to trigger a trusted provider status check~~ — **struck by P6-8 (S2)**: the link reads and triggers nothing | **D18 = B**; B10: "the return page may _trigger_ a check but never marks anything paid" |
+| **Does not** grant | **initiating a payment**, any session, any cap identity, any basket, any other order, any mutation of order state                                                                                                          | **D18 = B**, OD-2                                                                       |
+| Lifetime           | **`orders.expires_at` + 30 minutes**                                                                                                                                                                                       | **D19 = A, D19a**                                                                       |
+| Delivery           | in the provider **return URL**, so the browser need not have stayed anywhere                                                                                                                                               | OD-2                                                                                    |
+| Revocation         | `revoked_at`, mirroring `guest_sessions`                                                                                                                                                                                   | `0012`                                                                                  |
 
 Because it is per-order and read-only, it satisfies "must not expose arbitrary orders" structurally rather than by a check. Because it is a separate credential, it touches neither `guest_sessions.verified_email` nor the authenticated path.
 
@@ -929,7 +930,7 @@ Because of **C1**, this will not be rare. Because of **C10**, there is exactly o
 | At the provider              | none — the customer has left the site                                      |                                                                                                     |
 | **Webhook**                  | **none** (I13)                                                             | this is why the guest's session, browser and email window are all irrelevant to correctness         |
 | **Return from the provider** | **order access token** (OD-2)                                              | works after the 30-minute window, after the browser closed, on a different tab                      |
-| Poll for status              | order access token                                                         | may _trigger_ a trusted status check; never asserts an outcome                                      |
+| Poll for status              | order access token                                                         | never asserts an outcome, and since P6-8 (S2) triggers no status check either                       |
 | **Retry a failed payment**   | **guest session + fresh verified email** — **not** the token (**D18 = B**) | a guest past the 30-minute window must verify again to retry. They can _see_ the failure without it |
 
 **LOCKED guarantees:**
@@ -1129,7 +1130,14 @@ Exactly B10: `(market_id, provider_code, config_ref)`. **`config_ref` is a refer
 
 **The 180-second refusal is a product behaviour, not an internal error.** It means "your hold is about to expire; rebuild your basket", and P6-8 must present it that way. It needs its own error code, distinct from "past the deadline", so the web app can say the right thing.
 
-**`GET /markets/:market/checkout/orders/:order/payments/:payment`** — status for the return page. Accepts either the owning identity **or** a valid order access token. **May trigger a trusted status check; never asserts an outcome** (ADR-0006, D6).
+**`GET /markets/:market/checkout/orders/:order/payments/:payment`** — status for the owning identity. **Read-only: it never asserts an outcome, and as of P6-9 it never triggers a status check either** ([ADR-0035](adr/0035-customer-payment-status-is-read-only.md); ADR-0006, D6).
+
+> **Superseded, twice, and worth reading together.** As written this row said the route accepted _either_ the owning identity _or_ an order access token, and that it might trigger a trusted status check.
+>
+> - **P6-8** gave the return link its own route, `GET /checkout/order-access`, rather than widening this one. This route takes the owning identity only.
+> - **P6-9 (ADR-0035)** removed the status check. `reconcile` reaches `finalization.confirm`, so a GET could capture a payment, sell tickets, release holds, raise a refund and write an outbox row. Advancement belongs to the verified webhook and the P6-5 reconciler, both unchanged. Staff can still ask the provider deliberately through `POST admin/…/payments/:payment/reconcile`.
+>
+> The original text is kept above the line so the decision it recorded is still legible.
 
 **`GET /markets/:market/checkout/orders/:order`** — unchanged for authenticated and freshly-verified guests; additionally accepts an order access token (OD-2). `buyerOf` is not modified.
 

@@ -44,13 +44,14 @@ Next:
 
 - **Phases 1–4:** complete. Phase 4 merged into `develop` (**PR #8**, `49e3903`) and released to `main` (**PR #9**, `c284825`).
 - **Phase 5 (cart + checkout):** **COMPLETE.** P5-0 through P5-8 merged. The phase ends where Option A said it would: the order is `awaiting_payment`, the reservation is still active and its tickets still `reserved`.
-- **Phase 6 (payments + settlement):** **P6-1 through P6-5 merged** into `develop` — PR #26 (P6-1), #27 (P6-2), #29 (P6-3), #30 (P6-4), #31 (P6-5). `develop` is at `a71e687`; CI green. Migrations `0019`–`0025`.
+- **Phase 6 (payments + settlement):** **P6-1 through P6-8 merged** into `develop` — PR #26 (P6-1), #27 (P6-2), #29 (P6-3), #30 (P6-4), #31 (P6-5), #33 (P6-7), #34 (P6-8), #35 (the P6-8 corrective pass). `develop` is at `748b9e9`; CI green (PR #66, post-merge #67). Migrations `0019`–`0027`.
 - **[PHASE_6_SCOPE_LOCK.md](../PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** The phase plan in PROJECT_STATUS.md predates it; where they disagree, the scope lock wins.
 - **P6-6 is consumed by P6-4**, not outstanding. Everything §22 originally listed under it — `paid_unfulfillable` (D14 = A), the automatic refund to the original instrument (D15a, D15b), `order.unfulfillable` (D16a) — shipped in P6-4, because the locked D21/D22.3/D23 outcomes need a refund at the moment finalisation decides. It is **not** a separate implementation slice.
-- **P6-7** is implemented on `feature/p6-7-market-payment-config` (`1418ab2`), not yet merged.
-- **P6-8 (web payment flow) is the active task**, branched from it. **P6-9** (hardening and Gate 4 sign-off) remains.
+- **P6-7** (per-market payment configuration) merged by PR #33.
+- **P6-8** (web payment flow) merged by PR #34, and its corrective pass by PR #35 — see [ADR-0035](../adr/0035-customer-payment-status-is-read-only.md) for the decision the second pass reached.
+- **P6-9 (hardening and Gate 4 sign-off) is the active task**, taken one work package at a time. **WP-3** (payment-status GET semantics) is in progress; **WP-4** (integration-suite stability) and the Gate 4 matrix follow.
 - **The web purchase journey is basket-first as of P6-8.** An order is built from the basket and must match it exactly (ADR-0032), so the draw page now adds to the basket rather than reserving directly. The allocation is unchanged — `CartService` takes the same hold through the same engine — and the reservation detail page is kept and linked from each basket line.
-- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `a71e687`.
+- **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `748b9e9`.
 
 ### Open owner decisions carried by Phase 6
 
@@ -65,34 +66,36 @@ Recorded so they are not mistaken for oversights. None may be decided by an impl
 
 ## Active entries
 
-### P6-8 — Web payment flow
+### P6-9 — Hardening and Gate 4 sign-off
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `feature/p6-8-web-payment-flow` (from `feature/p6-7-market-payment-config` `1418ab2`)
+Branch: `feature/p6-9-payment-status-read-only` (from `develop` `748b9e9`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
 PR: none yet
-Status: IN REVIEW
+Status: IN PROGRESS
 
 Current task:
-Making the backend purchase and payment system reachable from a browser (OD-2; **D18 = B**, **D19 = A**, **D19a**). Migration `0027_order_access_tokens`, the read-only return link, and the basket-first customer journey.
+**WP-3 only** — making the customer payment-status GET genuinely read-only ([ADR-0035](../adr/0035-customer-payment-status-is-read-only.md)). The route could reach `finalization.confirm` through a trusted status check, so a GET could capture a payment, sell tickets, release holds, raise a refund and write outbox rows. It now reads the database and returns.
 
 Affected areas:
-`packages/db/migrations/0027_order_access_tokens.sql` (new), `apps/api/src/orders/{order-access.service,checkout.service,orders.module,markets}`, `apps/api/src/payments/{order-access.controller,payments.service,payments.module}.ts`, `apps/api/src/auth/rate-limiter.ts`, `apps/api/src/config/env.ts`, `packages/contracts/src/orders.ts`, `packages/payments/src/fake-provider.ts`, `apps/web/src/app/[market]/{basket,checkout,orders,cart-actions,checkout-actions}`, `apps/web/src/app/checkout/payments/[id]/{return,cancel}`, `apps/web/src/lib/{api,checkout}.ts`, `apps/web/src/components/entry-panel.tsx`, e2e, docs.
+`apps/api/src/payments/{payments.service,payments.controller}.ts`, `apps/api/test/payment-reconciliation.int.test.ts`, `apps/web/src/lib/checkout.ts` (dead `fetchPaymentStatus` removed), `docs/adr/0035-*`, docs.
 
 Avoid modifying:
-`packages/db/migrations/` (`0027` is taken by this branch; the next free number is `0028`). The payment and order state machines are unchanged by this slice and must stay that way.
+The webhook path, the P6-5 reconciler, the internal reconciliation route, the staff reconcile POST, payment provider configuration, settlement, the ticket engine, refunds policy. WP-3 touches the customer read path and nothing else.
 
 Blockers:
-None. **Four things for the reviewer:**
+None. **For the reviewer:**
 
-1. **The web purchase journey deliberately moved to the basket.** `POST /checkout/orders` builds an order from the caller's basket and the order must match it exactly (ADR-0032), so a hold taken by the old draw-page route could never become an order — the two paths reached the same engine by different doors, and only one of them leads to checkout. The draw page now adds to the basket. **The allocation is unchanged**: `CartService` takes the same real hold, through the same ticket engine, under the same cap and locks. No second reservation or basket mechanism exists.
-2. **The reservation detail page is kept**, and each basket line links to it. The hold is real and its ticket numbers are worth showing; deleting the page to simplify the new flow would have lost something true.
-3. **Webhook resolution and payment authority are untouched.** Nothing in the web flow can mark an order paid. The return page presents a read-only token and prints what the database says; a forged query string, a replayed link and twenty refreshes all produce the same answer.
-4. **`draws.spec.ts` and `reservations.spec.ts` were updated, not weakened.** Their assertions described the old journey. Allocation, real ticket numbers, sequential padding, the per-person cap, expiry, release, market isolation and authorization are all still asserted — one page further along.
+1. **Payment advancement is unchanged.** The verified webhook stays authoritative and the P6-5 reconciler stays the recovery path. Two tests assert that the same payment still settles by each of them after any number of customer reads.
+2. **No `POST …/check` was introduced.** There is no caller that needs one, and the staff route already provides a deliberate, audited way to ask the provider.
+3. **An existing test changed meaning, not strength.** `audits an anomaly the customer status route discovers` asserted the opposite of the new rule. It now asserts that the route finds nothing and that the internal path still does — the anomaly is discovered by a scheduled check rather than by whoever refreshed.
+4. **The rate-limit test was strengthened, not relaxed.** Its provider spy now watches from the first call, so it proves no read reaches the provider, rather than only that a refused one does not.
+
+Work packages still to come:
+**WP-4** integration-suite stability (two transient data points on record; mechanism unidentified, not to be called contention without evidence), the **Gate 4 matrix** G4.1–G4.13 (G4.4 deferred to Gate 6 / P8 by D8 = A), the **Phase 6 Definition of Done** (G4.10, required before the phase closes), Gate 1 and Gate 2 re-run (G4.12), and documentation reconciliation.
 
 Last update:
-2026-09-29 — Implemented. 29 order-access integration tests, a new Playwright journey spec, and the two existing specs updated to the basket-first flow.
-2026-09-29 — Corrective pass after the first CI run: defects A (a Server Component tried to set a cookie), B (the e2e raced a failed navigation), C (a `>= 400` assertion hid a 500) and D (a POST issued during a plain navigation, correctly refused by the CSRF hook for want of an `Origin`). Owner decision **S2**: order access is a read-only bearer-authenticated `GET /checkout/order-access` with the token in `x-hv-order-access`, and the browser return exchange stays a Route Handler. `statusByAccess` no longer reconciles. See HANDOFFS for the full record.
+2026-09-29 — WP-3 implemented: `status` no longer calls `reconcile`; ADR-0035 written; four read-only regression tests added; the dead `fetchPaymentStatus` helper removed after confirming zero callers.
 
 Next:
-Owner review of the P6-8 PR.
+Owner review of WP-3, then WP-4.
