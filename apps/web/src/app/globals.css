@@ -534,6 +534,12 @@ a {
   margin: 0;
 }
 
+.draw-card__winners {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 .draw-card__meta {
   display: flex;
   justify-content: space-between;
@@ -544,6 +550,31 @@ a {
   border-top: 1px solid var(--line);
   font-size: 0.9rem;
   color: var(--muted);
+}
+
+/*
+ * Closing soon: a gold edge and a darker timing line, and that is all.
+ *
+ * The card already says "Closes in 5 hours" in words, so nothing here carries
+ * meaning on its own — the treatment draws the eye to a sentence that is
+ * already there rather than replacing it with a colour.
+ */
+.draw-card--closing {
+  border-color: rgb(200 162 74 / 55%);
+  box-shadow:
+    inset 3px 0 0 var(--gold),
+    var(--shadow);
+}
+
+.draw-card--closing:hover {
+  box-shadow:
+    inset 3px 0 0 var(--gold),
+    var(--shadow-lift);
+}
+
+.draw-card__timing--soon {
+  color: var(--upcoming);
+  font-weight: 600;
 }
 
 .price {
@@ -1389,4 +1420,153 @@ table.data th {
   max-width: 18ch;
   margin-inline: auto;
   margin-bottom: 1em;
+}
+
+/* ====================================================== competition listing
+   The market catalogue: /[market]/draws. Page framing, then the control bar.
+   Everything here is scoped to the listing; the homepage has its own section
+   further up and the two share only tokens. */
+
+/*
+ * Title left, context right, once there is room for both.
+ *
+ * Stacked, the heading's 20ch measure left the right half of a desktop page
+ * empty and the page read as unfinished. The same two blocks side by side fill
+ * the width and give the listing an editorial masthead rather than a banner.
+ */
+.listing-head {
+  display: grid;
+  gap: 12px 48px;
+  align-items: end;
+  margin-bottom: clamp(20px, 3vw, 28px);
+}
+
+@media (min-width: 960px) {
+  .listing-head {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  }
+}
+
+.listing-head h1 {
+  font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+  max-width: 20ch;
+  margin-bottom: 0;
+}
+
+.listing-head__lede {
+  color: var(--muted);
+  max-width: 52ch;
+  font-size: 1.05rem;
+  margin: 0;
+  padding-bottom: 0.35em;
+}
+
+/* --------------------------------------------------------------- toolbar */
+
+/*
+ * A catalogue control bar, not a form.
+ *
+ * It is a real `<form method="get">` — no JavaScript, and the result is an
+ * ordinary shareable URL — so it has to look deliberate rather than like a
+ * settings panel dropped onto the page. Mobile stacks; from 720px the search
+ * takes the room the selects do not need.
+ */
+.toolbar {
+  display: grid;
+  gap: 14px 16px;
+  grid-template-columns: 1fr;
+  align-items: end;
+  padding: 18px 20px;
+  margin-bottom: clamp(24px, 4vw, 36px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+@media (min-width: 560px) {
+  .toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar__field--search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 900px) {
+  .toolbar {
+    /* search · show · sort · actions */
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .toolbar__field--search {
+    grid-column: auto;
+  }
+}
+
+.toolbar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.toolbar__field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.toolbar__field input,
+.toolbar__field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* Room for the native arrow, which sits inside the padding box. */
+.toolbar__field select {
+  padding-right: 8px;
+}
+
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+}
+
+.toolbar__actions .button {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 900px) {
+  .toolbar__actions .button {
+    flex: 0 0 auto;
+  }
+}
+
+/* The count spans the bar and sits under a hairline: a result, not a control. */
+.toolbar__results {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------- listing sections */
+
+.stack > section > h2 {
+  font-size: 1.35rem;
+  margin-bottom: 0.6em;
 }
