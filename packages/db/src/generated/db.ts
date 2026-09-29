@@ -39,6 +39,25 @@ export interface AuditLog {
   request_id: string | null;
 }
 
+export interface CartItems {
+  cart_id: string;
+  created_at: Generated<Timestamp>;
+  draw_id: string;
+  id: Generated<string>;
+  market_id: string;
+  removed_at: Timestamp | null;
+  reservation_id: string;
+}
+
+export interface Carts {
+  created_at: Generated<Timestamp>;
+  guest_session_id: string | null;
+  id: Generated<string>;
+  market_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string | null;
+}
+
 export interface DrawEntrantCounts {
   count: Generated<number>;
   draw_id: string;
@@ -79,6 +98,43 @@ export interface Draws {
   winner_positions: number;
 }
 
+export interface GuestEmailVerifications {
+  attempts: Generated<number>;
+  code_hash: Buffer;
+  consumed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  email: string;
+  expires_at: Timestamp;
+  guest_session_id: string;
+  id: Generated<string>;
+}
+
+export interface GuestSessions {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  ip: string | null;
+  revoked_at: Timestamp | null;
+  token_hash: Buffer;
+  user_agent: string | null;
+  verified_email: string | null;
+  verified_email_at: Timestamp | null;
+}
+
+export interface MarketPaymentConfigs {
+  /**
+   * Which credential set the provider uses — a reference, NEVER a secret (I15). Credentials live in the environment.
+   */
+  config_ref: string | null;
+  created_at: Generated<Timestamp>;
+  market_id: string;
+  /**
+   * The provider's stable code, matching payments.provider. Format-checked only: no provider is named in the schema (Gate 4.9, ADR-0006).
+   */
+  provider_code: string | null;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Markets {
   code: string;
   created_at: Generated<Timestamp>;
@@ -95,6 +151,10 @@ export interface Markets {
 }
 
 export interface MarketSettings {
+  /**
+   * The terms version a checkout in this market is placed under (ADR-0031). NULL means no order can be created; it does NOT stop the market being enabled or browsed.
+   */
+  active_terms_version_id: string | null;
   created_at: Generated<Timestamp>;
   market_id: string;
   min_age: number | null;
@@ -110,9 +170,137 @@ export interface MfaRecoveryCodes {
   user_id: string;
 }
 
+export interface OrderItems {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  draw_id: string;
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  quantity: number;
+  reservation_id: string;
+  skill_answer_option_id: string | null;
+  total_minor: number;
+  unit_price_minor: number;
+}
+
+export interface Orders {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  /**
+   * The payment deadline (D1 = B): min(created_at + 600s, earliest reservation expiry - 90s). Immutable. Not the reservation TTL, and never to be derived from it.
+   */
+  expires_at: Timestamp;
+  external_due_minor: number;
+  guest_email: string | null;
+  id: Generated<string>;
+  /**
+   * SHA-256 of the canonicalised request the idempotency key was first used with, so reusing a key for a different request is refused rather than answered with the earlier order.
+   */
+  idempotency_digest: Buffer;
+  idempotency_key: string;
+  market_id: string;
+  order_number: string;
+  status: Generated<string>;
+  terms_version_id: string;
+  total_minor: number;
+  updated_at: Generated<Timestamp>;
+  user_id: string | null;
+  wallet_applied_minor: Generated<number>;
+}
+
+export interface Outbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  last_error: string | null;
+  payload: Json;
+  published_at: Timestamp | null;
+  topic: string;
+}
+
+export interface PaymentEvents {
+  amount_minor: number | null;
+  currency: string | null;
+  event_type: string;
+  id: Generated<string>;
+  last_error: string | null;
+  /**
+   * The original bytes, AES-256-GCM sealed (D7 = B, ADR-0033). Cleared after 90 days by the retention process; never rewritten. Readable only under the payments.reconcile authority.
+   */
+  payload_sealed: Json | null;
+  payment_id: string | null;
+  /**
+   * NULL while the event still needs acting on. P6-3 settles events that need nothing further; one that should move an order is left for finalisation.
+   */
+  processed_at: Timestamp | null;
+  provider: string;
+  provider_event_id: string;
+  provider_reference: string | null;
+  /**
+   * The event's status normalised to Highland Vault's vocabulary. Decisions are taken from this, never from event_type.
+   */
+  provider_status: string | null;
+  received_at: Generated<Timestamp>;
+}
+
+export interface Payments {
+  /**
+   * Equal to orders.external_due_minor by foreign key, not by copy: the client never contributes an amount (I4, I5).
+   */
+  amount_minor: number;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  /**
+   * When this attempt stops being usable (D3a): min(created_at + 120s, orders.expires_at). The order deadline always wins.
+   */
+  expires_at: Timestamp;
+  failure_code: string | null;
+  failure_message: string | null;
+  id: Generated<string>;
+  idempotency_key: string;
+  market_id: string;
+  order_id: string;
+  provider: string;
+  /**
+   * The provider's identifier for this attempt. NULL until the provider answers, then fixed. Never shown to a customer.
+   */
+  provider_reference: string | null;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Permissions {
   code: string;
   description: string;
+}
+
+export interface Refunds {
+  /**
+   * NULL for a refund the system raised with no human involved, which is every refund Phase 6 writes (D15b).
+   */
+  actor_id: string | null;
+  amount_minor: number;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  /**
+   * Where the money goes. Phase 6 writes only 'provider' — back to the instrument it came from (D15a).
+   */
+  destination: Generated<string>;
+  id: Generated<string>;
+  /**
+   * Derived deterministically from what is being refunded (an order, or a provider event), so a repeated webhook or reconciliation action writes one row and the provider issues one refund.
+   */
+  idempotency_key: string;
+  market_id: string;
+  order_id: string;
+  payment_id: string | null;
+  provider: string;
+  provider_refund_reference: string | null;
+  reason: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface Reservations {
@@ -173,6 +361,23 @@ export interface SkillQuestions {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TermsAcceptances {
+  accepted_at: Generated<Timestamp>;
+  guest_session_id: string | null;
+  id: Generated<string>;
+  market_id: string;
+  terms_version_id: string;
+  user_id: string | null;
+}
+
+export interface TermsVersions {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  market_id: string;
+  published_at: Timestamp | null;
+  version: string;
+}
+
 export interface Tickets {
   created_at: Generated<Timestamp>;
   draw_id: string;
@@ -217,19 +422,32 @@ export interface Users {
 
 export interface DB {
   audit_log: AuditLog;
+  cart_items: CartItems;
+  carts: Carts;
   draw_entrant_counts: DrawEntrantCounts;
   draw_prizes: DrawPrizes;
   draws: Draws;
+  guest_email_verifications: GuestEmailVerifications;
+  guest_sessions: GuestSessions;
+  market_payment_configs: MarketPaymentConfigs;
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
+  order_items: OrderItems;
+  orders: Orders;
+  outbox: Outbox;
+  payment_events: PaymentEvents;
+  payments: Payments;
   permissions: Permissions;
+  refunds: Refunds;
   reservations: Reservations;
   role_permissions: RolePermissions;
   roles: Roles;
   sessions: Sessions;
   skill_question_options: SkillQuestionOptions;
   skill_questions: SkillQuestions;
+  terms_acceptances: TermsAcceptances;
+  terms_versions: TermsVersions;
   tickets: Tickets;
   user_mfa: UserMfa;
   user_roles: UserRoles;

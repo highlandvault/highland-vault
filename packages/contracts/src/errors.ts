@@ -27,6 +27,44 @@ export const ERROR_CODES = [
   'DRAW_TRANSITION_NOT_ALLOWED',
   'DRAW_NOT_OPEN',
   'INVALID_QUANTITY',
+  // Guest email verification (ADR-0020). Deliberately coarse: a caller never
+  // learns whether a code was wrong, expired, already used or never issued.
+  'VERIFICATION_REQUIRED',
+  // The basket (ADR-0031). CHECKOUT_IDENTITY_REQUIRED means the caller has
+  // neither a session nor a guest session, so there is no basket to own.
+  'CHECKOUT_IDENTITY_REQUIRED',
+  // Market terms (ADR-0031). TERMS_UNAVAILABLE means the market has no active
+  // version, so no order can be created in it yet; TERMS_VERSION_STALE means
+  // the customer agreed to a version that is no longer the active one.
+  'TERMS_UNAVAILABLE',
+  'TERMS_VERSION_STALE',
+  // Checkout (ADR-0030, ADR-0031). INVALID_SKILL_ANSWER is deliberately
+  // coarse: it never says which line was wrong or which option was right.
+  // IDEMPOTENCY_KEY_REUSED means the same key arrived with a different
+  // request, which is a mistake rather than a retry.
+  'INVALID_SKILL_ANSWER',
+  'TERMS_NOT_ACCEPTED',
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'IDEMPOTENCY_KEY_REUSED',
+  'BASKET_EMPTY',
+  // Payments (Phase 6, B10). ORDER_NOT_PAYABLE means the order has already
+  // settled one way or another. The two deadline codes are deliberately
+  // distinct: PAYMENT_DEADLINE_PASSED means the window has gone, while
+  // PAYMENT_WINDOW_TOO_SHORT means it has not yet but there is no longer
+  // enough of it to finish at a provider (D1b) — a different thing to tell a
+  // customer, and the reason it gets its own code rather than sharing one.
+  // PAYMENT_PROVIDER_UNAVAILABLE covers both "none is configured here" and
+  // "the provider could not be reached".
+  'ORDER_NOT_PAYABLE',
+  'PAYMENT_DEADLINE_PASSED',
+  'PAYMENT_WINDOW_TOO_SHORT',
+  'PAYMENT_PROVIDER_UNAVAILABLE',
+  // Staff-only (P6-7). A market's provider and its configuration reference are
+  // set together or cleared together; half a configuration is not a state the
+  // table can hold, and this says so in domain terms rather than surfacing a
+  // constraint violation.
+  'PAYMENT_CONFIG_INCOMPLETE',
+  'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',
   'CONFLICT',

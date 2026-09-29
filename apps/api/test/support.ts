@@ -9,7 +9,11 @@ import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { createApp } from '../src/app';
 import { base32Decode, hotp, totpStep } from '../src/auth/totp';
-import { DEV_PLACEHOLDER_MFA_KEY, parseApiEnv } from '../src/config/env';
+import {
+  DEV_PLACEHOLDER_INTERNAL_TOKEN,
+  DEV_PLACEHOLDER_MFA_KEY,
+  parseApiEnv,
+} from '../src/config/env';
 
 export const WEB_ORIGIN = 'http://127.0.0.1:3000';
 export const PASSWORD = 'correct horse battery staple';
@@ -46,7 +50,9 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
 
 export async function startApp(
   database: TestDatabase,
-  overrides: Record<string, string> = {},
+  // `undefined` removes a default, which is how a test asks for an API with
+  // no payment provider at all.
+  overrides: Record<string, string | undefined> = {},
 ): Promise<NestFastifyApplication> {
   const env = parseApiEnv({
     NODE_ENV: 'test',
@@ -57,6 +63,16 @@ export async function startApp(
     WEB_ORIGINS: WEB_ORIGIN,
     SESSION_COOKIE_SECURE: 'false',
     MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
+    // The API seals outbox payloads (ADR-0028); a low-entropy placeholder,
+    // the same convention as the MFA key above.
+    OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
+    // The fake payment provider (ADR-0006). Present here and refused in
+    // production, where there is no fake provider and no chosen one either.
+    FAKE_PAYMENT_WEBHOOK_SECRET: 'integration-test-webhook-secret',
+    // The internal listener (K-a). Port 0 asks the operating system for a
+    // free one, so many test apps can run at once without fighting over 4001.
+    INTERNAL_API_TOKEN: DEV_PLACEHOLDER_INTERNAL_TOKEN,
+    INTERNAL_API_PORT: '0',
     ...overrides,
   });
   const app = await createApp(env);

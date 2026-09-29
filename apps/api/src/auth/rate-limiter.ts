@@ -21,6 +21,57 @@ export const RATE_LIMITS = {
   registerPerIp: { name: 'register-ip', limit: 20, windowSeconds: 60 * 60 },
   mfaPerUser: { name: 'mfa-user', limit: 5, windowSeconds: 15 * 60 },
   reservePerUser: { name: 'reserve-user', limit: 30, windowSeconds: 10 * 60 },
+  // Basket changes per owner (ADR-0031), keyed on the user or the guest
+  // session rather than the address, so it holds for both kinds of checkout.
+  // Same value and window as reservePerUser: adding to a basket allocates
+  // tickets through the same engine and costs the same.
+  cartItemsPerOwner: { name: 'cart-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Checkout, which B19 names among the routes that must be limited. Same
+  // value and window as the basket and reservation limits, keyed on the
+  // checkout identity so a guest and an account each get their own bucket.
+  //
+  // It bounds CHECKOUT ATTEMPTS. It is not an answer-attempt counter, and
+  // ADR-0030 deliberately does not introduce one: a caller inside this limit
+  // still has more attempts than a skill question has options.
+  checkoutPerOwner: { name: 'checkout-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Starting a payment, per checkout identity (B19, Phase 6). Same value and
+  // window as checkout: it is the step immediately after one, and a caller who
+  // may attempt thirty checkouts may reasonably attempt thirty payments.
+  //
+  // It is not what stops a customer opening several provider sessions — one
+  // live attempt per order is a partial unique index, not a counter. This
+  // bounds the cost of asking.
+  paymentsPerOwner: { name: 'payments-owner', limit: 30, windowSeconds: 10 * 60 },
+  // Reading a payment's status, per checkout identity (B19 "endpoint abuse",
+  // Phase 6 P6-5). Keyed the same way as payment initiation, so a customer and
+  // the order they are paying for share one bucket however they identified.
+  //
+  // **Higher than the limits above, and for a different reason.** Those bound
+  // how often a customer may START something. This bounds how often they may
+  // ASK — and asking is a page refresh, so the honest ceiling is generous.
+  //
+  // It is here because the status route may make a TRUSTED PROVIDER STATUS
+  // CHECK (OD-5), which is a network call to the provider on our merchant
+  // account. Without a limit one customer polling their own order could spend
+  // the provider's rate budget and degrade payments for everybody else. The
+  // limit is what bounds that, not any assumption about how often a browser
+  // chooses to poll: P6-8's return page polls by design, and a client-side
+  // interval is a courtesy, never a control.
+  //
+  // 120 in 10 minutes is one request every 5 seconds sustained, which is
+  // comfortably above any sensible poll and far below a budget-exhausting
+  // loop. An attempt only lives 120 seconds (D3a), so a single attempt can
+  // cost at most a fraction of this.
+  paymentStatusPerOwner: { name: 'payment-status-owner', limit: 120, windowSeconds: 10 * 60 },
+  // Guest verification codes per address per hour (ADR-0020). Keyed on the
+  // address so one inbox cannot be flooded from many sessions.
+  verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },
+  // And per IP, because the limit above bounds one inbox but not one caller:
+  // rotating addresses would otherwise mean unlimited mail to strangers and
+  // unlimited rows on tables hv_app cannot delete from. Same value and window
+  // as registerPerIp — the nearest thing in this codebase, another public,
+  // unauthenticated write that creates a durable identity.
+  verificationCodePerIp: { name: 'verify-ip', limit: 20, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimit>;
 
 /**

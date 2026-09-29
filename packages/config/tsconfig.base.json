@@ -35,7 +35,8 @@
       "@hv/contracts": ["../contracts/src/index.ts"],
       "@hv/db": ["../db/src/index.ts"],
       "@hv/db/testing": ["../db/src/testing/index.ts"],
-      "@hv/domain": ["../domain/src/index.ts"]
+      "@hv/domain": ["../domain/src/index.ts"],
+      "@hv/payments": ["../payments/src/index.ts"]
     }
   }
 }

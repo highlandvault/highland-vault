@@ -10,6 +10,8 @@ import { Redis } from 'ioredis';
 import { LoggerModule } from 'nestjs-pino';
 import { WORKER_ENV, type WorkerEnv } from './config/env';
 import { DrawLifecycleService } from './draws/draw-lifecycle.service';
+import { OutboxService } from './outbox/outbox.service';
+import { PaymentsJobsService } from './payments/payments.service';
 import { ReservationExpiryService } from './tickets/reservation-expiry.service';
 import { SystemService } from './system/system.service';
 import { DATABASE, REDIS } from './tokens';
@@ -47,6 +49,8 @@ export class WorkerModule implements OnApplicationShutdown {
         SystemService,
         DrawLifecycleService,
         ReservationExpiryService,
+        OutboxService,
+        PaymentsJobsService,
       ],
     };
   }

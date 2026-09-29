@@ -1,16 +1,43 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-23_
+_Last updated: 2026-09-28_
 
 ## Current phase
 
-**Phase 4 (Day 4): Ticket engine + customer entry flow — implementation complete and verified locally; not yet committed, pushed or in review.**
+**Phase 6 (payments + settlement) is under way. P6-1 through P6-5 are merged into `develop` (`a71e687`); P6-7 is the active task.**
 
-- Branch `feature/p4-ticket-engine` (from `develop` `3eb551e`). Not merged.
-- **Phase 4 state (2026-09-23):** the whole implementation is still in the working tree. The branch's last commit is `af8645a`, which only claims the phase and records ADR-0027. **No implementation commit has been pushed and no PR is open** — an earlier revision of this file said "PR #8", which was never true. The full verification below was run on the working tree; the work is ready to commit on the owner's instruction.
-- Phases 1–3 are complete and merged into `develop` (Phase 3: PR #7). Their records are below.
+> **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below this section was written for Phases 4 and 5 and is kept as the historical record. Where the two disagree about Phase 6, the scope lock wins.
+
+| Slice                                                    | State                                       | Migrations     |
+| -------------------------------------------------------- | ------------------------------------------- | -------------- |
+| **P6-1** Provider port + fake provider                   | merged                                      | none           |
+| **P6-2** Payment attempts + initiation                   | merged                                      | `0019`, `0020` |
+| **P6-3** Webhook persistence + verified intake           | merged                                      | `0021`         |
+| **P6-4** Atomic finalization (Gate 4 work)               | merged                                      | `0022`–`0024`  |
+| **P6-5** Status / reconciliation / expiry / refund retry | merged                                      | `0025`         |
+| **P6-6** Broader refund slice                            | **CONSUMED BY P6-4** — not a separate slice | —              |
+| **P6-7** Per-market payment configuration                | **active**                                  | `0026`         |
+| **P6-8** Web payment flow                                | not started                                 | `0027`         |
+| **P6-9** Hardening / Gate 4 sign-off                     | not started                                 | none           |
+
+**Gate 4 is not signed off.** All thirteen G4 items in [scope lock §24](PHASE_6_SCOPE_LOCK.md) remain open, and G4.4 ("one credit") is deferred to Gate 6 / P8 by **D8 = A**. A Phase 6 Definition of Done must be committed **before** the phase closes (G4.10).
+
+**Open owner decisions in Phase 6**, none of which an implementer may decide: **K-3** (a provider capture against a `cancelled` order — detected, flagged, unprocessed, **no policy**); **K-c** (what makes an order failed — `order.payment_failed` has a handler and no producer); manual retry after a terminal `failed` refund; and **O7**, **O9**, **O12**, **O13**, all deferred beyond Phase 6.
+
+**Still true, and now the reason local development needs a decision:** no market can be enabled on a real database until the owner supplies the O12 compliance values (ADR-0016), and since P6-7 an enabled market additionally needs a payment configuration before it can take money.
+
+---
+
+## Current phase — as recorded for Phases 4 and 5 (historical)
+
+**Phase 4 (Day 4): Ticket engine + customer entry flow — DONE. Merged into `develop` and released to `main`.**
+
+- **PR #8** (`feature/p4-ticket-engine` → `develop`), merged as **`49e3903`** on 2026-09-23. The implementation commit is `ba5e871`.
+- **Release PR #9** (`develop` → `main`), merged as **`c284825`**. `main` now contains Phase 4.
+- Phases 1–4 are complete and merged into `develop` (Phase 3: PR #7, Phase 4: PR #8). Their records are below.
+- Re-verified on the merged `develop` (`49e3903`): `pnpm verify` exit 0 — format, lint, typecheck, unit 139/139, migrations 9 applied and verified, integration 255/255, build 7 workspaces.
 - **O15 decided by the owner: sequential ticket numbers** (ADR-0027).
-- Phase 5 (checkout) has not started and will not start without explicit owner approval.
+- **Phase 5 (cart + checkout) is under way; P5-8 is in review** (owner-approved scope: specification-faithful Option A, ending at `awaiting_payment`). Payments, webhooks and the RESERVED → SOLD transition stay in Phase 6 (ADR-0006), and Gate 4 does not move. P5-0 through P5-6 are merged, along with NB-3, the gitleaks placeholder fix, the ticket-engine teardown fix and the local gitleaks tooling — most recently P5-5 (basket, `0014`) and P5-6 (market terms, `0015`). P5-7 (order creation, `0016`) merged as PR #25. The remaining work is broken down as **P5-5 to P5-8** below; **P5-8** (integration and gate hardening, migrations `0017` and `0018`) is implemented and awaiting review, and it is the last task in the phase.
 - Verified on the development machine: Windows 11, Docker Desktop 29.8.0, Node 24.11.1, pnpm 10.34.5, PostgreSQL 18.6, Redis 7.4.11.
 
 > **Still true: no market can be enabled on a real database** until the owner supplies the O12 compliance values (ADR-0016). So reservations are only possible in test databases, where UK and IE are enabled with labelled fixture values. Germany stays disabled everywhere.
@@ -33,7 +60,26 @@ _Last updated: 2026-09-23_
 | Market isolation, Germany blocked            | ✅     | Every query is scoped by market; another market's reservation or draw is 404; `/de/...` is 404 and the DB refuses reservations in a disabled market                          |
 | Unit / integration / e2e                     | ✅     | 139/139 (12 files) · 255/255 (17 files) · 38/38 (desktop + mobile)                                                                                                           |
 | `pnpm verify`                                | ✅     | exit 0                                                                                                                                                                       |
-| GitHub CI on the PR                          | ⏳     | Not yet run: no implementation commit is pushed and no PR is open                                                                                                            |
+| GitHub CI on the PR                          | ✅     | Green on PR #8 (`ba5e871`) and on the `develop` merge commit `49e3903` (push event). One caveat in the CI note below                                                         |
+
+## Phase 4 CI record (and one flaky run)
+
+Three CI runs touch the Phase 4 merge. Two are green; one is red on the **same commit** as a green one.
+
+| Run             | Event          | Commit    | Result                                         |
+| --------------- | -------------- | --------- | ---------------------------------------------- |
+| PR #8           | `pull_request` | `ba5e871` | ✅ success                                     |
+| `develop` merge | `push`         | `49e3903` | ✅ success — this is the merge commit's own CI |
+| Release PR #9   | `pull_request` | `49e3903` | ❌ **failure** at the "Integration tests" step |
+| `main` merge    | `push`         | `c284825` | ✅ success                                     |
+
+The same tree passed integration twice and failed once, so this is a **flaky integration test on CI hardware, not a product defect** — no code differs between the green and red runs. The job log needs repository authentication to read, so the specific failing test has not been identified.
+
+**Investigated under NB-3 (PR #12), and the first hypothesis was wrong.** An earlier revision of this file blamed `expect(r.status).toBe('active')` on the reservation-creation response under a 2-second TTL. The CI step timings refute it: green integration steps take 18–20 s and the red one took **22 s**, so the suite ran to completion and **no 30-second timeout fired** — a fast assertion or error, not the timeout class seen locally. CI is also far faster than the development machine, which makes a single POST exceeding two seconds implausible there.
+
+What was found instead: `hv_tickets_guard` compares a reservation's expiry with `now()`, the **transaction** timestamp. Allocation runs the reservation insert and the ticket hold in one transaction, so `now()` is frozen and production is immune by construction. Two test fixtures built the same state with **separate statements**, putting a one-second wall-clock budget on the round trips; missing it is refused by `tickets_reservation_active` and fails immediately. That rejection was reproduced deterministically and the fixtures now run in one transaction (PR #12).
+
+**The original CI failure was never attributed.** The job log needs repository authentication (HTTP 403), and the fixture fragility could not be reproduced end to end even with PostgreSQL throttled to 0.1 CPU. NB-3 therefore remains an **unconfirmed hypothesis**; what was fixed is a proven fragility matching its signature. One failure in thirteen runs.
 
 ## Database (migration 0009_tickets)
 
@@ -105,8 +151,8 @@ Anyone else's reservation, another market's reservation and malformed IDs are al
 ## Phase 4 scope notes
 
 - **Not built (later phases, as instructed):** orders, checkout, payment, webhooks, wallet, refunds, settlement, instant wins, referrals, production migration.
-- **Guest entry:** the engine and the cap support the verified-email key, but the API accepts signed-in customers only. Guests need email verification first (ADR-0020), which arrives with checkout (Phase 5).
-- **`sold`:** nothing in Phase 4 sets it. Phase 5 turns a reservation's tickets into `sold` when the order is paid; the trigger already allows only `reserved → sold` for the same reservation.
+- **Guest entry:** the engine and the cap support the verified-email key. Phase 5 built the identity (P5-3, ADR-0029) and the verification that fills it (P5-4, ADR-0020); the reservation and checkout routes still accept signed-in customers only until the remaining P5 tasks connect them.
+- **`sold`:** nothing in Phase 4 sets it, and nothing in Phase 5 does either (Option A). **Phase 6** turns a reservation's tickets into `sold` when the payment webhook confirms the order; the trigger already allows only `reserved → sold` for the same reservation.
 
 ## Implementation choices made in Phase 4 (for review)
 
@@ -125,16 +171,16 @@ Anyone else's reservation, another market's reservation and malformed IDs are al
 
 ## Decisions needed
 
-| #   | Decision                                                                                                   | Blocks                                    |
-| --- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| 1   | **O12** `min_age` + self-exclusion for UK and IE; wrong skill answer behaviour                             | Any market going live; checkout (Phase 5) |
-| 2   | Email verification + password reset timing                                                                 | Account recovery; guest entry (Phase 5)   |
-| 3   | **O8** roles that must use MFA                                                                             | Mandatory staff MFA                       |
-| 4   | **O9** major configuration changes                                                                         | Editing published draws                   |
-| 5   | Confirm the seeded RBAC matrix                                                                             | —                                         |
-| 6   | **O6** policy for cancelling a live draw (and what happens to its reservations)                            | Cancelling live draws (refused today)     |
-| 7   | Public page caching approach                                                                               | SPEC §9 performance target                |
-| 8   | Confirm the 1,000,000-ticket pool limit and the 30-per-10-minutes reservation rate limit (choices 3 and 7) | —                                         |
+| #   | Decision                                                                                                   | Blocks                                  |
+| --- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | **O12** `min_age` + self-exclusion for UK and IE                                                           | Any market going live                   |
+| 2   | Email verification + password reset timing                                                                 | Account recovery; guest entry (Phase 5) |
+| 3   | **O8** roles that must use MFA                                                                             | Mandatory staff MFA                     |
+| 4   | **O9** major configuration changes                                                                         | Editing published draws                 |
+| 5   | Confirm the seeded RBAC matrix                                                                             | —                                       |
+| 6   | **O6** policy for cancelling a live draw (and what happens to its reservations)                            | Cancelling live draws (refused today)   |
+| 7   | Public page caching approach                                                                               | SPEC §9 performance target              |
+| 8   | Confirm the 1,000,000-ticket pool limit and the 30-per-10-minutes reservation rate limit (choices 3 and 7) | —                                       |
 
 ## Phase 4 known issues
 
@@ -144,19 +190,19 @@ Anyone else's reservation, another market's reservation and malformed IDs are al
 
 ## Open decisions (Revision 2 Part G, still unresolved)
 
-| ID        | Question                                                                                                                                      | Needed by                                                                                                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| O6 (part) | Policy for cancelling a draw that is already live                                                                                             | Phase 9                                                                                                     |
-| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                       | Phases 6/10                                                                                                 |
-| O8        | Which roles are "privileged" for mandatory MFA (not enforced in Phase 2)                                                                      | Phase 2                                                                                                     |
-| O9        | Exact list of "major configuration changes" (market gate changes are treated as sensitive meanwhile)                                          | Phases 2/10                                                                                                 |
-| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                    | Phases 7/10                                                                                                 |
-| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                           | Phase 11                                                                                                    |
-| O12       | Compliance values: minimum age per market, wrong skill answer behaviour, self-exclusion scope, consent wording, retention, masked-name format | **Now** for UK/IE `min_age` + self-exclusion (market enablement); the rest Phase 12 (skill answer: Phase 5) |
-| O13       | Production payment provider(s)                                                                                                                | Before Phase 14                                                                                             |
-| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                  | Before Phase 13                                                                                             |
-| O16       | Cash alternative for physical prizes                                                                                                          | Phases 8/9                                                                                                  |
-| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                | Now (migration discovery)                                                                                   |
+| ID        | Question                                                                                                                                                         | Needed by                                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| O6 (part) | Policy for cancelling a draw that is already live                                                                                                                | Phase 9                                                                             |
+| O7        | Refund policy: destination, refunds after close/settlement, tickets and instant wins on refunded orders                                                          | Phases 6/10                                                                         |
+| O8        | Which roles are "privileged" for mandatory MFA (not enforced in Phase 2)                                                                                         | Phase 2                                                                             |
+| O9        | Exact list of "major configuration changes" (market gate changes are treated as sensitive meanwhile)                                                             | Phases 2/10                                                                         |
+| O10       | Postal-entry rule values; maker-checker threshold for admin wallet credits                                                                                       | Phases 7/10                                                                         |
+| O11       | Referral qualifying actions/rewards; Vault Meter metric, scope, thresholds, rewards                                                                              | Phase 11                                                                            |
+| O12       | Compliance values: minimum age per market, self-exclusion scope, consent wording, retention, masked-name format. **The skill-answer part is settled — ADR-0030** | **Now** for UK/IE `min_age` + self-exclusion (market enablement); the rest Phase 12 |
+| O13       | Production payment provider(s)                                                                                                                                   | Before Phase 14                                                                     |
+| O14       | Hosting (and PostgreSQL 18 availability), email provider, storage/CDN, monitoring, analytics                                                                     | Before Phase 13                                                                     |
+| O16       | Cash alternative for physical prizes                                                                                                                             | Phases 8/9                                                                          |
+| O17       | Legacy access: plugin list and a sanitized WordPress DB export                                                                                                   | Now (migration discovery)                                                           |
 
 O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6 and O18 were approved on 2026-09-21 (ADR-0020 to ADR-0026).
 
@@ -165,9 +211,284 @@ O15 (ticket numbering) was decided on 2026-09-22: sequential (ADR-0027). O1–O6
 - **Phase 4:** none for the implementation. Reservations stay impossible on real databases until O12 lets a market be enabled.
 - **Migration discovery:** O17, legacy system access.
 
+## Phase 5 progress
+
+| Task                                              | State         | Evidence                                                           |
+| ------------------------------------------------- | ------------- | ------------------------------------------------------------------ |
+| P5-0 NB-1 structural reservation-end fix          | ✅ merged     | PR #11, migration `0010`                                           |
+| NB-3 reservation fixtures made transaction-stable | ✅ merged     | PR #12, tests only                                                 |
+| P5-1 Transactional outbox                         | ✅ merged     | PR #13 (`13b35ae`), migration `0011`                               |
+| P5-2 Mail port + notifications relay              | ✅ merged     | PR #15 (`f1d33d3`), ADR-0028                                       |
+| Ticket-engine test-pool teardown fix              | ✅ merged     | PR #17 (`117a6fa`), harness only                                   |
+| Local gitleaks in `pnpm verify`                   | ✅ merged     | PR #18 (`5ebbdf2`), tooling only                                   |
+| P5-3 Guest sessions                               | ✅ merged     | PR #20 (`b940e7d`), ADR-0029, migration `0012`, 41 tests           |
+| P5-4 Guest email verification                     | ✅ merged     | PR #21 (`173fd45`), ADR-0020 + ADR-0030, migration `0013`          |
+| P5-5 Guest checkout access + per-market basket    | ✅ merged     | PR #23 (`e61e31a`), migration `0014`, 34 integration tests         |
+| P5-6 Market terms versions and acceptance         | ✅ merged     | PR #24 (`210c217`), migration `0015`, 33 integration tests         |
+| P5-7 Order creation, skill answer, idempotency    | ✅ merged     | PR #25 (`9e0ec50`), ADR-0032, migration `0016`, 47 tests           |
+| **P5-8 Phase 5 integration and gate hardening**   | **in review** | ADR-0021 bridging + B19 checkout limit, `0017`/`0018`, 8+4+4 tests |
+
+### P5-1: the outbox (migration 0011)
+
+- **`outbox`:** `id` (UUIDv7), `topic` (dotted lower-case, same format as `audit_log.action`), `payload` (jsonb object), `available_at`, `attempts`, `published_at`, `last_error`, `created_at`.
+- **Producers** call `enqueueOutboxEvent(executor, topic, payload)` with the **same executor as the business change**, so the event commits or rolls back with it. This is why `withTransaction` forbids side effects in `fn`: an outbox row is inside the database, an email is not.
+- **`hv_claim_outbox(limit, lease_seconds)`** claims due, unpublished events with `FOR UPDATE SKIP LOCKED` — the same pattern as `hv_expire_reservations` — counting the attempt and pushing `available_at` forward by the lease.
+- **A claim is a lease, not a hand-off.** A worker that dies mid-delivery loses nothing: the lease lapses and the event is claimable again. Delivery is therefore **at least once**, and every handler must be idempotent.
+- **Guard trigger `hv_outbox_guard`:** created unpublished, unattempted and error-free; `id`, `topic`, `payload` and `created_at` immutable; **publishing happens once** (a published row cannot change again); attempts never decrease.
+- **Privileges:** `hv_app` cannot `DELETE` or `TRUNCATE` the outbox, so application code cannot lose a pending event.
+- **Worker:** `outbox` queue, job `publish`, scheduler `outbox-publish` every 5 s, up to 20 batches of 100 per run, `concurrency: 1` per process. Several worker processes remain safe because claiming skips what another holds.
+- **Retry:** backoff doubles from 10 s and stops growing at 1 hour. **No give-up policy is set** — a stuck event keeps its attempt count and last error and stays visible rather than being dropped. Choosing when to stop is a policy decision left to the owner.
+- **The first producer is P5-4** (guest verification codes). An unknown topic still fails the event — recorded, not dropped. `enqueueOutboxEvent` now lives in `@hv/db`, because the API produces and the worker delivers and neither app can import the other; `apps/worker/src/outbox/outbox.ts` re-exports it.
+
+### P5-2: mail delivery and the B17 relay (ADR-0028, no migration)
+
+- **The `outbox` queue relays**, it does not deliver: it claims due rows and enqueues a job on the `notifications` queue with **`jobId` = the outbox row id** (specification B17), then returns `deferred` so the row stays unpublished.
+- **The `notifications` queue delivers**: it opens the sealed payload, sends the message, and only then marks the row published. **`published_at` still means the side effect happened** — never "queued in Redis".
+- **PostgreSQL owns retry, exclusively.** Notification jobs use `attempts: 1`; the outbox lease, `attempts` and backoff remain the only retry mechanism.
+- **Notification jobs remove themselves on success and on failure.** Verified by experiment, not assumed: BullMQ silently ignores an enqueue whose job id belongs to a **retained** completed or failed job, so retention would have left a failed email permanently un-redeliverable while its attempt count climbed.
+- **Sensitive payloads are sealed** with the same AES-256-GCM construction as TOTP secrets (`SecretBox`, now in `@hv/domain` so the API and worker share one key-management model). The topic is the associated data. No plaintext one-time code or recipient address is stored in PostgreSQL **or Redis** — proven by direct SQL and by inspecting the job.
+- **`MailPort` is provider-independent**, following the shape of ADR-0006. `nodemailer` exists only behind the SMTP adapter; Mailpit is the dev/test target. **Production refuses to start without `SMTP_URL`, `MAIL_FROM` and `OUTBOX_ENCRYPTION_KEY`**, because O14 has not chosen a provider.
+- **Duplicate verification emails are possible and accepted** (at-least-once). Redelivery is tested: the message is sent again, but the record of the first success is not overwritten.
+
+### P5-4: guest email verification (ADR-0020, migration 0013)
+
+The parameters are in [ADR-0020](adr/0020-guest-email-verification.md#implementation-phase-5-task-p5-4). What matters structurally:
+
+- **`guest_email_verifications`:** `id` (UUIDv7), `guest_session_id`, `email` (citext, normalized exactly as `users.email`), `code_hash` (bytea, `CHECK octet_length = 32`), `attempts`, `consumed_at`, `expires_at`, `created_at`. A partial index on `(guest_session_id, email, created_at DESC) WHERE consumed_at IS NULL` serves the only hot lookup.
+- **Guard trigger `hv_guest_email_verifications_guard`:** rows are created fresh (unconsumed, unattempted); identity columns and `expires_at` are immutable; a consumed row stays consumed; attempts never decrease. A `CHECK` also caps the TTL at 60 minutes, so no migration or fixture can quietly issue an hour-long code.
+- **Privileges:** `hv_app` cannot `DELETE` or `TRUNCATE` the table, so an attempt count cannot be erased by application code. Retention is Phase 12 (O12), as for the outbox.
+- **The limits are in the database, not the API.** The attempt count is incremented under `FOR UPDATE` before the comparison, and **committed whatever the verdict** — the verifying transaction returns a verdict and the error is raised outside it. Throwing inside would roll the increment back and the cap would never engage.
+- **Every failure is the same error.** Wrong, expired, consumed, belonging to another session, never existed: one `INVALID_VERIFICATION_CODE`. Tested directly, because this is the property that makes the 5-attempt cap worth having.
+- **Sending is limited on both dimensions, deliberately.** Per address (3/hour), so one inbox cannot be flooded from many sessions; and **per IP (20/hour, the same value as `registerPerIp`)**, because the per-address limit does nothing about a caller who rotates addresses — which is what would produce unbounded mail to strangers and unbounded rows on tables `hv_app` cannot delete from. Both are consumed before anything is written, and both fail closed. A third count in SQL covers the same address across rotated sessions, as a backstop if Redis is emptied.
+- **Routes:** `POST /markets/:market/checkout/email/code` (202), `POST …/verify` (200), `GET …/verification`. All `@Public({ identify: true })` behind `MarketGuard`. The code request issues the guest session if there is none, so **these are the only routes that set `hv_guest`**.
+- **The API is now a key holder.** `OUTBOX_ENCRYPTION_KEY` is required for it to start, and it refuses a low-entropy placeholder in production exactly as the worker does. The API and worker must hold the same value.
+- **Still no plaintext code anywhere it could persist**: hashed in PostgreSQL, sealed in the outbox and in Redis, absent from every response, and never logged.
+
+## Phase 5 remaining scope (P5-5 to P5-8)
+
+Specification Part F gives Phase 5 as "per-market basket, guest email verification, skill answer validation, terms acceptance, idempotent order creation, outbox". The outbox (P5-1, P5-2) and guest email verification (P5-3, P5-4) are merged. **Four items remain**, and they are broken down below.
+
+This breakdown was derived on 2026-09-25 from the specification alone. Nothing here adds a requirement the specification does not state; where the specification is silent, it says so. The three questions it raised as needing an owner decision were **all settled on 2026-09-25 in [ADR-0031](adr/0031-checkout-cart-terms-and-order-numbers.md)**, so P5-5, P5-6 and P5-7 are no longer blocked on a decision.
+
+### Why this decomposition, and not one task per remaining item
+
+The obvious split — basket, skill answer, terms, orders — does not survive contact with the data model (Revision 2 B18):
+
+| Table                 | Specified shape                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `carts`, `cart_items` | Cart per (session, market); `UNIQUE(cart_id, draw_id)`                                                                                                            |
+| `terms_versions`      | `market_id`, `version`, `published_at`; `UNIQUE(market_id, version)`                                                                                              |
+| `terms_acceptances`   | `terms_version_id`, `user_id` **or** `order_id`, `at`                                                                                                             |
+| `orders`              | `idempotency_key UNIQUE`; `(market_id, currency)` FK; `user_id` **or** `guest_email` (CHECK exactly one); `status`; **`terms_version_id`**; `order_number UNIQUE` |
+| `order_items`         | `(draw_id, market_id)` FK → `draws (id, market_id)`; `quantity > 0`; `unit_price_minor`; **`skill_answer_option_id`**                                             |
+
+The skill answer is a column on `order_items` and the accepted terms are a column on `orders`. B20 requires the answer to be validated **before order creation**, and `cart_items` has no answer column — so the answer arrives with the checkout request and is written in the order-creation transaction. **Skill-answer validation is therefore not separable from order creation**; a task that validated an answer without creating an order would have nothing to persist and nothing to test end to end.
+
+Terms are different: `orders.terms_version_id` is a foreign key, so **`terms_versions` must exist before `orders` can be created at all**. That makes terms a genuine prerequisite task rather than a slice of order creation, and it keeps the orders migration focused.
+
+Hence: basket → terms → orders (carrying the skill answer) → hardening.
+
+### P5-5 — Guest checkout access and the per-market basket
+
+**Objective.** Give a verified guest a way into the purchase path, and put the server-side basket behind it.
+
+In scope:
+
+- **Open the purchase path to guests.** Part F requires guest checkout; the reservation routes are `@Authenticated()` today and the P4 handoff records that "the API does not accept guests yet". The constraints on this are fixed and listed below.
+- **`carts` and `cart_items`**, per the shape above. One basket per market (ADR-0026); a basket cannot mix markets and the API rejects an attempt to.
+- **Basket identity for both guests and accounts**, using the same mechanism (B4).
+- **Basket persistence** across the requests a checkout takes, and its relationship to the existing reservations (a reservation is what actually holds tickets; the basket is not a hold).
+- **Market isolation**, enforced as everywhere else: `MarketGuard`, and a cross-market basket refused by the API rather than by the UI.
+- **Concurrency**: proven against real PostgreSQL, following the P4 lock order (entrant counter → tickets) wherever the basket touches allocation.
+
+Out of scope: orders, payment, terms, skill answers.
+
+**Guest access — the constraints, which are not negotiable:**
+
+1. The appropriate guest identity is `guest_sessions` (ADR-0029), resolved through `@Public({ identify: true })` into `request.hvGuest`.
+2. A **fresh** verified email is required wherever the cap identity is needed — `GuestSessionsService.hasFreshVerifiedEmail()`, evaluated at the point of decision, never cached (ADR-0020, 30-minute window).
+3. **Authenticated behaviour is preserved exactly.** A signed-in customer's path does not change, and a signed-in caller is never also treated as a guest.
+4. **Guest context never satisfies an authenticated authorization decision.** `AccessGuard` keeps reading `hvAuth` only below the public branch. Nothing may be re-routed through `hvGuest` to make a guest "count as" a user.
+5. **Cap identity rules are unchanged** (ADR-0008): user → user id, guest → normalized verified email. ADR-0021 bridging still applies.
+6. **Market isolation is unchanged.**
+
+**Route names are deliberately not specified here.** The implementation task inspects the existing reservation API first and proposes them.
+
+**Migration: yes — `0014`.** The specification names `carts` and `cart_items` and gives their key constraints (`UNIQUE(cart_id, draw_id)`), and **ADR-0031 fixes the ownership columns**. The column list beyond that is not specified and must not be invented; the task proposes a schema from the spec, ADR-0031 and the existing conventions, and the owner approves it before it is applied.
+
+**OWNER-DECIDED (2026-09-25) — cart ownership. ADR-0031, Decision 1.** A cart carries both `user_id` and `guest_session_id` with a CHECK that **exactly one** is set, plus one `market_id` — the same shape the specification already gives `orders`. "One cart per owner per market" is therefore two partial unique indexes, not one constraint. Cart ownership and order identity differ on purpose: the cart points at a guest **session**, the order records a guest **email**, and the verified email must still be fresh at order creation even though the cart is not.
+
+**Cart merge on sign-in is not decided, because nothing requires it.** ADR-0021's merge is about cap counters, not baskets. What happens to a guest's cart when they sign in is a **P5-5 implementation decision** to be taken from the ownership model and reported at the P5-5 gate; doing nothing is consistent with ADR-0031. If P5-5 concludes a merge is needed, that needs its own ADR.
+
+### P5-5 as built (migration 0014)
+
+- **`carts`:** `market_id`, plus `user_id` and `guest_session_id` with the ADR-0031 CHECK that exactly one is set. One cart per owner per market as **two partial unique indexes**, because the owning column differs.
+- **`cart_items`:** `cart_id`, `market_id`, `draw_id`, `reservation_id`, `removed_at`. It deliberately **does not copy quantity, price or currency** — the reservation already records all three under constraints that tie them to the draw and the market, and a second copy could only drift.
+- **Market isolation is structural.** Composite foreign keys force an item's market to equal its cart's market _and_ its draw's market, and a reservation already carries the same pair (0009). A UK basket holding an IE draw is unrepresentable, not merely refused. Proven by a test that tries it in raw SQL.
+- **`hv_cart_items_guard` checks ownership in the database**: a user's basket takes only that user's `user` reservations, a guest's only `email` reservations for the address that guest session verified. Putting someone else's reservation in your basket would otherwise be one INSERT.
+- **Nothing is deleted.** `hv_app` has no DELETE or TRUNCATE on either table; removing an item sets `removed_at`, and B18's `UNIQUE(cart_id, draw_id)` is a partial index over live items.
+- **Routes** (all `@Public({ identify: true })` behind `MarketGuard`): `GET /markets/:market/cart`, `POST …/cart/items`, `DELETE …/cart/items/:item`. The authenticated reservation routes are **unchanged** and still refuse a guest cookie.
+- **The basket allocates through the existing engine** — same `TicketAllocator`, same caps, same lock order, same expiry. There is no second allocation path.
+- **A guest's cap key is their verified email, checked fresh at the moment it is used** (ADR-0008, ADR-0020); a lapsed verification cannot add to a basket.
+- **An expired hold stays visible but stops counting**: the item is reported with its effective status and is excluded from `activeItemCount` and the total.
+- **Guest → user cart merge is deliberately not implemented** (ADR-0031). A guest's basket and an account's basket are separate rows and stay that way; nothing in the specification asks for a merge, and inventing one was out of scope.
+
+### P5-6 — Market terms versions and acceptance
+
+**Objective.** Make it possible for a market to have terms, and for accepting them to be recorded.
+
+In scope: `terms_versions` and `terms_acceptances` as specified; a market's active terms version (B12 lists "active terms version" among the typed `market_settings` compliance columns, which `0004` does not yet have); the read path that exposes a market's current terms; and recording acceptance.
+
+Out of scope: **terms content**, which B12 marks "Content: legal" and Part F assigns to Phase 12. The mechanism is built with the content absent, exactly as `market_settings` already carries nullable compliance columns.
+
+**Migration: yes — `0015`** (plus the `market_settings` column). Required before `orders.terms_version_id` can exist.
+
+**OWNER-DECIDED (2026-09-25) — an active terms version gates checkout. ADR-0031, Decision 2.** A market must have an active terms version before checkout can create an order; the customer accepts that version; the order references the accepted `terms_version_id`; missing active terms prevent order creation, refused by the API rather than the UI; and acceptance is tied to the applicable market and version.
+
+**The gate is on checkout, not on market enablement** — `hv_market_missing_settings` is not extended. A market can be enabled and browsable with no terms version; it simply cannot take an order. Terms content remains Phase 12 and comes from legal; no wording is invented here or in fixtures.
+
+### P5-6 as built (migration 0015)
+
+- **`terms_versions`:** `market_id`, `version` (the publisher's label, `UNIQUE(market_id, version)`), `published_at` (NULL while a draft), `created_at`. `UNIQUE(id, market_id)` so everything pointing at a version can be checked against the market it claims.
+- **`hv_terms_versions_guard`:** a published version is **immutable and cannot be withdrawn**. An order will point at it as the thing the customer agreed to, and that record is worthless if it can be rewritten. A correction is a new version.
+- **`market_settings.active_terms_version_id`**, with a **composite** foreign key, so a market cannot point at another market's terms. Nullable, like every other compliance value there.
+- **`hv_market_missing_settings` is untouched.** The terms gate is on **checkout**, not enablement (ADR-0031): a market with no active version is still enabled and browsable, it simply cannot take an order. A test asserts the enablement gate does not mention it.
+- **`terms_acceptances`:** `market_id`, `terms_version_id`, and `user_id` **or** `guest_session_id` with a CHECK that exactly one is set — the same resolution ADR-0031 applied to cart ownership, because B18's "per user or order" predates ADR-0029. Two partial unique indexes make accepting twice one acceptance. **Append-only**: `hv_app` has no UPDATE or DELETE, and a trigger refuses any change.
+- **No legal wording anywhere.** There is no content column, no content field in any contract, and no invented terms in fixtures — version labels in tests are marked as fixtures. B12 marks the wording "legal" and Part F puts it in Phase 12.
+- **Routes:** `GET /markets/:market/terms` (public; `checkoutAllowed` is the flag P5-7's gate turns on) and `POST …/terms/acceptance` (`@Public({ identify: true })`). Admin: `GET/POST /admin/markets/:market/terms`, `POST …/:terms/publish`, `POST …/:terms/activate` — `markets.gate.manage`, market-scoped, mutations sensitive, every change audited in the same transaction.
+- **The accepted version is checked against the active one.** A page left open while legal published a revision cannot record agreement to wording nobody was shown (`TERMS_VERSION_STALE`).
+- **A guest accepting creates no account**, and their acceptance is recorded against the guest session (ADR-0029).
+
+### P5-7 — Order creation, skill answer and idempotency
+
+**Objective.** Turn a basket into an order that stops at `awaiting_payment`.
+
+In scope:
+
+- **`orders` and `order_items`** as specified above, including `order_number UNIQUE` and the `user_id`-or-`guest_email` CHECK.
+- **Server-side skill-answer validation** per **ADR-0030**: a wrong answer rejects the whole checkout, creates no order, leaves the reservation active and returns a generic error. The submitted option is checked to belong to the question of the draw being bought. Correct options never leave the admin API.
+- **Terms acceptance** recorded in the same transaction (`orders.terms_version_id` plus a `terms_acceptances` row).
+- **`Idempotency-Key`** on the mutating endpoint (B5), backed by `orders.idempotency_key UNIQUE`, with replay returning the original order rather than creating a second.
+- **One transaction** for the whole of it: skill answer, terms, order, order items. Money as `(amount_minor, currency)`, never summed across currencies; `order_items` snapshot `market_id`, `currency` and `unit_price_minor`.
+- **The order ends at `awaiting_payment`.** The reservation stays active and its tickets stay `reserved`. An expired reservation must never become an order — check `expires_at > now()` in the same transaction.
+
+Explicitly out of scope, and this is the part the P4 handoff originally got wrong: **no payment, no payment webhooks, no `reserved → sold`, no Gate 4, and a payment return URL is never proof of payment.** All of that is Phase 6 (ADR-0006).
+
+**Migration: yes — `0016`.**
+
+**OWNER-DECIDED (2026-09-25) — `order_number` is an opaque `HV-` identifier. ADR-0031, Decision 3.** `HV-` followed by an uppercase alphanumeric suffix (for example `HV-7F4K92M8`): randomly and collision-resistantly generated with the project's existing `node:crypto` conventions, `UNIQUE` in PostgreSQL, and **never the primary key** — primary keys stay `uuidv7()`. **Not sequential**, which would leak order volume and let a holder guess neighbouring numbers.
+
+**The length is left to P5-7**, since nothing in the specification, schema or tests constrains one; P5-7 records its choice and the reasoning. Worth weighing there: `generateRecoveryCode` is the project's other customer-facing typed-back identifier and uses base32, whose alphabet has no `0`/`O` or `1`/`I` to confuse when read aloud. Either the full alphanumeric range or a narrower one satisfies ADR-0031.
+
+### P5-7 as built (migration 0016)
+
+- **`orders`:** `order_number` (UNIQUE), `(market_id, currency)` FK, `user_id` **or** `guest_email` (CHECK exactly one), `terms_version_id` (NOT NULL, **composite** FK so an order cannot cite another market's terms), `status`, `total_minor = wallet_applied_minor + external_due_minor` (CHECK), `idempotency_key` (UNIQUE) and `idempotency_digest`.
+- **`order_items`:** composite FKs on `(order_id, market_id)`, `(draw_id, market_id)`, `(reservation_id, draw_id)` and `(market_id, currency)`; `quantity`, `unit_price_minor` and `total_minor` snapshotted; `skill_answer_option_id`. `UNIQUE(order_id, draw_id)` and `UNIQUE(reservation_id)`.
+- **The snapshot is immutable.** `hv_orders_guard` freezes buyer, market, currency, totals, terms and idempotency — **only `status` may move**, because Phase 6 has to move it. `hv_order_items_guard` refuses any change to a line. `hv_app` cannot DELETE an order or UPDATE a line.
+- **`order_number` is `HV-` + 10 base32 characters** (`^HV-[A-Z2-7]{10}$`, enforced by CHECK). About 50 bits; base32 has no `0`/`O` or `1`/`I` to confuse when read aloud, matching `generateRecoveryCode`, which is this project's other customer-facing typed-back identifier. Random, never sequential. A collision is a UNIQUE violation, retried up to five times.
+- **The checkout request is self-describing (ADR-0032).** It states the intended draw, quantity and skill-answer option per line, and the server matches that against the locked basket before pricing anything. The request is **intent, never evidence**: price, currency, market, availability, ownership, eligibility and answer correctness all come from PostgreSQL. A request that does not describe the basket — a missing line, an extra one, a different quantity — is refused with one generic conflict.
+- **Idempotency is the database's job.** The key is claimed by `INSERT … ON CONFLICT (idempotency_key) DO NOTHING`; there is no read-then-insert and no Redis anywhere in the path. A replay is matched on `idempotency_digest`, a SHA-256 of **market, buyer, terms version and the sorted `slug:quantity:optionId` tuples** — every input that can change the resulting order, and nothing server-derived. So the **same key with a different quantity, draw, answer, terms version or customer is refused** rather than answered with the earlier order.
+- **A duplicate request blocks on the cart lock** and finds the basket emptied when it is released. That is not conclusive on its own, so an empty basket is re-checked against the idempotency key: found means replay, absent means genuinely empty. Found by the concurrency test, not by reading the code.
+- **Why self-describing, and why it was not at first.** P5-7 was originally basket-defined for its contents and request-defined for its digest, which meant reusing a key with different _answers_ was refused while reusing it with a different _basket_ silently returned the earlier order. There is no rule under which both are right. The specification does not settle it (see ADR-0032), so the owner did: a confirmation page shows quantities and a total, and the order has to be for what was shown.
+- **A wrong skill answer leaves nothing behind** (ADR-0030): no order, no spent idempotency key, and the basket and its hold intact. A missing answer and a wrong one produce an identical error, and the correct option never enters a response — it is compared in SQL and only a boolean comes back.
+- **Terms are P5-6's rules, re-asked inside the order transaction**: an active version must exist, the customer must have accepted _that_ version, and the label they sent must still be the active one.
+- **The reservation is untouched.** An order leaves it **active** and its tickets **`reserved`**; only the basket line is removed, because the order is now the record. Nothing is allocated a second time.
+- **Phase 5 stops here.** Status is `awaiting_payment`; there is no payment, provider, webhook or `sold`. Tests assert positively that no ticket is sold and that no payment table exists.
+
+**On the status name.** Revision 2 B7 gives the state machine as `created → awaiting_payment → paid`, and its later transitions name the same value; the Phase 5 planning prose describes the boundary as "ends at `pending_payment`". The specification is the authority for a persisted value, and Phase 6 will implement its transitions literally, so the stored status is **`awaiting_payment`**. The two names mean the same moment. The CHECK admits the full B7 enumeration, so Phase 6 adds transitions rather than values.
+
+### P5-8 — Phase 5 integration and gate hardening
+
+**Objective.** Prove the whole checkout works together, and close the phase.
+
+In scope: the full vertical integration (guest and account); the two Part F exit criteria — **idempotency-key replay** and **cross-market basket rejected**; the **ADR-0021 concurrency test of registration racing a guest purchase**, which that ADR requires "in Phase 4/5" and which does not yet exist; concurrency against real PostgreSQL; and the documentation, handoff and status cleanup that closes the phase.
+
+**Migration: none expected.**
+
+### Dependencies
+
+```text
+P5-4 (merged) ──► P5-5 ──► P5-7 ──► P5-8
+                    │        ▲
+P5-6 ───────────────┴────────┘
+```
+
+- **P5-5 needs P5-3 and P5-4** for guest identity and the verified-email cap key.
+- **P5-6 needs neither P5-5 nor anything after P5-4**; it can be built at any point, and only has to land before P5-7.
+- **P5-7 needs both P5-5 and P5-6** — a basket to turn into an order, and a terms version to point at.
+- **P5-8 needs all three.**
+
+## Phase 5 Definition of Done
+
+ADR-0019 gates every phase on a Definition of Done. Phase 1's is in the Initialization Report (H4); this is Phase 5's, built from Part F, DEVELOPMENT_RULES and the approved Option A scope. Phase 5 is complete only when every line is true.
+
+**Functionality**
+
+- [ ] A **guest** can complete a checkout: verified email, basket, skill answer, terms, order — without an account.
+- [ ] A **signed-in customer** can do the same, and their existing behaviour is unchanged.
+- [ ] A checkout requires a **fresh verified email** for a guest, judged at the point of decision.
+- [ ] The basket is **server-side and one per market**; a cross-market basket is **refused by the API**, with the UI bypassed.
+- [ ] The **skill answer is validated server-side** and a wrong answer rejects the checkout per ADR-0030. Correct options never leave the admin API.
+- [ ] **Terms acceptance is recorded** against the order (and the user, where there is one).
+- [ ] Order creation is **idempotent**: the same `Idempotency-Key` returns the original order and never creates a second.
+- [ ] An order ends at **`awaiting_payment`** — B7’s name for the state the planning prose called `pending_payment`. Same moment; the specification wins because Phase 6 implements its transitions literally.
+
+**Explicitly not done in Phase 5** (each must be demonstrably absent)
+
+- [ ] No payment is taken or initiated; no payment provider code runs.
+- [ ] No payment webhooks.
+- [ ] No ticket moves `reserved → sold`.
+- [ ] Gate 4 has not moved.
+- [ ] No wallet, referrals or Vault Meter.
+
+**Correctness and concurrency**
+
+- [ ] **PostgreSQL is the source of truth.** No decision rests on Redis, a cache, or anything the browser sent back.
+- [ ] Concurrency is proven **against real PostgreSQL**, not a mock.
+- [ ] The **idempotency-key replay test** passes (Part F exit criterion).
+- [ ] The **cross-market basket rejection test** passes (Part F exit criterion).
+- [ ] The **guest purchase racing account registration** test passes (ADR-0021). _Built in P5-8 — the bridging itself did not exist until then._
+- [ ] An **expired reservation cannot become an order**.
+- [ ] Cap identity holds across the guest and account paths (ADR-0008, ADR-0021).
+
+**Quality gate**
+
+- [ ] `pnpm verify` green end to end, including `pnpm secrets:scan` (local Gitleaks).
+- [ ] Migrations apply from a clean database, checksums match, and `codegen:verify` is clean.
+- [ ] `pnpm test:e2e` green.
+- [ ] **CI green** on the pull request.
+- [ ] Reviewed and merged into `develop` by pull request (DEVELOPMENT_RULES §4, §7); no direct push to `develop` or `main`.
+- [ ] `PROJECT_STATUS.md`, `TASK_BOARD.md`, `ACTIVE_WORK.md`, `CHANGELOG.md` and a handoff are current.
+- [ ] Every architectural decision taken during the phase has an ADR.
+
+**Not part of this DoD:** legal and compliance _values_ (terms content, consent wording, minimum age, self-exclusion) remain O12 and Phase 12. Phase 5 builds the mechanisms that carry them.
+
+### P5-8 as built (migrations 0017 and 0018)
+
+Phase 5's last task. It was scoped as test hardening, and the audit that opened it found two accepted requirements that had never been built.
+
+- **ADR-0021 bridging now exists.** It did not, at all. A guest could buy to the cap under their verified address and the account with that same address could buy to it again — the exact bypass ADR-0008 keys the cap on a _verified_ email to prevent. Two halves: a guest allocation resolves the address to an account **inside the allocating transaction**, and registration moves whatever that address already holds onto the new account.
+- **The counters move with their holds, or the allowance is lost.** `hv_end_reservation` decrements using the key stored on the reservation, so a counter that moved alone would be decremented by a `WHERE` matching **zero rows** — silently, for ever. Migration `0017` therefore relaxes `hv_reservations_guard` by exactly one case: `email → user`, onto a real account, `entrant_ref` becoming that account's id, active holds only. Nothing else about a reservation became mutable.
+- **One advisory lock, and only one.** `lockEntrantEmail` is taken by guest allocation and by registration. Row locks cannot serialise them because the losing race is a row that does not exist yet. It orders two identity decisions and nothing else (ADR-0011 amendment).
+- **Migration `0018` was found by its own test.** `hv_cart_items_guard` required a guest basket to hold an _email_-keyed reservation. After bridging, a guest whose address has an account legitimately holds a _user_-keyed one, and checkout failed with a constraint violation. The rule is widened by that one case.
+- **Checkout is rate limited** (B19): `checkoutPerOwner`, 30 per 10 minutes, keyed on the checkout identity, consumed before the transaction, fail-closed. **It bounds checkout attempts. It is not an answer-attempt counter**, and ADR-0030 deliberately does not introduce one — a caller inside this limit still has more attempts than a skill question has options.
+- **Two integrated journeys** now exist end to end, guest and authenticated, each asserting the phase boundary from the customer's side: nothing sold, hold still active, order `awaiting_payment`.
+- **Cross-identity order isolation** is tested both ways and answers **404**, not 403.
+
+## Carried into Phase 5 (from the Phase 4 review)
+
+These came out of the final review of PR #8. **None of them is reachable in Phase 4**; they are obligations and known issues for the phase that introduces orders.
+
+1. **NB-1 — `hv_end_reservation` returns the wrong allowance once sold tickets exist. Phase 5 must fix this structurally before adding the reservation → sold/order transition.** The function frees only `reserved` tickets (correct, sold ones are untouched) but then decrements `draw_entrant_counts.count` by the reservation's **quantity** rather than by the number of tickets it actually released. A reservation holding a sold ticket that later expires or is released would therefore give the entrant their cap allowance back while they keep the sold ticket — a cap bypass. Unreachable in Phase 4 because nothing writes `sold`. The fix is to decrement by the actual row count freed (`GET DIAGNOSTICS`), making the invariant structural instead of a rule Phase 5 has to remember. **Fixed by task P5-0, migration `0010_reservation_end_fix`**, merged in PR #11.
+2. **NB-2 — a temporary "the last tickets are being taken right now" refusal.** When a shortfall is caused by reservations that are overdue but not yet swept, `countAvailable` counts their tickets as free, so the allocator raises `AllocationContended` and retries; the inline sweep runs once before allocation (limit 200), not between retries, so all five attempts reach the same conclusion. The customer gets a correct refusal with a slightly misleading message. **No data corruption.** Low severity; leave it unless Phase 5 changes the reservation flow, in which case re-sweep before the final retry or reword the refusal.
+3. **NB-3 — a flaky integration assertion on CI.** See the Phase 4 CI record above. Test-only; needs its own `fix/*` branch.
+4. **Large ticket-pool publication is acceptable for V1. Do not change it now.** The pool is one set-based insert inside the publish transaction: ~6.2 s for 50,000 tickets on the development machine, whose Docker VM is roughly 10× slower than a normal server. The scale assumption is that draws are published rarely, by staff, at sizes in the thousands to tens of thousands; `draws_total_tickets_max` (1,000,000) bounds the worst case. Revisit only if pools beyond ~100,000 become real.
+5. **`maxWorkers: 4` is resource management, not reduced coverage.** It caps how many integration **files** run at once. The concurrency the gates actually exercise lives inside each test (`Promise.all` over dozens of simultaneous transactions against a 60-connection pool) and is untouched by it, as is `ROUNDS = 3`.
+6. **O15 = sequential ticket numbering** (ADR-0027). Numbers are taken lowest first; zero padding is display only.
+
 ## Next task
 
-**Stop for owner review of Phase 4.** The branch must be committed and pushed and a PR opened first (owner instruction required; DEVELOPMENT_RULES §10). Phase 5 (cart and checkout) starts only on explicit owner approval. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
+**Phase 5 (cart and checkout) is under way; P5-0 to P5-7 are merged and P5-8 is in review.** Scope is Option A (specification-faithful), ending at `awaiting_payment`; Phase 6 keeps payments, webhooks, RESERVED → SOLD and Gate 4. The wrong-skill-answer behaviour is settled in **ADR-0030**, and cart ownership, the terms gate and the order-number format in **ADR-0031**. The remaining work is broken down as P5-5 to P5-8 in "Phase 5 remaining scope", and the phase closes against the "Phase 5 Definition of Done" above. Each task needs its own branch, PR and owner approval before it starts. Active work and ownership: [collaboration/ACTIVE_WORK.md](collaboration/ACTIVE_WORK.md), [collaboration/TASK_BOARD.md](collaboration/TASK_BOARD.md).
 
 ---
 
