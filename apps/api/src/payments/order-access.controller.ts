@@ -1,13 +1,12 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Controller, Get, Headers } from '@nestjs/common';
 import {
-  OrderAccessRequestSchema,
-  type OrderAccessRequest,
+  ORDER_ACCESS_TOKEN_HEADER,
+  OrderAccessTokenSchema,
   type OrderAccessResponse,
 } from '@hv/contracts';
 import { RATE_LIMITS, RateLimiter } from '../auth/rate-limiter';
 import { Errors } from '../common/errors';
 import { Meta, type MarketContext, type RequestMeta } from '../common/request-context';
-import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { MarketsRepository } from '../markets/markets.repository';
 import { CheckoutService } from '../orders/checkout.service';
 import { OrderAccessService } from '../orders/order-access.service';
@@ -23,16 +22,28 @@ import { PaymentsService } from './payments.service';
  * a guest here would be pointless, and would risk the token appearing to
  * extend something it must never touch (ADR-0029).
  *
- * **A POST, although it reads.** The token is a bearer credential, and a query
- * string would write it into the web server's access log, the browser's
- * history and any referrer. It travels in the body, and the response carries
- * the order so the caller can drop the token immediately.
+ * **A GET, with the token in a header.** A query string would write a bearer
+ * credential into the web server's access log, the browser's history and any
+ * referrer, so the token has never travelled in the URL. It began as a POST
+ * body for that reason, and that was wrong for another: this route's only
+ * caller is a page rendered by a plain navigation, a navigation sends no
+ * `Origin`, and `app.ts` refuses every state-changing request that has none. So
+ * the route answered 403 to the one caller it has, and the page showed its
+ * 404. A header hides the token as well as a body does.
  *
- * **Everything this route can do, it does to one order, by reading.** There is
- * no token-scoped write anywhere — not here, not in `CheckoutService`, not in
- * `OrderAccessService`. Starting a payment is deliberately absent (D18 = B): a
- * guest past their thirty minutes can see that a payment failed and must
- * verify their address again to try once more.
+ * **Everything this route can do, it does to one order, by reading** (S2).
+ * There is no token-scoped write anywhere — not here, not in
+ * `CheckoutService`, not in `OrderAccessService`, and no longer in
+ * `statusByAccess`, which until this pass could run a trusted status check and
+ * therefore a finalisation. A check is `finalization.confirm` under another
+ * name — it can capture a payment, sell tickets, raise a refund and send
+ * email — and nobody following a link should hold that. Confirmation arrives
+ * by verified webhook or by the P6-5 reconciler; a customer who is early sees
+ * "waiting for the provider", which is what is true.
+ *
+ * Starting a payment is deliberately absent too (D18 = B): a guest past their
+ * thirty minutes can see that a payment failed and must verify their address
+ * again to try once more.
  *
  * It lives in `PaymentsModule` rather than `OrdersModule` because it needs
  * both, and `PaymentsModule` already imports orders — the other direction
@@ -51,19 +62,25 @@ export class OrderAccessController {
     private readonly rateLimiter: RateLimiter,
   ) {}
 
-  @Post()
-  @HttpCode(200)
+  @Get()
   @Public()
   async present(
-    @Body(new ZodValidationPipe(OrderAccessRequestSchema)) body: OrderAccessRequest,
+    @Headers(ORDER_ACCESS_TOKEN_HEADER) header: string | undefined,
     @Meta() meta: RequestMeta,
   ): Promise<OrderAccessResponse> {
     // Before the token is looked at, so a Redis outage refuses the read rather
-    // than leaving the one guessable credential unguarded.
+    // than leaving the one guessable credential unguarded — and before its
+    // shape is looked at, so a caller who sends nothing still pays for asking.
     await this.rateLimiter.consume(RATE_LIMITS.orderAccessPerIp, meta.ip ?? 'unknown');
 
+    // Absent or the wrong shape is answered like anything else that does not
+    // resolve. A validation error would separate "not a token" from "not a
+    // token I know", which is worth nothing to an honest caller.
+    const token = OrderAccessTokenSchema.safeParse(header);
+    if (!token.success) throw Errors.notFound('Order');
+
     const db = this.access.database;
-    const grant = await this.access.resolve(db, body.token);
+    const grant = await this.access.resolve(db, token.data);
     // One answer for malformed, unknown, revoked and expired alike. Anything
     // else would tell somebody which tokens exist.
     if (!grant) throw Errors.notFound('Order');
@@ -79,9 +96,8 @@ export class OrderAccessController {
     };
 
     const order = await this.checkout.getOrderByAccess(context, grant.orderId);
-    // The order's latest attempt, read-only. It may trigger a trusted status
-    // check — the one thing B10 lets a return page cause — and still asserts
-    // nothing: the answer is re-read from the database afterwards.
+    // The order's latest attempt, as the database holds it. No provider call,
+    // no finalisation, nothing written (S2).
     const payment = await this.payments.statusByAccess(grant.orderId);
     return { order, payment, serverTime: new Date().toISOString() };
   }

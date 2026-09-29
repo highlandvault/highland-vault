@@ -124,11 +124,20 @@ export class PaymentsService {
    * happened before this method was reached, and it authorized reading one
    * order, which is exactly what this returns.
    *
-   * It may trigger a trusted status check, the one thing B10 permits a return
-   * page to cause. That check still asserts nothing: it gives finalisation a
-   * chance to run, and the answer below is then re-read from the database. A
-   * browser cannot make an order paid by arriving here, refreshing, or
-   * arriving with any query string it likes.
+   * **It reads, and does nothing else** (S2). It does not reconcile, does not
+   * ask the provider anything, and cannot reach finalisation — so arriving
+   * here cannot capture a payment, sell a ticket, raise a refund, send an
+   * email or write an audit record. A browser coming back from a provider is
+   * not a trusted caller, and the surest way for it to assert nothing is to
+   * give it nothing to assert with.
+   *
+   * An earlier version did run a trusted status check here, on the reasoning
+   * that B10 permits one. It does — but a check is `finalization.confirm` under
+   * another name, reached by whoever follows a link, and that is far more
+   * authority than showing somebody their own order needs. Confirmation
+   * arrives on the two paths built for it: the verified webhook, and the P6-5
+   * reconciler every 60 seconds. Until one of them lands this says so, which
+   * is true.
    *
    * Null when the customer never started a payment — a real state for an order
    * that is about to expire unpaid.
@@ -138,23 +147,18 @@ export class PaymentsService {
     const attempt = attempts[0];
     if (!attempt) return null;
 
-    if (attempt.status === 'pending' || attempt.status === 'processing') {
-      // Best effort, and never the source of the answer.
-      await this.reconcile.reconcile(attempt.id);
-    }
-
-    const [current, order] = await Promise.all([
-      this.payments.findById(this.db, attempt.id),
-      this.orders.findById(this.db, attempt.marketId, orderId),
-    ]);
-    if (!current || !order) return null;
+    // Nothing above can have changed anything, so there is nothing to re-read:
+    // the rows fetched here are the rows the database holds, and that is the
+    // whole answer this route has ever been entitled to give.
+    const order = await this.orders.findById(this.db, attempt.marketId, orderId);
+    if (!order) return null;
     return {
-      id: current.id,
-      status: current.status,
-      amountMinor: current.amountMinor,
-      currency: current.currency,
-      expiresAt: current.expiresAt.toISOString(),
-      createdAt: current.createdAt.toISOString(),
+      id: attempt.id,
+      status: attempt.status,
+      amountMinor: attempt.amountMinor,
+      currency: attempt.currency,
+      expiresAt: attempt.expiresAt.toISOString(),
+      createdAt: attempt.createdAt.toISOString(),
       order: {
         id: order.id,
         status: order.status as PaymentStatus['order']['status'],
@@ -418,7 +422,14 @@ export class PaymentsService {
     accessToken?: string | null,
   ): string {
     const origin = this.env.WEB_ORIGINS[0]!;
-    const url = new URL(`${origin}/checkout/payments/${attempt.id}/${outcome}`);
+    // The return address is the EXCHANGE route, not the page: a cookie is set
+    // on the way back, and only a route handler may compose a response that
+    // carries one. The page it redirects to is read-only (P6-8).
+    const path =
+      outcome === 'return' && accessToken
+        ? `checkout/payments/${attempt.id}/return/exchange`
+        : `checkout/payments/${attempt.id}/${outcome}`;
+    const url = new URL(`${origin}/${path}`);
     // Only on the RETURN url, and only when this call minted one. The cancel
     // url leads back to a customer who never left our site and still has
     // whatever identity they arrived with.

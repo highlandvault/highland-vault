@@ -1,17 +1,13 @@
-import { OrderAccessResponseSchema } from '@hv/contracts';
+import { ORDER_ACCESS_TOKEN_HEADER, OrderAccessResponseSchema } from '@hv/contracts';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { ACCESS_COOKIE } from '@/lib/order-access';
 import { formatPrice } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Your payment', robots: { index: false } };
-
-/** Where the return link is kept once it is out of the URL. Per-order, short-lived. */
-const ACCESS_COOKIE = 'hv_order_access';
-
-type Params = Promise<{ id: string }>;
 
 /**
  * Back from the provider (P6-8; OD-2; **D18 = B**; B10's "the redirect cannot
@@ -30,48 +26,33 @@ type Params = Promise<{ id: string }>;
  * server-side status check. A browser is neither, and there is no call this
  * page could make that would change that.
  *
- * ## The token leaves the URL immediately
+ * ## This page reads; it never writes
  *
- * It arrives as `?t=…` because the provider had to be given a URL before the
- * customer left. A bearer credential in a URL ends up in browser history, in
- * referrers and in logs — so the first thing this page does is move it into an
- * HttpOnly cookie and redirect to a clean address (§12). After that the link
- * still works if reopened, and the visible URL carries nothing.
+ * The token arrives in the URL the provider was given, and the Route Handler
+ * next door moves it into an HttpOnly cookie and sends the customer here
+ * without it (§12). By the time this renders there is nothing left to
+ * exchange, which is why it only ever calls `cookies().get`.
+ *
+ * That split is not tidiness. A Server Component renders after the response
+ * headers are committed, so Next.js refuses `cookies().set()` here — setting a
+ * cookie is composing a response, and a Route Handler is what composes one.
+ *
+ * Without the cookie it answers 404, the same as for any caller who has no
+ * link, and says nothing about whether the order exists.
  */
-export default async function PaymentReturnPage({
-  params,
-  searchParams,
-}: {
-  params: Params;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const { id } = await params;
-  const query = await searchParams;
-  const fromUrl = typeof query.t === 'string' ? query.t : null;
-
-  if (fromUrl) {
-    // Out of the URL, into an HttpOnly cookie, and straight back here without
-    // it. The cookie outlives the redirect; the URL does not keep the secret.
-    const store = await cookies();
-    store.set(ACCESS_COOKIE, fromUrl, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/checkout/payments',
-      // The API decides the real lifetime; this only stops the browser holding
-      // it longer than it could possibly be useful.
-      maxAge: 60 * 60,
-      secure: process.env.NODE_ENV === 'production',
-    });
-    redirect(`/checkout/payments/${id}/return`);
-  }
-
-  const store = await cookies();
-  const token = store.get(ACCESS_COOKIE)?.value;
+export default async function PaymentReturnPage() {
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+  // No cookie, no page. The exchange sets it; arriving here without one means
+  // the link was never presented, or it has already been cleared. Answering 404
+  // says nothing about whether any particular order exists.
   if (!token) notFound();
 
+  // A GET, with the credential in a header rather than the URL. It cannot be
+  // a POST: this renders during a plain navigation, which sends no Origin, and
+  // the API refuses every state-changing request without one. The route is
+  // read-only (S2), so the method is also the truth about it.
   const result = await apiFetch(`/checkout/order-access`, {
-    method: 'POST',
-    body: { token },
+    headers: { [ORDER_ACCESS_TOKEN_HEADER]: token },
     parse: (json) => OrderAccessResponseSchema.parse(json),
   });
   // Expired, revoked, or never valid — all the same answer, and all meaning

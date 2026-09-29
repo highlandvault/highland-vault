@@ -124,6 +124,15 @@ export class FakePaymentProvider implements PaymentProvider {
   private readonly refunds = new Map<string, ProviderRefundResult>();
   /** Signed and ready, in the order they occurred. Not yet "delivered". */
   private readonly queue: SignedWebhook[] = [];
+  /**
+   * How many times anybody has asked this provider for a payment's state.
+   *
+   * Counted so a test can assert a route made **no** outbound call at all. An
+   * absence is otherwise invisible: a read that wrongly reconciles looks
+   * identical to one that does not, right up until the provider happens to say
+   * "succeeded" and an order settles because somebody opened a link.
+   */
+  private statusChecks = 0;
 
   constructor(options: FakePaymentProviderOptions) {
     // The config guard (B10). A production build cannot hold one of these at
@@ -201,6 +210,7 @@ export class FakePaymentProvider implements PaymentProvider {
   }
 
   getPaymentStatus(providerReference: string): Promise<ProviderPaymentStatus> {
+    this.statusChecks += 1;
     const payment = this.payments.get(providerReference);
     if (payment === undefined) {
       return Promise.reject(
@@ -271,6 +281,11 @@ export class FakePaymentProvider implements PaymentProvider {
   /** How many webhooks are queued but not yet handed over. */
   get pendingWebhooks(): number {
     return this.queue.length;
+  }
+
+  /** How many status checks this provider has been asked for (see the field). */
+  get statusCheckCount(): number {
+    return this.statusChecks;
   }
 
   /**

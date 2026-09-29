@@ -14,7 +14,12 @@
  * it authenticates nobody, it reaches one order, it reads, and it can never
  * make anything paid.
  */
-import { ErrorResponseSchema, OrderResponseSchema, PaymentResponseSchema } from '@hv/contracts';
+import {
+  ErrorResponseSchema,
+  ORDER_ACCESS_TOKEN_HEADER,
+  OrderResponseSchema,
+  PaymentResponseSchema,
+} from '@hv/contracts';
 import { enableMarketsForTesting, insertFixtureDraw } from '@hv/db/testing';
 import { FAKE_SIGNATURE_HEADER, signWebhook, type FakePaymentProvider } from '@hv/payments';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -133,13 +138,21 @@ describe('the order return link', () => {
     return { client, order, payment, token: token!, reference };
   }
 
-  const present = (token: string, address = ip) =>
+  /**
+   * The route as its only real caller reaches it.
+   *
+   * A GET, and **no `origin` header**, because the caller is a page rendering
+   * during a top-level navigation and a navigation sends none. The earlier
+   * version of this helper was a POST that supplied an origin no browser would
+   * ever send — so every test below passed against a route the actual return
+   * page could not reach at all, and the API was right to refuse it.
+   */
+  const present = (token: string | undefined, address = ip) =>
     h.app.inject({
-      method: 'POST',
+      method: 'GET',
       url: '/checkout/order-access',
       remoteAddress: address,
-      headers: { origin: 'http://127.0.0.1:3000', 'content-type': 'application/json' },
-      payload: { token },
+      ...(token === undefined ? {} : { headers: { [ORDER_ACCESS_TOKEN_HEADER]: token } }),
     });
 
   const provider = () =>
@@ -222,6 +235,61 @@ describe('the order return link', () => {
       const after = (await present(token)).json<{ order: { status: string } }>();
       expect(after.order.status).toBe('paid');
       expect(await orderStatus(order.id)).toBe('paid');
+    });
+  });
+
+  // ---- the credential is the header, and nothing else ------------------------
+
+  describe('the interface', () => {
+    it('refuses a request with no credential header', async () => {
+      await paidJourney();
+      const response = await present(undefined);
+      expect(response.statusCode).toBe(404);
+      expect(errorCode(response)).toBe('NOT_FOUND');
+    });
+
+    it('answers a malformed credential exactly as it answers an unknown one', async () => {
+      const { token } = await paidJourney();
+      // Too short to be a token, far too long to be one, and empty. All three
+      // are the same 404 as a well-formed token nobody issued: a caller learns
+      // nothing about which shapes are worth trying.
+      const unknown = await present(`${token.slice(0, -4)}zzzz`);
+      for (const bad of ['', 'short', 'x'.repeat(200)]) {
+        const response = await present(bad);
+        expect(response.statusCode).toBe(unknown.statusCode);
+        expect(errorCode(response)).toBe(errorCode(unknown));
+      }
+      expect(unknown.statusCode).toBe(404);
+    });
+
+    it('is no longer reachable as a POST', async () => {
+      const { token } = await paidJourney();
+      // With an origin supplied, so this proves the route is gone rather than
+      // the CSRF hook refusing it. There is one canonical interface.
+      const response = await h.app.inject({
+        method: 'POST',
+        url: '/checkout/order-access',
+        remoteAddress: ip,
+        headers: { origin: 'http://127.0.0.1:3000', 'content-type': 'application/json' },
+        payload: { token },
+      });
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('will not take the token from the URL', async () => {
+      // The whole reason it is a header: a bearer credential in a query string
+      // ends up in access logs, history and referrers. The URL is not a channel
+      // this route reads, and offering the token there buys nothing.
+      const { token } = await paidJourney();
+      for (const url of [
+        `/checkout/order-access?token=${token}`,
+        `/checkout/order-access?t=${token}`,
+      ]) {
+        const response = await h.app.inject({ method: 'GET', url, remoteAddress: ip });
+        expect(response.statusCode).toBe(404);
+      }
+      // ...and the header still does.
+      expect((await present(token)).statusCode).toBe(200);
     });
   });
 
@@ -399,10 +467,14 @@ describe('the order return link', () => {
         // "wrong" from "gone" from "never existed".
         expect(errorCode(response)).toBe('NOT_FOUND');
       }
-      // Shorter than any token this system issues: refused by validation
-      // before a query runs. That boundary is public — the length is visible in
-      // any link — so answering differently costs nothing.
-      expect((await present('short')).statusCode).toBe(400);
+      // Shorter than any token this system issues. This used to be a 400 from
+      // the body validator, on the reasoning that the length boundary is
+      // visible in any link anyway. Superseded by S2: the token is a header
+      // now and its shape is checked in the handler, so "not a token" and "not
+      // a token I know" give one answer. Nothing was lost — the old reply was
+      // merely harmless, not useful.
+      expect((await present('short')).statusCode).toBe(404);
+      expect(errorCode(await present('short'))).toBe('NOT_FOUND');
     });
 
     it('cannot start a payment (D18 = B)', async () => {
@@ -511,18 +583,8 @@ describe('the order return link', () => {
     it('cannot make an order paid, however it is presented', async () => {
       const { order, token } = await paidJourney();
       // Every shape a forged return could take. None is an input to anything.
-      for (const payload of [
-        { token },
-        { token: `${token}&status=paid` },
-        { token: `${token}?paid=true` },
-      ]) {
-        await h.app.inject({
-          method: 'POST',
-          url: '/checkout/order-access',
-          remoteAddress: ip,
-          headers: { origin: 'http://127.0.0.1:3000', 'content-type': 'application/json' },
-          payload,
-        });
+      for (const value of [token, `${token}&status=paid`, `${token}?paid=true`]) {
+        await present(value);
       }
       expect(await orderStatus(order.id)).toBe('awaiting_payment');
       const sold = await h.sql.query<{ n: number }>(
@@ -541,6 +603,96 @@ describe('the order return link', () => {
 
       // The authoritative mechanism, untouched by any of the above.
       await settle(order, reference);
+      expect(await orderStatus(order.id)).toBe('paid');
+    });
+  });
+
+  // ---- the read is a read (S2) -----------------------------------------------
+
+  /**
+   * The defect this block exists for.
+   *
+   * `statusByAccess` used to run a trusted status check when the attempt was
+   * still pending — a provider call, and then `finalization.confirm`, which is
+   * the same code a verified webhook reaches. Opening a link could therefore
+   * capture a payment, sell tickets, raise a refund and send email.
+   *
+   * Reading is now all it can do. Both halves are asserted: that no call goes
+   * out, and that nothing settles even when the provider is sitting on a
+   * "succeeded" the route would have been delighted to find.
+   */
+  describe('presenting a link performs no provider work', () => {
+    it('asks the provider nothing, even while the attempt is pending', async () => {
+      const { order, token } = await paidJourney();
+      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+
+      const before = provider().statusCheckCount;
+      for (let i = 0; i < 5; i++) expect((await present(token)).statusCode).toBe(200);
+
+      expect(provider().statusCheckCount).toBe(before);
+    });
+
+    it('does not settle an order the provider has already succeeded', async () => {
+      const { order, token, reference } = await paidJourney();
+      // The provider has taken the money and the webhook has not arrived —
+      // exactly the window a customer returns in. Under the old behaviour the
+      // next line's read found 'succeeded' and paid the order.
+      provider().complete(reference);
+      provider().takeWebhooks('withheld');
+
+      const audits = async () =>
+        (
+          await h.sql.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM audit_log WHERE entity_id = $1`,
+            [order.id],
+          )
+        ).rows[0]!.n;
+      const beforeAudits = await audits();
+      const beforePayment = (
+        await h.sql.query<{ status: string; updated_at: Date }>(
+          `SELECT status, updated_at FROM payments WHERE order_id = $1`,
+          [order.id],
+        )
+      ).rows[0];
+
+      for (let i = 0; i < 5; i++) {
+        const body = (await present(token)).json<{
+          order: { status: string };
+          payment: { status: string } | null;
+        }>();
+        // And it reports the truth while it is at it: the database's answer,
+        // not the provider's — which is 'succeeded' and stays unheard.
+        expect(body.order.status).toBe('awaiting_payment');
+        expect(['pending', 'processing']).toContain(body.payment?.status);
+      }
+
+      expect(await orderStatus(order.id)).toBe('awaiting_payment');
+      expect(
+        (
+          await h.sql.query<{ status: string; updated_at: Date }>(
+            `SELECT status, updated_at FROM payments WHERE order_id = $1`,
+            [order.id],
+          )
+        ).rows[0],
+      ).toEqual(beforePayment);
+      // No ticket sold, no refund raised, no audit record written.
+      const sold = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM tickets t
+           JOIN order_items oi ON oi.reservation_id = t.reservation_id
+          WHERE oi.order_id = $1 AND t.status = 'sold'`,
+        [order.id],
+      );
+      expect(sold.rows[0]!.n).toBe(0);
+      const refunds = await h.sql.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM refunds r
+           JOIN payments p ON p.id = r.payment_id WHERE p.order_id = $1`,
+        [order.id],
+      );
+      expect(refunds.rows[0]!.n).toBe(0);
+      expect(await audits()).toBe(beforeAudits);
+
+      // The authoritative path still works, and is the only thing that does.
+      expect((await settle(order, reference)).statusCode).toBe(200);
       expect(await orderStatus(order.id)).toBe('paid');
     });
   });
