@@ -1,6 +1,6 @@
 # Active Work
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 Who is working on what **right now**, so that parallel work does not collide. Rules: [DEVELOPMENT_RULES.md](../DEVELOPMENT_RULES.md) §8–§10.
 
@@ -47,7 +47,9 @@ Next:
 - **Phase 6 (payments + settlement):** **P6-1 through P6-5 merged** into `develop` — PR #26 (P6-1), #27 (P6-2), #29 (P6-3), #30 (P6-4), #31 (P6-5). `develop` is at `a71e687`; CI green. Migrations `0019`–`0025`.
 - **[PHASE_6_SCOPE_LOCK.md](../PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** The phase plan in PROJECT_STATUS.md predates it; where they disagree, the scope lock wins.
 - **P6-6 is consumed by P6-4**, not outstanding. Everything §22 originally listed under it — `paid_unfulfillable` (D14 = A), the automatic refund to the original instrument (D15a, D15b), `order.unfulfillable` (D16a) — shipped in P6-4, because the locked D21/D22.3/D23 outcomes need a refund at the moment finalisation decides. It is **not** a separate implementation slice.
-- **P6-7 (per-market payment configuration) is the active task.** P6-8 (web payment flow, `order_access_tokens`) and P6-9 (hardening and Gate 4 sign-off) remain.
+- **P6-7** is implemented on `feature/p6-7-market-payment-config` (`1418ab2`), not yet merged.
+- **P6-8 (web payment flow) is the active task**, branched from it. **P6-9** (hardening and Gate 4 sign-off) remains.
+- **The web purchase journey is basket-first as of P6-8.** An order is built from the basket and must match it exactly (ADR-0032), so the draw page now adds to the basket rather than reserving directly. The allocation is unchanged — `CartService` takes the same hold through the same engine — and the reservation detail page is kept and linked from each basket line.
 - **Branches:** `feature/*` → PR → `develop` → release PR → `main` (DEVELOPMENT_RULES §4). `origin/main` is at `c284825`, `origin/develop` at `a71e687`.
 
 ### Open owner decisions carried by Phase 6
@@ -63,32 +65,33 @@ Recorded so they are not mistaken for oversights. None may be decided by an impl
 
 ## Active entries
 
-### P6-7 — Per-market payment configuration
+### P6-8 — Web payment flow
 
 Developer: Divyanshu (repository owner), working with Claude
-Branch: `feature/p6-7-market-payment-config` (from `origin/develop` `a71e687`)
+Branch: `feature/p6-8-web-payment-flow` (from `feature/p6-7-market-payment-config` `1418ab2`)
 Issue: none (no GitHub CLI; PRs are opened through the GitHub web UI)
 PR: none yet
 Status: IN REVIEW
 
 Current task:
-Making the payment provider a property of the **market** rather than of the deployment (B10; owner decision **D17 = A**). Migration `0026_market_payment_configs`, a `PaymentProviderRegistry` that resolves per market for initiation, reconciliation and refunds, and the staff configuration surface under `config.manage`.
+Making the backend purchase and payment system reachable from a browser (OD-2; **D18 = B**, **D19 = A**, **D19a**). Migration `0027_order_access_tokens`, the read-only return link, and the basket-first customer journey.
 
 Affected areas:
-`packages/db/migrations/0026_market_payment_configs.sql` (new), `apps/api/src/payments/{payment-provider.factory,payment-provider.registry,admin-payment-config.service,admin-payment-config.controller,payments.service,payments-reconcile.service,refunds.service,payments.module}.ts`, `apps/api/src/webhooks/webhook-intake.service.ts`, `packages/contracts/src/{admin,errors}.ts`, `packages/db/src/testing/fixtures.ts`, tests, docs.
+`packages/db/migrations/0027_order_access_tokens.sql` (new), `apps/api/src/orders/{order-access.service,checkout.service,orders.module,markets}`, `apps/api/src/payments/{order-access.controller,payments.service,payments.module}.ts`, `apps/api/src/auth/rate-limiter.ts`, `apps/api/src/config/env.ts`, `packages/contracts/src/orders.ts`, `packages/payments/src/fake-provider.ts`, `apps/web/src/app/[market]/{basket,checkout,orders,cart-actions,checkout-actions}`, `apps/web/src/app/checkout/payments/[id]/{return,cancel}`, `apps/web/src/lib/{api,checkout}.ts`, `apps/web/src/components/entry-panel.tsx`, e2e, docs.
 
 Avoid modifying:
-`packages/db/migrations/` (`0026` is taken by this branch; the next free number is `0027`). The payment and order state machines are unchanged by this slice and should stay that way.
+`packages/db/migrations/` (`0027` is taken by this branch; the next free number is `0028`). The payment and order state machines are unchanged by this slice and must stay that way.
 
 Blockers:
-None. **Three things for the reviewer:**
+None. **Four things for the reviewer:**
 
-1. **Webhook resolution deliberately does not read the new table.** It resolves by provider code from the environment alone. Had it consulted `market_payment_configs`, a delivery for a configured provider and one for an unconfigured provider would answer differently, and the route would become a way to enumerate which markets are configured. P6-3's boundary is otherwise untouched.
-2. **`config_ref` is stored and audited but nothing reads it yet.** It names which credential set a provider should use, and no production provider exists to have credential sets (OPEN O13). Wiring it to a credential lookup belongs with the provider that needs one; saying so is better than a lookup that pretends.
-3. **Enabling a market in a test now requires configuring one too.** `enableMarketsForTesting` calls the new `configurePaymentsForTesting`, because a market with no provider cannot take a payment — which is the point.
+1. **The web purchase journey deliberately moved to the basket.** `POST /checkout/orders` builds an order from the caller's basket and the order must match it exactly (ADR-0032), so a hold taken by the old draw-page route could never become an order — the two paths reached the same engine by different doors, and only one of them leads to checkout. The draw page now adds to the basket. **The allocation is unchanged**: `CartService` takes the same real hold, through the same ticket engine, under the same cap and locks. No second reservation or basket mechanism exists.
+2. **The reservation detail page is kept**, and each basket line links to it. The hold is real and its ticket numbers are worth showing; deleting the page to simplify the new flow would have lost something true.
+3. **Webhook resolution and payment authority are untouched.** Nothing in the web flow can mark an order paid. The return page presents a read-only token and prints what the database says; a forged query string, a replayed link and twenty refreshes all produce the same answer.
+4. **`draws.spec.ts` and `reservations.spec.ts` were updated, not weakened.** Their assertions described the old journey. Allocation, real ticket numbers, sequential padding, the per-person cap, expiry, release, market isolation and authorization are all still asserted — one page further along.
 
 Last update:
-2026-09-28 — Implemented. 33 new integration tests; all 206 existing payment, finalization, reconciliation, refund and webhook tests green.
+2026-09-29 — Implemented. 23 new order-access integration tests, a new Playwright journey spec, and the two existing specs updated to the basket-first flow.
 
 Next:
-Owner review of the P6-7 PR.
+Owner review of the P6-8 PR.

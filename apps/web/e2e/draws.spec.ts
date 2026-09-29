@@ -47,7 +47,7 @@ test('signed out, the entry panel shows real availability and exact totals', asy
   await expect(page.getByTestId('entry-quantity')).toHaveText('3');
   await expect(page.getByTestId('entry-total')).toHaveText('£8.97');
 
-  await page.getByRole('link', { name: 'Sign in to reserve' }).click();
+  await page.getByRole('link', { name: 'Sign in to buy' }).click();
   await expect(page).toHaveURL(/\/login\?next=%2Fuk%2Fdraws%2Fhighland-lodge-escape$/);
 });
 
@@ -59,8 +59,17 @@ test('a customer reserves tickets and sees their numbers, total and a countdown 
   await page.getByRole('button', { name: 'One more entry' }).click();
   await page.getByRole('button', { name: 'One more entry' }).click();
   await expect(page.getByTestId('entry-total')).toHaveText('£8.97');
-  await page.getByRole('button', { name: 'Reserve tickets' }).click();
+  await page.getByRole('button', { name: 'Add to basket' }).click();
 
+  // P6-8: the purchase journey is basket-first, because an order is built from
+  // the basket (ADR-0032). Adding still takes a real hold through the ticket
+  // engine — the same allocation, under the same cap and the same locks — so
+  // everything this test proved about the tickets is still proved, one page on.
+  await expect(page).toHaveURL(/\/uk\/basket$/);
+  await expect(page.getByTestId('basket-line-total')).toHaveText('£8.97');
+  await expect(page.getByTestId('basket-total')).toHaveText('£8.97');
+
+  await page.getByTestId('basket-line-tickets').click();
   await expect(page).toHaveURL(/\/uk\/reservations\/[0-9a-f-]{36}$/);
   await expect(page.getByTestId('reservation-title')).toHaveText('Your tickets are reserved');
   const numbers = page.getByTestId('ticket-number');

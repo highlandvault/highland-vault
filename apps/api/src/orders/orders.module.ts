@@ -8,6 +8,7 @@ import { TermsModule } from '../terms/terms.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
+import { OrderAccessService } from './order-access.service';
 import { OrdersRepository } from './orders.repository';
 
 /**
@@ -29,7 +30,7 @@ import { OrdersRepository } from './orders.repository';
     TicketsModule,
   ],
   controllers: [CheckoutController],
-  providers: [OrdersRepository, CheckoutService],
-  exports: [OrdersRepository, CheckoutService],
+  providers: [OrdersRepository, CheckoutService, OrderAccessService],
+  exports: [OrdersRepository, CheckoutService, OrderAccessService],
 })
 export class OrdersModule {}

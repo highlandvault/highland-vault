@@ -87,6 +87,18 @@ export const ApiEnvSchema = z
     // good for the rest of the day.
     GUEST_VERIFIED_EMAIL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
 
+    /**
+     * How long a return link outlives the order's payment deadline (D19a).
+     *
+     * **Its own value, deliberately.** Thirty is arithmetically equal to
+     * GUEST_VERIFIED_EMAIL_TTL_MINUTES above and that is a coincidence, not a
+     * dependency: deriving one from the other would mean a future change to the
+     * email-proof window silently changing how long a customer can look at the
+     * order they just paid for. A test changes one and asserts the other does
+     * not move.
+     */
+    ORDER_ACCESS_TOKEN_TAIL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
+
     // The API seals sensitive outbox payloads and the worker opens them, so
     // both must hold the same key (ADR-0028). Separate from MFA_ENCRYPTION_KEY:
     // same construction, different purpose.

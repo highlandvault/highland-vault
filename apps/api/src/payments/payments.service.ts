@@ -9,6 +9,7 @@ import { Errors } from '../common/errors';
 import type { MarketContext } from '../common/request-context';
 import { DATABASE } from '../database/database.module';
 import { GuestSessionsService } from '../guests/guest-sessions.service';
+import { OrderAccessService } from '../orders/order-access.service';
 import { type OrderBuyer, OrdersRepository } from '../orders/orders.repository';
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaymentsReconcileService } from './payments-reconcile.service';
@@ -46,6 +47,7 @@ export class PaymentsService {
     private readonly rateLimiter: RateLimiter,
     private readonly reconcile: PaymentsReconcileService,
     private readonly providers: PaymentProviderRegistry,
+    private readonly orderAccess: OrderAccessService,
   ) {}
 
   /**
@@ -98,6 +100,54 @@ export class PaymentsService {
       this.orders.findById(this.db, market.id, orderId),
     ]);
     if (!current || !order) throw Errors.notFound('Payment');
+    return {
+      id: current.id,
+      status: current.status,
+      amountMinor: current.amountMinor,
+      currency: current.currency,
+      expiresAt: current.expiresAt.toISOString(),
+      createdAt: current.createdAt.toISOString(),
+      order: {
+        id: order.id,
+        status: order.status as PaymentStatus['order']['status'],
+        expiresAt: order.expiresAt.toISOString(),
+      },
+      serverTime: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * The order's most recent payment attempt, for a return link (OD-2, D18 = B).
+   *
+   * **No identity is taken and none is checked**, because the caller proved
+   * nothing about who they are — the token proved which order. Authorization
+   * happened before this method was reached, and it authorized reading one
+   * order, which is exactly what this returns.
+   *
+   * It may trigger a trusted status check, the one thing B10 permits a return
+   * page to cause. That check still asserts nothing: it gives finalisation a
+   * chance to run, and the answer below is then re-read from the database. A
+   * browser cannot make an order paid by arriving here, refreshing, or
+   * arriving with any query string it likes.
+   *
+   * Null when the customer never started a payment — a real state for an order
+   * that is about to expire unpaid.
+   */
+  async statusByAccess(orderId: string): Promise<PaymentStatus | null> {
+    const attempts = await this.payments.listForOrder(this.db, orderId);
+    const attempt = attempts[0];
+    if (!attempt) return null;
+
+    if (attempt.status === 'pending' || attempt.status === 'processing') {
+      // Best effort, and never the source of the answer.
+      await this.reconcile.reconcile(attempt.id);
+    }
+
+    const [current, order] = await Promise.all([
+      this.payments.findById(this.db, attempt.id),
+      this.orders.findById(this.db, attempt.marketId, orderId),
+    ]);
+    if (!current || !order) return null;
     return {
       id: current.id,
       status: current.status,
@@ -218,14 +268,20 @@ export class PaymentsService {
   private async startWithProvider(
     provider: PaymentProvider,
     attempt: PaymentRecord,
-    order: { orderNumber: string; externalDueMinor: number; currency: 'GBP' | 'EUR' },
+    order: { id: string; orderNumber: string; externalDueMinor: number; currency: 'GBP' | 'EUR' },
   ): Promise<{ attempt: PaymentRecord; redirectUrl: string }> {
+    // The return link (OD-2, D18 = B). Minted here because this is the moment
+    // the customer is about to leave the site, and carried in the RETURN URL so
+    // that coming back needs no session, no open tab and no live email proof.
+    // Null when the order already has one: the plaintext of that token is gone,
+    // which is what storing only a hash means.
+    const access = await this.orderAccess.issue(this.db, order.id);
     try {
       const created = await provider.createPayment({
         amount: { amountMinor: order.externalDueMinor, currency: order.currency },
         orderReference: order.orderNumber,
         idempotencyKey: attempt.idempotencyKey,
-        returnUrl: this.customerUrl(attempt, 'return'),
+        returnUrl: this.customerUrl(attempt, 'return', access.token),
         cancelUrl: this.customerUrl(attempt, 'cancel'),
       });
       if (attempt.providerReference !== null) {
@@ -356,9 +412,18 @@ export class PaymentsService {
    * Where the provider sends the customer back to. P6-8 builds these pages;
    * the provider only needs somewhere to point.
    */
-  private customerUrl(attempt: PaymentRecord, outcome: 'return' | 'cancel'): string {
+  private customerUrl(
+    attempt: PaymentRecord,
+    outcome: 'return' | 'cancel',
+    accessToken?: string | null,
+  ): string {
     const origin = this.env.WEB_ORIGINS[0]!;
-    return `${origin}/checkout/payments/${attempt.id}/${outcome}`;
+    const url = new URL(`${origin}/checkout/payments/${attempt.id}/${outcome}`);
+    // Only on the RETURN url, and only when this call minted one. The cancel
+    // url leads back to a customer who never left our site and still has
+    // whatever identity they arrived with.
+    if (accessToken) url.searchParams.set('t', accessToken);
+    return url.toString();
   }
 
   /** The customer-facing view. Never the provider's reference for the attempt. */

@@ -226,6 +226,29 @@ export class CheckoutService {
     return this.toDto(market, order);
   }
 
+  /**
+   * The same order, reached by a return link instead of an identity (OD-2,
+   * D18 = B).
+   *
+   * **A second, parallel authorization route.** It does not call `buyerOf`, so
+   * the authenticated and freshly-verified-guest paths above behave exactly as
+   * they did before P6-8 — including still throwing VERIFICATION_REQUIRED once
+   * a guest's thirty minutes lapse. Nothing about who the caller is enters
+   * here: the token already named one order, and that is the whole of its
+   * authority.
+   *
+   * Read-only by construction. There is no token-scoped write anywhere in the
+   * codebase, and `OrderAccessService` offers no method that could become one.
+   */
+  async getOrderByAccess(market: MarketContext, orderId: string): Promise<Order> {
+    const order = await this.orders.findById(this.db, market.id, orderId);
+    // Unreachable in practice — the token resolved this order's market — but a
+    // second check costs nothing and keeps market isolation true of this method
+    // on its own rather than of its caller.
+    if (!order) throw Errors.notFound('Order');
+    return this.toDto(market, order);
+  }
+
   async listOrders(market: MarketContext, identity: CheckoutIdentity): Promise<Order[]> {
     const orders = await this.orders.listForBuyer(this.db, market.id, this.buyerOf(identity));
     return Promise.all(orders.map((o) => this.toDto(market, o)));

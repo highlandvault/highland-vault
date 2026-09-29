@@ -23,9 +23,13 @@ interface EntryPanelProps {
 }
 
 /**
- * Choose a quantity, see the exact total, reserve. The limits shown here are
- * for guidance only: the API enforces availability, the per-person cap and the
- * price, and its answer is what the customer sees.
+ * Choose a quantity, see the exact total, add it to the basket. The limits
+ * shown here are for guidance only: the API enforces availability, the
+ * per-person cap and the price, and its answer is what the customer sees.
+ *
+ * Adding to the basket takes a real hold through the ticket engine (P6-8), so
+ * the tickets are the customer’s from this moment — the basket is where they
+ * wait, not a list of intentions.
  */
 export function EntryPanel(props: EntryPanelProps) {
   const id = useId();
@@ -112,7 +116,7 @@ export function EntryPanel(props: EntryPanelProps) {
         </button>
       ) : !signedIn ? (
         <Link className="button button--gold button--block" href={props.loginHref}>
-          Sign in to reserve
+          Sign in to buy
         </Link>
       ) : soldOut ? (
         <button type="button" className="button button--gold button--block" disabled>
@@ -140,7 +144,7 @@ function ReserveButton({ disabled }: { disabled: boolean }) {
       className="button button--gold button--block"
       disabled={disabled || pending}
     >
-      {pending ? 'Reserving…' : 'Reserve tickets'}
+      {pending ? 'Adding…' : 'Add to basket'}
     </button>
   );
 }

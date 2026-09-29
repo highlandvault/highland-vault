@@ -87,6 +87,15 @@ interface FakePayment {
   readonly orderReference: string;
   readonly amount: Money;
   readonly idempotencyKey: string;
+  /**
+   * Where the customer is sent back to, captured AT CREATION.
+   *
+   * A real provider stores the return url with the payment session; a retried
+   * create is idempotent on the key and hands back the session it already
+   * made, return url included. Rebuilding it from whatever the latest call
+   * passed would make this fake answer a question real providers do not.
+   */
+  readonly returnUrl: string;
   state: ProviderPaymentState;
 }
 
@@ -143,7 +152,7 @@ export class FakePaymentProvider implements PaymentProvider {
       if (existing === undefined) throw new Error('fake provider lost a payment it created');
       return Promise.resolve({
         providerReference: existing.reference,
-        redirectUrl: this.redirectUrl(existing.reference, input.returnUrl),
+        redirectUrl: this.redirectUrl(existing.reference, existing.returnUrl),
         state: existing.state,
       });
     }
@@ -154,6 +163,7 @@ export class FakePaymentProvider implements PaymentProvider {
       orderReference: input.orderReference,
       amount: input.amount,
       idempotencyKey: input.idempotencyKey,
+      returnUrl: input.returnUrl,
       state: 'pending',
     });
     this.byIdempotencyKey.set(input.idempotencyKey, reference);

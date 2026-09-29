@@ -58,6 +58,12 @@ export class MarketsRepository {
   }
 
   /** Locks the market row for a gate change; concurrent changes to the same market serialise. */
+  /** By id, for a caller that resolved a market indirectly — a return link, say. */
+  async findById(db: DbExecutor, id: string): Promise<MarketRecord | null> {
+    const row = await this.base(db).where('m.id', '=', id).executeTakeFirst();
+    return row ? toRecord(row) : null;
+  }
+
   async findByCodeForUpdate(db: DbExecutor, code: string): Promise<MarketRecord | null> {
     const row = await this.base(db).where('m.code', '=', code).forUpdate('m').executeTakeFirst();
     return row ? toRecord(row) : null;

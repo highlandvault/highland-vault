@@ -1,6 +1,6 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 ## Current phase
 
@@ -16,9 +16,11 @@ _Last updated: 2026-09-28_
 | **P6-4** Atomic finalization (Gate 4 work)               | merged                                      | `0022`–`0024`  |
 | **P6-5** Status / reconciliation / expiry / refund retry | merged                                      | `0025`         |
 | **P6-6** Broader refund slice                            | **CONSUMED BY P6-4** — not a separate slice | —              |
-| **P6-7** Per-market payment configuration                | **active**                                  | `0026`         |
-| **P6-8** Web payment flow                                | not started                                 | `0027`         |
+| **P6-7** Per-market payment configuration                | implemented, unmerged                       | `0026`         |
+| **P6-8** Web payment flow                                | **active**                                  | `0027`         |
 | **P6-9** Hardening / Gate 4 sign-off                     | not started                                 | none           |
+
+**The web purchase journey is basket-first as of P6-8.** An order is built from the basket and must match it exactly (ADR-0032), so the draw page adds to the basket rather than reserving directly. The allocation is unchanged — `CartService` takes the same hold through the same ticket engine — and the reservation detail page is kept and linked from each basket line.
 
 **Gate 4 is not signed off.** All thirteen G4 items in [scope lock §24](PHASE_6_SCOPE_LOCK.md) remain open, and G4.4 ("one credit") is deferred to Gate 6 / P8 by **D8 = A**. A Phase 6 Definition of Done must be committed **before** the phase closes (G4.10).
 
