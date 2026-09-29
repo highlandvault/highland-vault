@@ -196,6 +196,7 @@ export function createBarrier(parties: number, timeoutMs = 10_000): () => Promis
 export {
   FIXTURE_PASSWORD_HASH,
   TEST_FIXTURE_COMPLIANCE,
+  configurePaymentsForTesting,
   enableGermanyForTesting,
   enableMarketsForTesting,
   insertFixtureDraw,

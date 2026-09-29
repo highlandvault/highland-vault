@@ -27,6 +27,35 @@ export async function enableMarketsForTesting(
     [codes, TEST_FIXTURE_COMPLIANCE.min_age, TEST_FIXTURE_COMPLIANCE.self_exclusion_required],
   );
   await db.query(`UPDATE markets SET is_enabled = true WHERE code = ANY($1)`, [codes]);
+  await configurePaymentsForTesting(db, codes);
+}
+
+/**
+ * Points the given markets at the fake provider (P6-7).
+ *
+ * Since P6-7 a market pays through the provider its `market_payment_configs`
+ * row names, and a market with none cannot take a payment at all — the correct
+ * state in production until O13 is answered. A test that enables a market and
+ * expects to pay therefore has to configure one too, exactly as it has to
+ * supply the compliance values above.
+ *
+ * `config_ref` is a reference, never a secret (I15). The fake provider takes
+ * its signing key from the environment like every other credential, so this
+ * value is only a label — and a labelled one, so that a row found in a real
+ * database is obviously a test fixture.
+ */
+export async function configurePaymentsForTesting(
+  db: Queryable,
+  codes: readonly ('uk' | 'ie' | 'de')[],
+  providerCode = 'fake',
+): Promise<void> {
+  await db.query(
+    `UPDATE market_payment_configs c
+        SET provider_code = $2, config_ref = $3
+       FROM markets m
+      WHERE m.id = c.market_id AND m.code = ANY($1)`,
+    [codes, providerCode, `test-fixture-${providerCode}`],
+  );
 }
 
 /**

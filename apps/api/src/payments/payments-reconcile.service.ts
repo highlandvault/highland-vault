@@ -1,10 +1,10 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Database, sql } from '@hv/db';
 import type { RequestMeta } from '../common/request-context';
-import { PaymentProviderError, type PaymentProvider } from '@hv/payments';
+import { PaymentProviderError } from '@hv/payments';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { DATABASE } from '../database/database.module';
-import { PAYMENT_PROVIDER } from './payment-provider.factory';
+import { PaymentProviderRegistry } from './payment-provider.registry';
 import {
   PaymentFinalizationService,
   type FinalizationOutcome,
@@ -74,7 +74,7 @@ export class PaymentsReconcileService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
-    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
+    private readonly providers: PaymentProviderRegistry,
     private readonly payments: PaymentsRepository,
     private readonly finalization: PaymentFinalizationService,
     private readonly audit: AuditService,
@@ -95,7 +95,11 @@ export class PaymentsReconcileService {
       // about. Left exactly as it is; attempt expiry will close it.
       return { kind: 'no_provider_reference' };
     }
-    if (!this.provider || this.provider.code !== payment.provider) {
+    // P6-7: the provider is resolved from the payment’s own MARKET, and the
+    // attempt must name the provider that market is configured for. A payment
+    // taken through one provider is never re-checked against another.
+    const provider = await this.providers.forMarket(this.db, payment.marketId);
+    if (!provider || provider.code !== payment.provider) {
       return { kind: 'provider_unavailable', detail: 'no_provider_configured' };
     }
 
@@ -104,7 +108,7 @@ export class PaymentsReconcileService {
     let amountMinor: number;
     let currency: string;
     try {
-      const status = await this.provider.getPaymentStatus(payment.providerReference);
+      const status = await provider.getPaymentStatus(payment.providerReference);
       state = status.state;
       amountMinor = status.amount.amountMinor;
       currency = status.amount.currency;

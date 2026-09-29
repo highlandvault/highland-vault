@@ -1,8 +1,34 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-28_
 
 ## Current phase
+
+**Phase 6 (payments + settlement) is under way. P6-1 through P6-5 are merged into `develop` (`a71e687`); P6-7 is the active task.**
+
+> **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below this section was written for Phases 4 and 5 and is kept as the historical record. Where the two disagree about Phase 6, the scope lock wins.
+
+| Slice                                                    | State                                       | Migrations     |
+| -------------------------------------------------------- | ------------------------------------------- | -------------- |
+| **P6-1** Provider port + fake provider                   | merged                                      | none           |
+| **P6-2** Payment attempts + initiation                   | merged                                      | `0019`, `0020` |
+| **P6-3** Webhook persistence + verified intake           | merged                                      | `0021`         |
+| **P6-4** Atomic finalization (Gate 4 work)               | merged                                      | `0022`–`0024`  |
+| **P6-5** Status / reconciliation / expiry / refund retry | merged                                      | `0025`         |
+| **P6-6** Broader refund slice                            | **CONSUMED BY P6-4** — not a separate slice | —              |
+| **P6-7** Per-market payment configuration                | **active**                                  | `0026`         |
+| **P6-8** Web payment flow                                | not started                                 | `0027`         |
+| **P6-9** Hardening / Gate 4 sign-off                     | not started                                 | none           |
+
+**Gate 4 is not signed off.** All thirteen G4 items in [scope lock §24](PHASE_6_SCOPE_LOCK.md) remain open, and G4.4 ("one credit") is deferred to Gate 6 / P8 by **D8 = A**. A Phase 6 Definition of Done must be committed **before** the phase closes (G4.10).
+
+**Open owner decisions in Phase 6**, none of which an implementer may decide: **K-3** (a provider capture against a `cancelled` order — detected, flagged, unprocessed, **no policy**); **K-c** (what makes an order failed — `order.payment_failed` has a handler and no producer); manual retry after a terminal `failed` refund; and **O7**, **O9**, **O12**, **O13**, all deferred beyond Phase 6.
+
+**Still true, and now the reason local development needs a decision:** no market can be enabled on a real database until the owner supplies the O12 compliance values (ADR-0016), and since P6-7 an enabled market additionally needs a payment configuration before it can take money.
+
+---
+
+## Current phase — as recorded for Phases 4 and 5 (historical)
 
 **Phase 4 (Day 4): Ticket engine + customer entry flow — DONE. Merged into `develop` and released to `main`.**
 

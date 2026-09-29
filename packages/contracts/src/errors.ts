@@ -59,6 +59,11 @@ export const ERROR_CODES = [
   'PAYMENT_DEADLINE_PASSED',
   'PAYMENT_WINDOW_TOO_SHORT',
   'PAYMENT_PROVIDER_UNAVAILABLE',
+  // Staff-only (P6-7). A market's provider and its configuration reference are
+  // set together or cleared together; half a configuration is not a state the
+  // table can hold, and this says so in domain terms rather than surfacing a
+  // constraint violation.
+  'PAYMENT_CONFIG_INCOMPLETE',
   'INVALID_VERIFICATION_CODE',
   'TICKET_CAP_EXCEEDED',
   'INSUFFICIENT_TICKETS',

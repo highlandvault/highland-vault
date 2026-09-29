@@ -6,7 +6,10 @@ import { MarketsModule } from '../markets/markets.module';
 import { AuditModule } from '../audit/audit.module';
 import { OrdersModule } from '../orders/orders.module';
 import { TicketsModule } from '../tickets/tickets.module';
-import { PAYMENT_PROVIDER, createPaymentProvider } from './payment-provider.factory';
+import { PAYMENT_PROVIDERS, createPaymentProviders } from './payment-provider.factory';
+import { PaymentProviderRegistry } from './payment-provider.registry';
+import { AdminPaymentConfigController } from './admin-payment-config.controller';
+import { AdminPaymentConfigService } from './admin-payment-config.service';
 import { AdminPaymentsController } from './admin-payments.controller';
 import { AdminPaymentsService } from './admin-payments.service';
 import { PaymentFinalizationService } from './payment-finalization.service';
@@ -30,9 +33,11 @@ import { RefundsService } from './refunds.service';
  */
 @Module({
   imports: [AuditModule, AuthModule, GuestsModule, MarketsModule, OrdersModule, TicketsModule],
-  controllers: [PaymentsController, AdminPaymentsController],
+  controllers: [PaymentsController, AdminPaymentsController, AdminPaymentConfigController],
   providers: [
     AdminPaymentsService,
+    AdminPaymentConfigService,
+    PaymentProviderRegistry,
     PaymentsRepository,
     PaymentsService,
     PaymentFinalizationService,
@@ -40,9 +45,9 @@ import { RefundsService } from './refunds.service';
     RefundsRepository,
     RefundsService,
     {
-      provide: PAYMENT_PROVIDER,
+      provide: PAYMENT_PROVIDERS,
       inject: [API_ENV],
-      useFactory: (env: ApiEnv) => createPaymentProvider(env),
+      useFactory: (env: ApiEnv) => createPaymentProviders(env),
     },
   ],
   // The provider itself is exported so webhook intake verifies deliveries with
@@ -55,7 +60,8 @@ import { RefundsService } from './refunds.service';
     PaymentsReconcileService,
     RefundsRepository,
     RefundsService,
-    PAYMENT_PROVIDER,
+    PaymentProviderRegistry,
+    PAYMENT_PROVIDERS,
   ],
 })
 export class PaymentsModule {}
