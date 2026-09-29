@@ -73,14 +73,20 @@ export class PaymentsController {
   /**
    * Where an attempt stands (§18).
    *
-   * A read, so it is a GET and carries no idempotency key. It may cause a
-   * trusted status check and therefore a finalisation, which is why it is here
-   * rather than being served from a cache — but it never reports an outcome
-   * the database has not already committed.
+   * A read, so it is a GET and carries no idempotency key — and as of
+   * ADR-0035 that is the whole truth about it. It used to run a trusted status
+   * check for a live attempt, which meant a GET could reach finalisation and
+   * therefore capture money, sell tickets and raise a refund. It now reports
+   * what the database holds and nothing more.
    *
-   * OD-2's order access token, which will also open this route, arrives with
-   * `order_access_tokens` in P6-8. Until it exists the ownership rules are
-   * exactly the ones checkout already applies.
+   * Advancement is elsewhere and unchanged: the verified webhook, and the P6-5
+   * reconciler. Staff can still ask the provider directly through
+   * `POST admin/markets/:market/orders/:order/payments/:payment/reconcile`,
+   * which is a POST because asking is an action.
+   *
+   * OD-2's return link does **not** open this route. P6-8 gave it one of its
+   * own, `GET /checkout/order-access`, which is read-only for the same reason
+   * this now is. The ownership rules here are the ones checkout applies.
    */
   @Get(':payment')
   @Public({ identify: true })

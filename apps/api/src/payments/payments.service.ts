@@ -12,7 +12,6 @@ import { GuestSessionsService } from '../guests/guest-sessions.service';
 import { OrderAccessService } from '../orders/order-access.service';
 import { type OrderBuyer, OrdersRepository } from '../orders/orders.repository';
 import { PaymentProviderRegistry } from './payment-provider.registry';
-import { PaymentsReconcileService } from './payments-reconcile.service';
 import { type PaymentRecord, PaymentsRepository } from './payments.repository';
 
 /**
@@ -45,7 +44,6 @@ export class PaymentsService {
     private readonly orders: OrdersRepository,
     private readonly guests: GuestSessionsService,
     private readonly rateLimiter: RateLimiter,
-    private readonly reconcile: PaymentsReconcileService,
     private readonly providers: PaymentProviderRegistry,
     private readonly orderAccess: OrderAccessService,
   ) {}
@@ -54,13 +52,28 @@ export class PaymentsService {
    * Where one attempt stands, for the page a customer lands on coming back
    * from a provider (§18; OD-5; D6).
    *
-   * **This answers from the database, always.** A live attempt may prompt a
-   * trusted status check first — that is the check B10 sanctions, made server
-   * to server — but the check's job is to give finalisation a chance to run,
-   * not to supply the answer. Whatever it returns, this method then re-reads
-   * the rows and reports them. So the page can only ever say what a committed
-   * transaction established, which is the whole of B10's rule that a customer
-   * coming back from a provider proves nothing.
+   * **This answers from the database, and does nothing else** (ADR-0035).
+   *
+   * It used to run a trusted status check when the attempt was still live. B10
+   * sanctions that check, and the check was honest — it gave finalisation a
+   * chance to run and then re-read the rows, so the page never said more than
+   * a committed transaction had established. What it could not be was a read.
+   * `reconcile` calls the provider and then `finalization.confirm`, the same
+   * code a verified webhook reaches, so refreshing this page could capture a
+   * payment, sell tickets, release holds, raise a refund and write an outbox
+   * row that becomes an email. That is far more authority than "where does my
+   * payment stand" needs, and the method it sat behind promised none of it.
+   *
+   * Payment advancement is unchanged and belongs where it already lived: the
+   * verified webhook, and the P6-5 reconciler every 60 seconds over a
+   * five-minute lookback. Neither is touched by this. A customer who looks
+   * early is told the attempt is still live, which is true, and looking again
+   * costs the provider nothing.
+   *
+   * Staff keep the other half deliberately: `POST .../payments/:payment/
+   * reconcile` still asks the provider, behind `payments.reconcile`, step-up
+   * MFA and a required reason. Asking a third party about somebody's money is
+   * an action, and it is spelled as one.
    *
    * The order's status travels with the attempt for the same reason. An
    * attempt the provider calls `succeeded` has delivered nothing until the
@@ -73,11 +86,11 @@ export class PaymentsService {
     orderId: string,
     paymentId: string,
   ): Promise<PaymentStatus> {
-    // Before anything is read and long before the provider is asked. This route
-    // can make a trusted status check, which is a network call on our merchant
-    // account, so it carries the same fail-closed, per-owner limit that
-    // initiation does (B19 "endpoint abuse"). A Redis outage refuses the read
-    // rather than leaving the provider budget unguarded.
+    // Kept, although this route no longer reaches the provider (ADR-0035). It
+    // is an unauthenticated-by-default read of somebody's order, and B19's
+    // "endpoint abuse" concern is about how fast it can be asked, not only
+    // about what it costs us. Fail-closed for the same reason: a Redis outage
+    // refuses the read rather than leaving it unbounded.
     await this.rateLimiter.consume(RATE_LIMITS.paymentStatusPerOwner, ownerKey(identity));
 
     const buyer = this.buyerOf(identity);
@@ -88,25 +101,17 @@ export class PaymentsService {
     // that does not exist, exactly as the order itself is not.
     if (!attempt || attempt.orderId !== orderId) throw Errors.notFound('Payment');
 
-    if (attempt.status === 'pending' || attempt.status === 'processing') {
-      // Best effort, and never the source of the answer. A provider that is
-      // down means the customer sees the attempt as it stands, which is true.
-      await this.reconcile.reconcile(attempt.id);
-    }
-
-    // Re-read, because the check above may have finalised the order.
-    const [current, order] = await Promise.all([
-      this.payments.findById(this.db, paymentId),
-      this.orders.findById(this.db, market.id, orderId),
-    ]);
-    if (!current || !order) throw Errors.notFound('Payment');
+    // No re-read, because nothing above can have moved anything. The attempt
+    // fetched a moment ago is the attempt the database holds.
+    const order = await this.orders.findById(this.db, market.id, orderId);
+    if (!order) throw Errors.notFound('Payment');
     return {
-      id: current.id,
-      status: current.status,
-      amountMinor: current.amountMinor,
-      currency: current.currency,
-      expiresAt: current.expiresAt.toISOString(),
-      createdAt: current.createdAt.toISOString(),
+      id: attempt.id,
+      status: attempt.status,
+      amountMinor: attempt.amountMinor,
+      currency: attempt.currency,
+      expiresAt: attempt.expiresAt.toISOString(),
+      createdAt: attempt.createdAt.toISOString(),
       order: {
         id: order.id,
         status: order.status as PaymentStatus['order']['status'],

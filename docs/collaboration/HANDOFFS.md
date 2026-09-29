@@ -108,7 +108,7 @@ The first CI run failed, and isolating each browser test showed four separate de
 - A malformed token is now the same 404 as an unknown one. It used to be a 400 from the body validator; the uniform answer is strictly better, and the superseded expectation is recorded in the test rather than deleted.
 - No CSRF exemption was added, no origin is spoofed, nothing joined the webhook allowlist, and the global middleware is untouched.
 
-**Deferred to P6-9 (hardening item):** the existing `GET markets/:market/checkout/orders/:order/payments/:payment` remains unchanged and **may still trigger trusted reconciliation and therefore finalisation**. It is authenticated and rate limited per owner, and it predates this slice, so it was deliberately left alone rather than redesigned inside a corrective pass. P6-9 should review its HTTP semantics and security boundary.
+**Deferred to P6-9 (hardening item) — since RESOLVED.** At the time of writing, the existing `GET markets/:market/checkout/orders/:order/payments/:payment` still triggered trusted reconciliation and therefore finalisation, and was deliberately left alone rather than redesigned inside a corrective pass. **P6-9 WP-3 has now made it read-only ([ADR-0035](../adr/0035-customer-payment-status-is-read-only.md)).** Nothing below this line is changed by that; the record stands as written.
 
 Gate 4.1 — what this slice proves, and what it does not:
 

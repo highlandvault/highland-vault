@@ -4,8 +4,6 @@ import {
   CartResponseSchema,
   type Order,
   OrderResponseSchema,
-  type PaymentStatus,
-  PaymentStatusResponseSchema,
   type MarketTermsResponse,
   MarketTermsResponseSchema,
 } from '@hv/contracts';
@@ -55,25 +53,6 @@ export async function fetchOrder(market: string, id: string): Promise<OrderLooku
     return { ok: false, reason: 'verification_required' };
   }
   return { ok: false, reason: 'not_found' };
-}
-
-/**
- * One payment attempt's status.
- *
- * Asking may cause a trusted provider status check — the one thing B10 lets a
- * return page cause — and it still asserts nothing: the answer is read from
- * the database afterwards. Nothing the browser sends can move it.
- */
-export async function fetchPaymentStatus(
-  market: string,
-  orderId: string,
-  paymentId: string,
-): Promise<PaymentStatus | null> {
-  const result = await apiFetch(
-    `/markets/${market}/checkout/orders/${orderId}/payments/${paymentId}`,
-    { parse: (json) => PaymentStatusResponseSchema.parse(json).payment },
-  );
-  return result.ok ? result.data : null;
 }
 
 /** What the customer is told when the API refuses something at checkout. */

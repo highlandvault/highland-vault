@@ -40,3 +40,4 @@ An accepted ADR is changed only by a new ADR that supersedes it.
 | [0032](0032-checkout-request-identity.md)               | Checkout request identity — self-describing purchase intent   | P5-7 (spec gap)  |
 | [0033](0033-sealed-provider-payloads.md)                | Provider webhook payloads — normalised facts, sealed original | D7, OD-7a, P6-3  |
 | [0034](0034-late-payment-never-re-allocates-tickets.md) | A late payment is never re-allocated tickets                  | C10, D14, P6-4   |
+| [0035](0035-customer-payment-status-is-read-only.md)    | The customer payment-status GET is read-only                  | B10, P6-9        |
