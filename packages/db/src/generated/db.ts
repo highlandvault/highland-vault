@@ -170,6 +170,18 @@ export interface MfaRecoveryCodes {
   user_id: string;
 }
 
+export interface OrderAccessTokens {
+  created_at: Generated<Timestamp>;
+  /**
+   * orders.expires_at + the configured tail (D19a, 30 minutes). Its own value: never derived from GUEST_VERIFIED_EMAIL_TTL_MINUTES.
+   */
+  expires_at: Timestamp;
+  id: Generated<string>;
+  order_id: string;
+  revoked_at: Timestamp | null;
+  token_hash: Buffer;
+}
+
 export interface OrderItems {
   created_at: Generated<Timestamp>;
   currency: string;
@@ -433,6 +445,7 @@ export interface DB {
   market_settings: MarketSettings;
   markets: Markets;
   mfa_recovery_codes: MfaRecoveryCodes;
+  order_access_tokens: OrderAccessTokens;
   order_items: OrderItems;
   orders: Orders;
   outbox: Outbox;

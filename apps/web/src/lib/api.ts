@@ -23,7 +23,13 @@ export type ApiResult<T> =
 
 export async function apiFetch<T>(
   path: string,
-  init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; parse?: (json: unknown) => T } = {},
+  init: {
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    body?: unknown;
+    parse?: (json: unknown) => T;
+    /** Extra request headers, e.g. an Idempotency-Key the API requires. */
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<ApiResult<T>> {
   const [cookieStore, incoming] = await Promise.all([cookies(), headers()]);
   const token = cookieStore.get(SESSION_COOKIE)?.value;
@@ -36,6 +42,7 @@ export async function apiFetch<T>(
   if (origin) outgoing.origin = origin;
   const forwardedFor = incoming.get('x-forwarded-for');
   if (forwardedFor) outgoing['x-forwarded-for'] = forwardedFor;
+  Object.assign(outgoing, init.headers ?? {});
 
   let response: Response;
   try {

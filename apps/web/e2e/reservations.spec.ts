@@ -11,7 +11,11 @@ async function reserve(page: import('@playwright/test').Page, slug: string, quan
     await page.getByRole('button', { name: 'One more entry' }).click();
   }
   await expect(page.getByTestId('entry-quantity')).toHaveText(String(quantity));
-  await page.getByRole('button', { name: 'Reserve tickets' }).click();
+  await page.getByRole('button', { name: 'Add to basket' }).click();
+  // Basket-first since P6-8. The hold is real and its own page still shows the
+  // ticket numbers, so the reservation assertions below are unchanged.
+  await expect(page).toHaveURL(/\/uk\/basket$/);
+  await page.getByTestId('basket-line-tickets').last().click();
   await expect(page).toHaveURL(/\/uk\/reservations\/[0-9a-f-]{36}$/);
   return page.url();
 }
@@ -35,7 +39,7 @@ test('when the tickets run out first, the customer is told and nothing is reserv
     await registerCustomer(rival, 'early');
     const rivalReservation = await reserve(rival, 'last-tickets', 2);
 
-    await page.getByRole('button', { name: 'Reserve tickets' }).click();
+    await page.getByRole('button', { name: 'Add to basket' }).click();
     await expect(page.getByTestId('entry-error')).toHaveText(
       'There are not enough tickets left for that many entries. Choose fewer and try again.',
     );

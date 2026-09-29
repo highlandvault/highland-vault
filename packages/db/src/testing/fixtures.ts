@@ -173,3 +173,32 @@ export async function insertFixtureDraw(
   }
   return id;
 }
+
+/**
+ * Publishes and activates a terms version for the given markets (P6-8).
+ *
+ * Checkout refuses to create an order without an active version (ADR-0031), so
+ * a test database that expects to reach checkout needs one. Labelled a test
+ * fixture, like the compliance values above: it is not legal copy and must
+ * never be mistaken for any.
+ */
+export async function activateTermsForTesting(
+  db: Queryable,
+  codes: readonly ('uk' | 'ie' | 'de')[],
+  version = 'test-fixture-terms-v1',
+): Promise<void> {
+  await db.query(
+    `INSERT INTO terms_versions (market_id, version, published_at)
+       SELECT id, $2, now() FROM markets WHERE code = ANY($1)
+       ON CONFLICT (market_id, version) DO NOTHING`,
+    [codes, version],
+  );
+  await db.query(
+    `UPDATE market_settings s
+        SET active_terms_version_id = t.id
+       FROM terms_versions t, markets m
+      WHERE m.id = s.market_id AND t.market_id = m.id
+        AND t.version = $2 AND m.code = ANY($1)`,
+    [codes, version],
+  );
+}

@@ -16,7 +16,7 @@
 import { Redis } from 'ioredis';
 import pg from 'pg';
 import { migrateUp } from '../migrate/runner';
-import { enableMarketsForTesting, insertFixtureDraw } from './fixtures';
+import { activateTermsForTesting, enableMarketsForTesting, insertFixtureDraw } from './fixtures';
 import { MIGRATIONS_DIR, databaseUrl, testAdminUrl, withAdminClient } from './index';
 
 export const E2E_DB = 'hv_e2e';
@@ -37,6 +37,9 @@ async function main(): Promise<void> {
   await client.connect();
   try {
     await enableMarketsForTesting(client, ['uk', 'ie']);
+    // Checkout cannot create an order without an active terms version
+    // (ADR-0031), and the e2e journey goes through checkout since P6-8.
+    await activateTermsForTesting(client, ['uk', 'ie']);
     const day = 24 * 60 * 60 * 1000;
     await insertFixtureDraw(client, {
       market: 'uk',

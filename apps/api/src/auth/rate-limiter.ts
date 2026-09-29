@@ -63,6 +63,13 @@ export const RATE_LIMITS = {
   // loop. An attempt only lives 120 seconds (D3a), so a single attempt can
   // cost at most a fraction of this.
   paymentStatusPerOwner: { name: 'payment-status-owner', limit: 120, windowSeconds: 10 * 60 },
+  // Presenting a return link, per IP (OD-2, D18 = B, P6-8). The token is a
+  // bearer credential that arrives in a URL, so the thing to bound is how fast
+  // somebody can try tokens — which is an address question, not an owner
+  // question: a caller holding no valid token has no owner. Same shape as
+  // verificationCodePerIp, the nearest precedent for an unauthenticated
+  // credential presentation, and fail-closed for the same reason.
+  orderAccessPerIp: { name: 'order-access-ip', limit: 20, windowSeconds: 60 * 60 },
   // Guest verification codes per address per hour (ADR-0020). Keyed on the
   // address so one inbox cannot be flooded from many sessions.
   verificationCodePerEmail: { name: 'verify-email', limit: 3, windowSeconds: 60 * 60 },

@@ -8,7 +8,7 @@ import { fetchDraw } from '@/lib/draws';
 import { entryErrorMessage, fetchAvailability } from '@/lib/reservations';
 import { formatCount, formatDateTime, formatPrice, formatRelative, ordinal } from '@/lib/format';
 import { fetchMarket } from '@/markets';
-import { reserveTickets } from '../../reservation-actions';
+import { addToBasket } from '../../cart-actions';
 
 type Params = Promise<{ market: string; slug: string }>;
 
@@ -147,7 +147,7 @@ export default async function DrawDetailPage({
               allowance={availability?.allowance ?? null}
               loginHref={`/login?next=${encodeURIComponent(drawPath)}`}
               error={entryErrorMessage(error)}
-              action={reserveTickets.bind(null, market.code, draw.slug)}
+              action={addToBasket.bind(null, market.code, draw.slug)}
             />
           </div>
         </aside>

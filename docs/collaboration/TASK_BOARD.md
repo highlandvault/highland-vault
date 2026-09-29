@@ -1,6 +1,6 @@
 # Task Board
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 The shared view of every task and its state. It answers the question for a new developer or Claude session: **"What am I supposed to work on?"**
 
@@ -43,9 +43,9 @@ Transitions: BACKLOG → READY (owner) → IN PROGRESS (owner claims) → IN REV
 
 ## IN PROGRESS
 
-| ID   | Task                             | Owner             | Branch                               | Dependencies | Area                                                 | Issue / PR | Notes                                                                                                                    |
-| ---- | -------------------------------- | ----------------- | ------------------------------------ | ------------ | ---------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| P6-7 | Per-market payment configuration | Divyanshu (owner) | `feature/p6-7-market-payment-config` | P6-1         | `packages/db` (0026), `apps/api` payments + webhooks | none yet   | B10 + D17 = A. `market_payment_configs`, per-market provider resolution, admin config surface. Next free migration: 0027 |
+| ID   | Task             | Owner             | Branch                          | Dependencies | Area                                                           | Issue / PR | Notes                                                                                                           |
+| ---- | ---------------- | ----------------- | ------------------------------- | ------------ | -------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| P6-8 | Web payment flow | Divyanshu (owner) | `feature/p6-8-web-payment-flow` | P6-4, P6-7   | `packages/db` (0027), `apps/api` orders + payments, `apps/web` | none yet   | OD-2, D18 = B, D19a. Order access tokens; draw → basket → checkout → order → payment. Next free migration: 0028 |
 
 ## BLOCKED
 

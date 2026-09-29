@@ -61,6 +61,47 @@ A handoff that touches one of these areas must also answer the listed questions.
 
 ## Handoff log
 
+### 2026-09-29 — P6-8 — Web payment flow (for P6-9 and Gate 4 sign-off)
+
+Status: OPEN
+
+Task: P6-8
+Developer: Divyanshu (owner), with Claude
+Branch: `feature/p6-8-web-payment-flow` (not merged; branched from P6-7, which is also unmerged)
+Status of the work: DONE, awaiting review
+
+What was completed:
+
+- `0027_order_access_tokens` — one token per order, SHA-256 only, `expires_at = orders.expires_at + 30 minutes`, revocable, immutable once issued, `REVOKE DELETE/TRUNCATE`.
+- `OrderAccessService`, `CheckoutService.getOrderByAccess`, and `POST /checkout/order-access` (`@Public()` without `identify`, rate limited per IP, fail-closed).
+- The token is minted at payment initiation and delivered in the provider **return URL**.
+- The basket-first web journey: draw → basket → checkout → order → payment → return.
+- `order-access.int.test.ts` (23) and `checkout.spec.ts` (2 Playwright tests).
+
+Important implementation details — read these before P6-9:
+
+- **The web purchase journey is basket-first now.** An order is built from the basket and must match it exactly (ADR-0032). The draw page adds to the basket; `CartService` still takes the real hold through the ticket engine. There is no second reservation or basket mechanism, and the direct reservation endpoint still exists and is still used by the reservation detail page.
+- **The return link is read-only and cannot start a payment** (D18 = B). A guest past their thirty-minute email proof can see that a payment failed and must verify again to retry. That is the deliberate trade, and there is no token-scoped write anywhere to undermine it.
+- **Its lifetime is its own setting** — `ORDER_ACCESS_TOKEN_TAIL_MINUTES`, default 30. It is arithmetically equal to `GUEST_VERIFIED_EMAIL_TTL_MINUTES` and must never be derived from it; a test changes one and asserts the other does not move.
+- **The token leaves the URL on arrival.** The return page moves it into an HttpOnly cookie and redirects to a clean address, so it does not sit in history or referrers (§12).
+- **The fake provider now stores the return URL captured at creation**, as a real provider does on an idempotent retry. Without that, a second Pay produced a different redirect URL and D3b's guarantee looked broken when it was not.
+- **The integration suite is near its concurrency ceiling.** A full `pnpm verify` run alongside other database work produced seven failures with ~440-second durations in files this slice did not touch; every one passed in isolation. P6-9 should treat suite concurrency as a real subject rather than assuming a red run is a logic failure.
+
+Gate 4.1 — what this slice proves, and what it does not:
+
+- **Proven:** a forged return URL, a made-up token and repeated refreshes all leave the order `awaiting_payment` with no ticket sold, in both the integration suite and a real browser; the authoritative webhook path then settles it. The return page reports the ORDER's status, never the attempt's, and never anything from the URL.
+- **Not proven, and left to P6-9:** the full Gate 4 matrix. **G4.1 is NOT marked complete.** Sign-off belongs to P6-9 together with G4.2, G4.3, G4.5, G4.6, G4.7, G4.8, G4.9, G4.11, G4.12 and G4.13, and the Phase 6 Definition of Done that G4.10 requires before the phase closes.
+
+Open decisions this slice did **not** touch:
+
+- **K-3** — a capture against a `cancelled` order. Still OPEN, owner decision required.
+- **K-c** — what makes an ORDER failed. `order.payment_failed` still has a handler and no producer.
+- **O7**, **O9**, **O12**, **O13** — unchanged.
+- **Guest checkout through the web** is not built: `apiFetch` forwards only `hv_session`, so the browser journey is for signed-in customers, exactly as the reservation journey it replaces was. The API's guest path is built and tested; plumbing `hv_guest` through Next.js is separate work.
+
+Next:
+Owner review of the P6-8 PR, then **P6-9** (hardening and Gate 4 sign-off).
+
 ### 2026-09-28 — P6-7 — Per-market payment configuration (for P6-8 and P6-9)
 
 Status: OPEN

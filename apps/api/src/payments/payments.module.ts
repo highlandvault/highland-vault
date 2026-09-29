@@ -11,6 +11,7 @@ import { PaymentProviderRegistry } from './payment-provider.registry';
 import { AdminPaymentConfigController } from './admin-payment-config.controller';
 import { AdminPaymentConfigService } from './admin-payment-config.service';
 import { AdminPaymentsController } from './admin-payments.controller';
+import { OrderAccessController } from './order-access.controller';
 import { AdminPaymentsService } from './admin-payments.service';
 import { PaymentFinalizationService } from './payment-finalization.service';
 import { PaymentsController } from './payments.controller';
@@ -33,7 +34,12 @@ import { RefundsService } from './refunds.service';
  */
 @Module({
   imports: [AuditModule, AuthModule, GuestsModule, MarketsModule, OrdersModule, TicketsModule],
-  controllers: [PaymentsController, AdminPaymentsController, AdminPaymentConfigController],
+  controllers: [
+    PaymentsController,
+    AdminPaymentsController,
+    AdminPaymentConfigController,
+    OrderAccessController,
+  ],
   providers: [
     AdminPaymentsService,
     AdminPaymentConfigService,

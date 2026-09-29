@@ -15,7 +15,19 @@ const required = (name: string) => {
 // Dedicated ports so a running `pnpm dev` (3000/4000) is never reused by mistake.
 export const E2E_WEB_ORIGIN = 'http://127.0.0.1:3100';
 export const E2E_API_URL = 'http://127.0.0.1:4100';
-export const E2E_RESERVATION_TTL_SECONDS = 60;
+/**
+ * Reservation TTL for the e2e database.
+ *
+ * **300, not 60, since P6-8.** D1 = B sets an order's payment deadline to
+ * `min(created_at + 600s, earliest reservation expiry − 90s)`, and D1b refuses
+ * to start a payment with fewer than 180 seconds left. A 60-second hold puts
+ * the deadline in the past before the order exists, so the checkout journey
+ * could not run at all — 300 leaves 210 seconds, comfortably clear of the
+ * floor. The cost is that the reservation-expiry test waits five minutes
+ * instead of one; it scales its own timeouts off this value and loses no
+ * coverage. Production refuses any value but 600.
+ */
+export const E2E_RESERVATION_TTL_SECONDS = 300;
 
 function e2eDatabaseUrl(): string {
   const url = new URL(required('TEST_DATABASE_ADMIN_URL'));
@@ -56,6 +68,11 @@ export const E2E_API_ENV = {
   // production refuses.
   INTERNAL_API_TOKEN: 'x'.repeat(32),
   INTERNAL_API_PORT: '4101',
+  // The deterministic fake provider (ADR-0006), so the basket-first journey
+  // can reach a real payment initiation. NODE_ENV is 'test' here; production
+  // refuses this setting outright and the fake's own constructor refuses to be
+  // built there, so neither guard is weakened by its presence.
+  FAKE_PAYMENT_WEBHOOK_SECRET: 'e2e-fake-provider-webhook-secret',
   RESERVATION_TTL_SECONDS: String(E2E_RESERVATION_TTL_SECONDS),
 } as const;
 

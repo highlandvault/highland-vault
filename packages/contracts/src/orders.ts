@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PaymentStatusSchema } from './payments';
 
 /**
  * Checkout and orders (Revision 2 B7, B18 and B20; ADR-0026, ADR-0030,
@@ -104,3 +105,26 @@ export type OrderResponse = z.infer<typeof OrderResponseSchema>;
 
 export const OrderListResponseSchema = z.object({ orders: z.array(OrderSchema) });
 export type OrderListResponse = z.infer<typeof OrderListResponseSchema>;
+
+/**
+ * POST /checkout/order-access — presenting a return link (OD-2, D18 = B).
+ *
+ * The token travels in the **body**, never a query string: it is a bearer
+ * credential, and a query string would write it into access logs, browser
+ * history and referrers.
+ */
+export const OrderAccessRequestSchema = z.strictObject({
+  token: z.string().min(16).max(128),
+});
+export type OrderAccessRequest = z.infer<typeof OrderAccessRequestSchema>;
+
+/**
+ * What a return link shows: the order, and its latest payment attempt if one
+ * was ever started. Read-only — the link cannot start a payment (D18 = B).
+ */
+export const OrderAccessResponseSchema = z.object({
+  order: OrderSchema,
+  payment: PaymentStatusSchema.nullable(),
+  serverTime: z.iso.datetime(),
+});
+export type OrderAccessResponse = z.infer<typeof OrderAccessResponseSchema>;
