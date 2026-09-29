@@ -24,9 +24,16 @@ export const fetchMarket = cache(async (segment: string): Promise<Market | null>
   throw new Error(`Market lookup failed: ${result.code}`);
 });
 
-export async function fetchMarkets(): Promise<Market[] | null> {
+/**
+ * Every market currently open, or null when the API could not say.
+ *
+ * Cached per request like `fetchMarket`: the footer lists markets on every
+ * page, and the homepage asks again for its own sections, so without this one
+ * render would ask the API two or three times for the same answer.
+ */
+export const fetchMarkets = cache(async (): Promise<Market[] | null> => {
   const result = await apiFetch('/markets', {
     parse: (json) => MarketListResponseSchema.parse(json).markets,
   });
   return result.ok ? result.data : null;
-}
+});
