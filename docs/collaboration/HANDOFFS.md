@@ -73,23 +73,48 @@ Status of the work: DONE, awaiting review
 What was completed:
 
 - `0027_order_access_tokens` — one token per order, SHA-256 only, `expires_at = orders.expires_at + 30 minutes`, revocable, immutable once issued, `REVOKE DELETE/TRUNCATE`.
-- `OrderAccessService`, `CheckoutService.getOrderByAccess`, and `POST /checkout/order-access` (`@Public()` without `identify`, rate limited per IP, fail-closed).
+- `OrderAccessService`, `CheckoutService.getOrderByAccess`, and `GET /checkout/order-access` (`@Public()` without `identify`, credential in the `x-hv-order-access` header, rate limited per IP, fail-closed, **read-only**).
 - The token is minted at payment initiation and delivered in the provider **return URL**.
 - The basket-first web journey: draw → basket → checkout → order → payment → return.
-- `order-access.int.test.ts` (23) and `checkout.spec.ts` (2 Playwright tests).
+- `order-access.int.test.ts` (29) and `checkout.spec.ts` (3 Playwright tests).
 
 Important implementation details — read these before P6-9:
 
 - **The web purchase journey is basket-first now.** An order is built from the basket and must match it exactly (ADR-0032). The draw page adds to the basket; `CartService` still takes the real hold through the ticket engine. There is no second reservation or basket mechanism, and the direct reservation endpoint still exists and is still used by the reservation detail page.
 - **The return link is read-only and cannot start a payment** (D18 = B). A guest past their thirty-minute email proof can see that a payment failed and must verify again to retry. That is the deliberate trade, and there is no token-scoped write anywhere to undermine it.
 - **Its lifetime is its own setting** — `ORDER_ACCESS_TOKEN_TAIL_MINUTES`, default 30. It is arithmetically equal to `GUEST_VERIFIED_EMAIL_TTL_MINUTES` and must never be derived from it; a test changes one and asserts the other does not move.
-- **The token leaves the URL on arrival.** The return page moves it into an HttpOnly cookie and redirects to a clean address, so it does not sit in history or referrers (§12).
+- **The token leaves the URL on arrival.** A Route Handler at `/checkout/payments/[id]/return/exchange` moves it into an HttpOnly cookie and redirects to a clean address, so it does not sit in history or referrers (§12). The page next door only reads.
 - **The fake provider now stores the return URL captured at creation**, as a real provider does on an idempotent retry. Without that, a second Pay produced a different redirect URL and D3b's guarantee looked broken when it was not.
 - **The integration suite is near its concurrency ceiling.** A full `pnpm verify` run alongside other database work produced seven failures with ~440-second durations in files this slice did not touch; every one passed in isolation. P6-9 should treat suite concurrency as a real subject rather than assuming a red run is a logic failure.
+- **A second data point for the same finding, from the corrective pass.** `pnpm verify` was green end to end (EXIT=0). A standalone `pnpm test:integration` run started immediately afterwards, on the heels of the full 6-minute browser suite, failed three tests in three different files — `checkout-orders`, `payments` and `webhook-intake` — none of which touches this slice's changed code, and one of which only checks that a tampered webhook body fails its signature. An immediate re-run was 784/784 green. The mechanism is still unidentified: the integration harness builds its own Postgres database per run and e2e uses a separate one and a separate Redis logical database, so the obvious "they share state" explanation does **not** hold and should not be assumed. This remains open for P6-9 and must not be written off.
+
+The corrective pass (CI failure on the first push of `c69a65b`):
+
+The first CI run failed, and isolating each browser test showed four separate defects rather than one. None of them is the suite-concurrency finding recorded below; each has a real and distinct cause.
+
+- **Defect A — a Server Component tried to set a cookie.** The return page called `cookies().set()` while rendering. A Server Component renders after the response headers are committed, so Next.js refuses it and the page answered 500. **Fix:** the cookie mutation moved to a Route Handler at `/checkout/payments/[id]/return/exchange`, which is what composes a response; the page became a pure reader.
+- **Defect B — the test raced a failed navigation.** The fake provider's host is `.invalid` and can never resolve, so the navigation never commits and there is no event to await; the next `goto` interrupted the browser mid-unwind with `chrome-error://chromewebdata/`. **Fix:** `page.route` fulfils the provider request, and the test awaits both the request leaving and `waitForURL`. The provider boundary is still proved — the API still builds the real `.invalid` URL and the browser is still sent to it. No sleeps.
+- **Defect C — an over-broad assertion hid a crash.** The G4.1 test accepted any status `>= 400`, so the 500 from Defect A counted as a security refusal. **Fix:** exact `404`, plus an explicit `toBeLessThan(500)`. An application crash can no longer pass as a rejection.
+- **Defect D — the wrong HTTP method for the context.** The return page called `POST /checkout/order-access` during a plain navigation. A navigation sends no `Origin`, so the API's CSRF hook refused it with 403 and the page turned that into its 404. **This is not a CSRF bug: the middleware behaved exactly as designed.** The application used a state-changing method for an operation reached during rendering. The mechanism had therefore never worked, and Defect C's assertion is why nobody noticed. The integration suite missed it because its helper supplied an `origin` header no browser would ever send on that path.
+- **Defect D, second half — the redirect changed origin.** `request.nextUrl.origin` normalises to `localhost` while the browser was on `127.0.0.1`. Those are different hosts to a cookie, so the exchange set a cookie the clean page never received. **Fix:** the `Location` is relative, which the browser resolves against the address it actually asked for — and which takes nothing on trust from a `Host` header.
+- **Also fixed:** the cookie's `Secure` flag was `NODE_ENV === 'production'`, which `next start` makes true even on a plain-HTTP origin, so the browser dropped it. It now derives from the request scheme (`x-forwarded-proto`, else the request protocol) — always `Secure` over TLS, which is the condition the browser enforces anyway.
+
+**Architectural correction (owner decision S2): order access is a read-only bearer-authenticated GET; the browser return exchange remains a Route Handler.**
+
+- `GET /checkout/order-access`, credential in `x-hv-order-access`. One canonical interface — the POST is gone, and a test asserts that it is gone.
+- `statusByAccess` no longer calls `PaymentsReconcileService.reconcile`. It reads the order and its latest attempt and returns them. It cannot call the provider, cannot reach `finalization.confirm`, and therefore cannot capture a payment, sell or release a ticket, raise a refund, emit an outcome event, send email or write an audit record.
+- Until this pass, a browser opening a return link could cause a finalisation. That authority is gone. Payment advancement for this page comes from the verified webhook and the P6-5 reconciler (every 60 s, 5-minute lookback). A customer who returns early sees "waiting for the payment provider", which is true, and a refresh re-reads.
+- The credential moved from a POST body to a header for the same reason it was never in the URL: it is a bearer token, and a query string reaches access logs, history and referrers. A header hides it as well as a body does, and leaves the method honest about what the route is.
+- A malformed token is now the same 404 as an unknown one. It used to be a 400 from the body validator; the uniform answer is strictly better, and the superseded expectation is recorded in the test rather than deleted.
+- No CSRF exemption was added, no origin is spoofed, nothing joined the webhook allowlist, and the global middleware is untouched.
+
+**Deferred to P6-9 (hardening item):** the existing `GET markets/:market/checkout/orders/:order/payments/:payment` remains unchanged and **may still trigger trusted reconciliation and therefore finalisation**. It is authenticated and rate limited per owner, and it predates this slice, so it was deliberately left alone rather than redesigned inside a corrective pass. P6-9 should review its HTTP semantics and security boundary.
 
 Gate 4.1 — what this slice proves, and what it does not:
 
 - **Proven:** a forged return URL, a made-up token and repeated refreshes all leave the order `awaiting_payment` with no ticket sold, in both the integration suite and a real browser; the authoritative webhook path then settles it. The return page reports the ORDER's status, never the attempt's, and never anything from the URL.
+- **Proven in a browser, end to end:** the provider's return address carries the token; the exchange answers 303 and sets an HttpOnly, `SameSite=Lax` cookie scoped to `/checkout/payments`; the clean URL holds no token; the page reads the cookie server-side and the order-access GET succeeds; `document.cookie` exposes neither the cookie nor the token; and three refreshes move nothing.
+- **Proven read-only:** with the provider holding a `succeeded` payment and the webhook withheld, five presentations of a valid link leave the order `awaiting_payment`, the payment row byte-identical, no ticket sold, no refund raised and no audit record written — and the fake provider's status-check counter never moves. The webhook then settles it.
 - **Not proven, and left to P6-9:** the full Gate 4 matrix. **G4.1 is NOT marked complete.** Sign-off belongs to P6-9 together with G4.2, G4.3, G4.5, G4.6, G4.7, G4.8, G4.9, G4.11, G4.12 and G4.13, and the Phase 6 Definition of Done that G4.10 requires before the phase closes.
 
 Open decisions this slice did **not** touch:

@@ -91,7 +91,8 @@ None. **Four things for the reviewer:**
 4. **`draws.spec.ts` and `reservations.spec.ts` were updated, not weakened.** Their assertions described the old journey. Allocation, real ticket numbers, sequential padding, the per-person cap, expiry, release, market isolation and authorization are all still asserted — one page further along.
 
 Last update:
-2026-09-29 — Implemented. 23 new order-access integration tests, a new Playwright journey spec, and the two existing specs updated to the basket-first flow.
+2026-09-29 — Implemented. 29 order-access integration tests, a new Playwright journey spec, and the two existing specs updated to the basket-first flow.
+2026-09-29 — Corrective pass after the first CI run: defects A (a Server Component tried to set a cookie), B (the e2e raced a failed navigation), C (a `>= 400` assertion hid a 500) and D (a POST issued during a plain navigation, correctly refused by the CSRF hook for want of an `Origin`). Owner decision **S2**: order access is a read-only bearer-authenticated `GET /checkout/order-access` with the token in `x-hv-order-access`, and the browser return exchange stays a Route Handler. `statusByAccess` no longer reconciles. See HANDOFFS for the full record.
 
 Next:
 Owner review of the P6-8 PR.

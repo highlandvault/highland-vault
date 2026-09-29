@@ -107,16 +107,39 @@ export const OrderListResponseSchema = z.object({ orders: z.array(OrderSchema) }
 export type OrderListResponse = z.infer<typeof OrderListResponseSchema>;
 
 /**
- * POST /checkout/order-access — presenting a return link (OD-2, D18 = B).
+ * GET /checkout/order-access — presenting a return link (OD-2, D18 = B).
  *
- * The token travels in the **body**, never a query string: it is a bearer
- * credential, and a query string would write it into access logs, browser
- * history and referrers.
+ * ## Why the token travels in a header
+ *
+ * It is a bearer credential, so it cannot go in a query string: that writes it
+ * into access logs, browser history and referrers. That ruled out the URL and
+ * made this a POST carrying the token in a body — which was wrong for a
+ * different reason. The return page is rendered by a **plain navigation**, and
+ * a navigation sends no `Origin`; the API refuses every state-changing request
+ * that has none, so the only caller this route has was refused before it was
+ * read. A header hides the token exactly as well as a body, and leaves the
+ * method free to say what this is.
+ *
+ * ## Why a GET is honest here
+ *
+ * Because the route was made genuinely read-only to earn it (S2). It resolves
+ * the token, reads the order and its latest attempt, and returns them. It does
+ * not reconcile, ask the provider anything, or reach finalisation — so it
+ * cannot capture a payment, sell a ticket, raise a refund or send an email.
+ * Confirmation reaches an order by verified webhook or by the P6-5 reconciler,
+ * and never because somebody opened a link.
  */
-export const OrderAccessRequestSchema = z.strictObject({
-  token: z.string().min(16).max(128),
-});
-export type OrderAccessRequest = z.infer<typeof OrderAccessRequestSchema>;
+export const ORDER_ACCESS_TOKEN_HEADER = 'x-hv-order-access';
+
+/**
+ * The token itself.
+ *
+ * Bounded so an absurd header never reaches the database, and *checked* rather
+ * than validated-with-an-error: a malformed token is answered with the same
+ * 404 as an unknown one, because separating them tells a caller which shapes
+ * are worth guessing.
+ */
+export const OrderAccessTokenSchema = z.string().min(16).max(128);
 
 /**
  * What a return link shows: the order, and its latest payment attempt if one
