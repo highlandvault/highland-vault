@@ -132,10 +132,113 @@ test('a customer reserves tickets and sees their numbers, total and a countdown 
   await expect(page.getByTestId('ticket-number')).toHaveCount(0);
 });
 
+/**
+ * The competition detail page (UI-3).
+ *
+ * Everything asserted here is a seeded value the API returned, not a string
+ * the page invented: the fixtures give `highland-lodge-escape` two prizes
+ * (so two winner positions), a £2.99 entry, 4,000 tickets and a limit of 50.
+ */
+test('the detail page presents the competition from the API', async ({ page }) => {
+  await page.goto('/uk/draws/highland-lodge-escape');
+
+  // Context: where this sits, and which market it belongs to.
+  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(crumbs).toContainText('United Kingdom');
+  await expect(crumbs.getByRole('link', { name: 'Competitions' })).toHaveAttribute(
+    'href',
+    '/uk/draws',
+  );
+
+  // The hero: the draw's own title, status and description.
+  await expect(page.getByTestId('draw-title')).toHaveText('Highland lodge escape');
+  await expect(page.getByTestId('draw-status').first()).toHaveText('Open');
+  await expect(page.getByText('Test fixture draw. Not a real competition.')).toBeVisible();
+
+  // Every prize the API returned, in order, with its rank.
+  const prizes = page.getByTestId('prize-list');
+  await expect(prizes.getByRole('listitem')).toHaveCount(2);
+  await expect(prizes).toContainText('A week in a Highland lodge');
+  await expect(prizes).toContainText('Weekend spa break');
+  await expect(prizes.getByRole('listitem').first()).toContainText('1st');
+
+  // Two prizes means two winner positions, and the page says so without
+  // being told separately.
+  await expect(page.getByTestId('draw-facts')).toContainText('Winners');
+  await expect(page.getByTestId('draw-facts')).toContainText('4,000');
+  await expect(page.getByTestId('draw-facts')).toContainText('50');
+  await expect(page.getByTestId('draw-closes')).toBeVisible();
+
+  // The skill question, with its options and no correct answer marked.
+  const question = page.getByTestId('skill-question');
+  await expect(question).toContainText('what is 2 + 3?');
+  await expect(question.getByRole('listitem')).toHaveCount(3);
+
+  // The terms version in force, from the API. No wording is shown because the
+  // contract carries none.
+  await expect(page.getByTestId('terms-version')).toContainText('terms version');
+  await expect(page.getByTestId('terms-unavailable')).toHaveCount(0);
+});
+
+test('the detail page leads to the basket through the existing entry panel', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/uk/draws/highland-lodge-escape');
+  // The hero call to action is an anchor to the entry form, not a second form.
+  const hero = page.getByRole('link', { name: 'Enter this competition' });
+  await expect(hero).toHaveAttribute('href', '#entry');
+  await expect(hero).toBeVisible();
+
+  // Signed out, the panel offers sign-in rather than a dead button.
+  await expect(page.getByRole('link', { name: 'Sign in to buy' })).toBeVisible();
+  await expect(page.getByTestId('entry-total')).toHaveText('£2.99');
+});
+
+test('on a narrow screen the entry panel comes before the long copy', async ({ page }) => {
+  // A sticky bottom bar was measured covering the hero's own lede, so the
+  // panel is brought to the customer instead: one scroll from the title, and
+  // nothing is ever obscured. There is no floating call to action to find.
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('/uk/draws/highland-lodge-escape');
+
+  const entry = await page.getByTestId('entry-total').boundingBox();
+  const prizes = await page.getByTestId('prize-list').boundingBox();
+  expect(entry, 'the entry panel is on the page').not.toBeNull();
+  expect(prizes, 'the prizes are on the page').not.toBeNull();
+  expect(entry!.y, 'entry before prizes on a narrow screen').toBeLessThan(prizes!.y);
+
+  // The hero keeps no duplicate of the panel's button at this width.
+  await expect(page.getByRole('link', { name: 'Enter this competition' })).toHaveCount(0);
+
+  // From 960px the aside is a column again and the natural order returns.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const wideEntry = await page.getByTestId('entry-total').boundingBox();
+  const widePrizes = await page.getByTestId('prize-list').boundingBox();
+  expect(widePrizes!.y).toBeLessThanOrEqual(wideEntry!.y + 1);
+  await expect(page.getByRole('link', { name: 'Enter this competition' })).toBeVisible();
+});
+
+test('the detail page does not overflow sideways at any supported width', async ({ page }) => {
+  for (const width of [320, 360, 768, 900, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/uk/draws/highland-lodge-escape');
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
 test('an upcoming draw shows when it opens and does not offer entry', async ({ page }) => {
   await page.goto('/uk/draws/vintage-whisky-collection');
   await expect(page.getByTestId('draw-status').first()).toHaveText('Opening soon');
   await expect(page.getByRole('button', { name: 'Entries not open' })).toBeDisabled();
+  // Nothing anywhere on the page invites an entry that cannot be taken, at
+  // any width — the hero's call to action is rendered only for a live draw.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByRole('link', { name: 'Enter this competition' })).toHaveCount(0);
+  // One prize, so one winner position — read from the API, not assumed.
+  await expect(page.getByTestId('prize-list').getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByTestId('draw-facts')).toContainText('Winner');
 });
 
 test('a market without draws shows the empty state', async ({ page }) => {

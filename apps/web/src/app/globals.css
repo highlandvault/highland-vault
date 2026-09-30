@@ -1570,3 +1570,195 @@ table.data th {
   font-size: 1.35rem;
   margin-bottom: 0.6em;
 }
+
+/* ==================================================== competition detail
+   /[market]/draws/[slug]. The page sits inside the market layout's container,
+   so the hero is a panel rather than a full-bleed band — the listing and the
+   detail keep the same measure, and only the surface changes. */
+
+.draw-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: clamp(20px, 3vw, 36px);
+  grid-template-columns: 1fr;
+  align-items: center;
+  background: var(--ink);
+  color: var(--on-ink);
+  border-radius: var(--radius);
+  padding: clamp(20px, 3.5vw, 36px);
+  margin-bottom: clamp(24px, 4vw, 40px);
+  box-shadow: var(--shadow);
+}
+
+/* One warm pool of light from behind the artwork. Restrained on purpose: the
+   prize placeholder already carries gold, and two sources fight. */
+.draw-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(52% 70% at 22% 30%, rgb(200 162 74 / 14%) 0%, transparent 62%);
+  pointer-events: none;
+}
+
+@media (min-width: 860px) {
+  .draw-hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+}
+
+.draw-hero__media,
+.draw-hero__copy {
+  position: relative;
+}
+
+/* The artwork is a placeholder until O14 settles storage, so it is framed
+   like a plate rather than bled to the edge — a frame reads as deliberate,
+   a bleed reads as a missing photograph. */
+.draw-hero__media .prize-art {
+  border-radius: var(--radius-sm);
+  aspect-ratio: 4 / 3;
+  border: 1px solid rgb(200 162 74 / 30%);
+  box-shadow: var(--shadow-lift);
+}
+
+/* The market and the status on one line. As siblings they collided: the
+   eyebrow is inline-block and the badge simply followed it. */
+.draw-hero__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+}
+
+.draw-hero__meta .eyebrow {
+  margin-bottom: 0;
+}
+
+.draw-hero h1 {
+  font-size: clamp(1.8rem, 4.2vw, 2.9rem);
+  margin-bottom: 0.35em;
+}
+
+.draw-hero__lede {
+  color: var(--on-ink-muted);
+  font-size: 1.05rem;
+  max-width: 56ch;
+  margin-bottom: 24px;
+}
+
+/* Three facts, and the price is the one that reads first. */
+.draw-hero__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 16px 24px;
+  margin: 0 0 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgb(245 241 232 / 16%);
+}
+
+.draw-hero__facts dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.draw-hero__facts dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--on-ink);
+}
+
+.draw-hero__facts .price {
+  color: var(--on-ink);
+  font-size: 1.5rem;
+}
+
+/*
+ * Exactly one call to action at any width.
+ *
+ * Below 960px the entry bar is on screen, and it says the same words in the
+ * same gold — two identical buttons in one viewport is a page arguing with
+ * itself. The bar is always reachable there, so the hero yields; from 960px
+ * the bar is gone and the hero carries it.
+ */
+.draw-hero__cta {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .draw-hero__cta {
+    display: inline-flex;
+  }
+}
+
+/* ------------------------------------------------------------ detail body */
+
+.detail__aside-title {
+  font-size: 1.05rem;
+  margin-bottom: 0.8em;
+}
+
+.skill-prompt {
+  font-size: 1.1rem;
+}
+
+/* The three steps borrowed from the homepage, at panel scale rather than
+   section scale: inside a panel the card chrome would be a box in a box. */
+.steps--compact {
+  gap: 16px;
+}
+
+.steps--compact .step {
+  padding: 0 0 0 18px;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--line);
+  border-radius: 0;
+}
+
+.steps--compact .step::before {
+  display: none;
+}
+
+.steps--compact .step__number {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.steps--compact .step__title {
+  font-size: 1.05rem;
+}
+
+@media (min-width: 720px) {
+  .steps--compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------- the entry panel first
+
+   On a narrow screen the entry panel is moved directly under the hero,
+   ahead of the prizes and the skill question.
+
+   It began as a sticky bar pinned to the bottom of the viewport. Measuring it
+   killed it: at 360x740 the bar occupied y=652-728 while the hero's facts
+   began at y=710, so the first thing a customer saw was their own lede cut in
+   half by a gold button. Every bottom bar covers something — that is what it
+   is for — and here the something was the most important part of the page.
+
+   Bringing the panel to the customer beats floating a shortcut over the
+   content: the price, the quantity and the button are all one thumb-scroll
+   from the title, nothing is ever obscured, there is exactly one call to
+   action, and it needs no JavaScript to decide when to appear. From 960px the
+   aside becomes a sticky column and the natural order is right again. */
+
+@media (max-width: 959px) {
+  .detail__aside {
+    order: -1;
+  }
+}
