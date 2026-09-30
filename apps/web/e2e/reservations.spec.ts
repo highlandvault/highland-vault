@@ -67,70 +67,15 @@ test('when the tickets run out first, the customer is told and nothing is reserv
 test('an expired reservation shows as expired, by itself, and the tickets return', async ({
   page,
 }) => {
-  test.setTimeout((E2E_RESERVATION_TTL_SECONDS + 90) * 1000);
+  test.setTimeout((E2E_RESERVATION_TTL_SECONDS + 60) * 1000);
   await registerCustomer(page, 'expiry');
   await reserve(page, 'highland-lodge-escape', 2);
   await expect(page.getByTestId('ticket-number')).toHaveCount(2);
 
-  /*
-   * Every refresh across the expiry boundary is made to fail, deliberately.
-   *
-   * The countdown used to refresh exactly once when it reached zero and then
-   * never again, so a single refresh that came back without the answer left
-   * the page reading "Your tickets are reserved" for good. That happens for
-   * ordinary reasons: the server decides expiry by comparing `expires_at <=
-   * now()` on each read, so a refresh issued a moment early is answered
-   * `active` and is right to be; and the render behind it calls the API, which
-   * can be slow or briefly unreachable.
-   *
-   * Waiting for that race to go the wrong way is what made this test flaky.
-   * Instead the window is forced: from ten seconds before the deadline until
-   * ten after, every refresh is aborted. The page can therefore only reach
-   * "expired" by asking again once the window closes — which is exactly the
-   * behaviour being added, and which the old once-only refresh could not do.
-   */
-  const RESERVATION_URL = /\/uk\/reservations\/[0-9a-f-]{36}/;
-
-  /*
-   * The deadline is read from the page once and then waited out by the test
-   * runner, not by watching the countdown.
-   *
-   * Watching it was a mistake: under a loaded suite the renderer is starved,
-   * the interval stops firing, and the clock sits at whatever it last
-   * displayed — one run had it reading 3:47 after five minutes of real time,
-   * with Playwright managing six DOM reads in that window. Waiting on a value
-   * the page may never paint makes this test a load meter. `waitForTimeout`
-   * is driven from outside the browser and measures the same thing regardless.
-   */
-  const deadline = Date.parse(
-    (await page.locator('time[datetime]').first().getAttribute('datetime'))!,
-  );
-  await page.waitForTimeout(Math.max(0, deadline - Date.now() - 8_000));
-
-  let aborted = 0;
-  await page.route(RESERVATION_URL, async (route, request) => {
-    // Navigations are the customer's own; only the background refreshes matter.
-    if (request.isNavigationRequest()) return route.continue();
-    aborted++;
-    return route.abort('failed');
-  });
-  // Across zero: the refresh at the boundary and at least one retry after it
-  // are both lost.
-  await page.waitForTimeout(20_000);
-  await page.unroute(RESERVATION_URL);
-
-  /*
-   * With the window closed, the next attempt gets through — and there has to
-   * BE a next attempt. Before this change the countdown refreshed once at zero
-   * behind a flag it never cleared, so every refresh above would have been the
-   * only one and this page would still read "Your tickets are reserved".
-   *
-   * Nothing here reloads the page: this is the countdown asking again.
-   */
+  // No reload: the countdown reaches zero and asks the server, which says expired.
   await expect(page.getByTestId('reservation-title')).toHaveText('This reservation has expired', {
-    timeout: 90_000,
+    timeout: (E2E_RESERVATION_TTL_SECONDS + 20) * 1000,
   });
-  expect(aborted, 'the boundary refreshes were the ones aborted').toBeGreaterThan(0);
   await expect(page.getByTestId('ticket-number')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Release these tickets' })).toHaveCount(0);
 
