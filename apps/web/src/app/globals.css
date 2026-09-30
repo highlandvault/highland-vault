@@ -12,6 +12,13 @@
   --gold: #c8a24a;
   --gold-strong: #a9832c;
   --gold-soft: #f3ead3;
+  /* Primary action. New in the visual redesign: the brand is navy and gold,
+     and the call to action is deliberately neither, so it cannot be mistaken
+     for decoration. Contrast against white is 4.6:1 at --blue. */
+  --blue: #1668dc;
+  --blue-strong: #0f52b0;
+  --blue-soft: #eaf2fd;
+  --sand: #f0e4c4;
   --ivory: #f7f4ee;
   --surface: #ffffff;
   --line: #e4ddcf;
@@ -114,18 +121,28 @@ a {
 
 /* ---------------------------------------------------------------- header */
 
+/*
+ * White, low and quiet.
+ *
+ * It used to be an ink bar, which competed with every dark section beneath it.
+ * The page is now 70-80% white and the header is part of that: one hairline
+ * under it, compact type, and the only saturated thing in it is the call to
+ * action.
+ */
 .site-header {
-  background: var(--ink);
-  color: var(--on-ink);
-  border-bottom: 1px solid rgb(200 162 74 / 25%);
+  position: relative;
+  z-index: 10;
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
 }
 
 .site-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 64px;
+  gap: 12px 28px;
+  min-height: 76px;
 }
 
 .brand {
@@ -133,84 +150,120 @@ a {
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  color: inherit;
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .brand__mark {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   flex: none;
 }
 
-.site-header__nav {
+.brand__name {
   display: flex;
-  align-items: center;
-  gap: 8px 28px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand__tag {
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .site-nav {
-  display: flex;
-  gap: 4px 18px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  font-size: 0.925rem;
+  display: none;
+  align-items: center;
+  gap: 4px 26px;
+  font-size: 0.9rem;
 }
 
-/* The account links sit quieter than the product ones, and separated by a
-   hairline rather than by distance — at narrow widths distance runs out. */
-.site-nav--account {
-  position: relative;
-  padding-left: 28px;
-}
-
-.site-nav--account::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  translate: 0 -50%;
-  width: 1px;
-  height: 18px;
-  background: rgb(245 241 232 / 18%);
-}
-
-@media (max-width: 720px) {
-  .site-nav--account {
-    padding-left: 0;
-  }
-
-  .site-nav--account::before {
-    display: none;
+@media (min-width: 1080px) {
+  .site-nav {
+    display: flex;
   }
 }
 
 .site-nav a {
-  color: var(--on-ink-muted);
+  color: var(--text);
   text-decoration: none;
   padding: 6px 0;
+  border-bottom: 2px solid transparent;
 }
 
 .site-nav a:hover {
-  color: var(--on-ink);
+  border-bottom-color: var(--gold);
 }
 
-@media (max-width: 480px) {
-  .site-header__inner {
-    flex-wrap: wrap;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    gap: 8px;
-  }
+/* Sections that have no page yet. Text, not a link, and dimmed enough to read
+   as "not here" without being invisible. */
+.site-nav__soon,
+.site-footer__soon {
+  color: var(--muted);
+  opacity: 0.65;
+  cursor: default;
+}
 
-  .site-header__nav {
-    gap: 4px 16px;
-    width: 100%;
-    justify-content: flex-start;
+.site-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.icon-link svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.icon-link:hover {
+  background: var(--ivory);
+}
+
+/* The label goes when there is no room for it; the icon and its accessible
+   name stay. */
+.icon-link--labelled span {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .icon-link--labelled span {
+    display: inline;
+  }
+}
+
+/* Measured at 320px: brand + search + account + the call to action came to
+   354px against a 288px container. The search icon goes first - it is the
+   least load-bearing of the four, and the listing's own toolbar still has a
+   search field. */
+@media (max-width: 599px) {
+  .site-header__actions .icon-link:not(.icon-link--labelled) {
+    display: none;
+  }
+}
+
+@media (max-width: 519px) {
+  .site-header__inner {
+    min-height: 64px;
+    gap: 8px;
   }
 
   .brand {
@@ -218,10 +271,12 @@ a {
     gap: 8px;
   }
 
-  .site-nav {
-    gap: 4px 12px;
-    font-size: 0.85rem;
-    flex-wrap: nowrap;
+  .brand__tag {
+    display: none;
+  }
+
+  .site-header__actions {
+    gap: 4px;
   }
 }
 
@@ -253,12 +308,36 @@ a {
   padding: clamp(24px, 5vw, 48px) 0 64px;
 }
 
+/*
+ * The footer, in daylight.
+ *
+ * Ivory rather than ink, with one hairline above it, so the page ends the way
+ * it began instead of dropping into a dark slab. The contour lines are two
+ * repeating gradients at very low opacity — a texture, not a picture, and
+ * nothing to download.
+ */
 .site-footer {
-  background: var(--ink);
-  color: var(--on-ink-muted);
+  position: relative;
+  overflow: hidden;
+  background: var(--ivory);
+  color: var(--muted);
   font-size: 0.875rem;
-  padding: clamp(40px, 6vw, 64px) 0 32px;
-  border-top: 1px solid rgb(200 162 74 / 25%);
+  padding: clamp(40px, 6vw, 68px) 0 28px;
+  border-top: 1px solid var(--line);
+}
+
+.site-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(114deg, rgb(200 162 74 / 7%) 0 1px, transparent 1px 58px),
+    repeating-linear-gradient(66deg, rgb(200 162 74 / 5%) 0 1px, transparent 1px 82px);
+  pointer-events: none;
+}
+
+.site-footer .container {
+  position: relative;
 }
 
 .site-footer p {
@@ -266,12 +345,12 @@ a {
 }
 
 .site-footer a {
-  color: var(--on-ink-muted);
+  color: var(--muted);
   text-decoration: none;
 }
 
 .site-footer a:hover {
-  color: var(--on-ink);
+  color: var(--text);
   text-decoration: underline;
 }
 
@@ -290,14 +369,13 @@ a {
 
 @media (min-width: 1080px) {
   .site-footer__grid {
-    /* The brand column is wider than the three link columns. */
-    grid-template-columns: 1.6fr 1fr 1fr 1.3fr;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
     gap: 48px;
   }
 }
 
 .site-footer__brand .brand {
-  color: var(--on-ink);
+  color: var(--text);
   margin-bottom: 12px;
 }
 
@@ -307,11 +385,11 @@ a {
 
 .site-footer__heading {
   font-family: var(--font-body);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--on-ink);
+  color: var(--text);
   margin: 0 0 14px;
 }
 
@@ -323,12 +401,8 @@ a {
   gap: 10px;
 }
 
-.site-footer__col p {
-  max-width: 38ch;
-}
-
 .site-footer__meta {
-  color: rgb(185 192 204 / 65%);
+  color: rgb(91 100 116 / 70%);
   font-size: 0.8em;
   letter-spacing: 0.06em;
 }
@@ -340,7 +414,7 @@ a {
   gap: 8px 24px;
   margin-top: clamp(32px, 5vw, 48px);
   padding-top: 20px;
-  border-top: 1px solid rgb(245 241 232 / 10%);
+  border-top: 1px solid var(--line);
   font-size: 0.8rem;
 }
 
@@ -400,6 +474,39 @@ a {
   transition:
     background-color 0.15s ease,
     transform 0.15s ease;
+}
+
+/* The primary action. Blue so it is not gold, not navy, and impossible to
+   read as decoration on a page made of both. */
+.button--blue {
+  background: var(--blue);
+  color: #fff;
+}
+
+.button--blue:hover {
+  background: var(--blue-strong);
+}
+
+/* For the one dark band, where blue would disappear into navy. */
+.button--sand {
+  background: var(--sand);
+  color: var(--ink);
+}
+
+.button--sand:hover {
+  background: var(--gold-soft);
+}
+
+.button--sm {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+}
+
+.button__arrow {
+  width: 17px;
+  height: 17px;
+  flex: none;
 }
 
 .button--gold {
@@ -1147,142 +1254,9 @@ table.data th {
   list-style: none;
 }
 
-/* ================================================================ home page
-   Full-bleed sections. Unlike every other page, the homepage owns its own
-   `main` and each section manages its container, so the ink bands can run
-   edge to edge while the copy stays on the shared 1160px measure. */
-
-.home {
-  /* No `site-main` padding: the first section is the hero and it sets its own. */
-  min-height: 60vh;
-}
-
-.home-section {
-  padding: clamp(48px, 8vw, 88px) 0;
-}
-
-/* A quiet change of surface, not a second colour scheme. */
-.home-section--tint {
-  background: var(--surface);
-  border-block: 1px solid var(--line);
-}
-
-/* ------------------------------------------------------------- home hero */
-
-.home-hero {
-  position: relative;
-  overflow: hidden;
-  background: var(--ink);
-  color: var(--on-ink);
-  padding: clamp(48px, 9vw, 104px) 0 clamp(52px, 9vw, 104px);
-}
-
-/*
- * Depth in three layers rather than one gradient: a warm pool of light behind
- * the emblem, a cool lift from the lower left, and a faint rule grid over the
- * top. Each is weak on its own; together they keep the panel from reading flat.
- */
-.home-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(52% 62% at 76% 34%, rgb(200 162 74 / 16%) 0%, transparent 62%),
-    radial-gradient(60% 70% at 8% 96%, rgb(36 51 77 / 85%) 0%, transparent 60%);
-  pointer-events: none;
-}
-
-.home-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right, rgb(245 241 232 / 4%) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(245 241 232 / 4%) 1px, transparent 1px);
-  background-size: 96px 96px;
-  mask-image: radial-gradient(80% 70% at 50% 40%, #000 0%, transparent 78%);
-  pointer-events: none;
-}
-
-.home-hero__inner {
-  position: relative;
-  display: grid;
-  gap: clamp(32px, 6vw, 56px);
-  align-items: center;
-}
-
-@media (min-width: 960px) {
-  .home-hero__inner {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 64px;
-  }
-}
-
-.home-hero__title {
-  font-size: clamp(2.2rem, 5.2vw, 3.6rem);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
-  /* Wide enough for the longer of the two lines; the <br> does the breaking. */
-  max-width: 20ch;
-  margin-bottom: 0.45em;
-  text-wrap: balance;
-}
-
-.home-hero__lede {
-  color: var(--on-ink-muted);
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
-  max-width: 48ch;
-  margin-bottom: 32px;
-}
-
-.cta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-}
-
-/* Below 400px two pill buttons side by side leave no room for their labels. */
-@media (max-width: 400px) {
-  .cta-row .button {
-    width: 100%;
-  }
-}
-
-.home-hero__art {
-  display: flex;
-  justify-content: center;
-}
-
-/*
- * Sized by how much room the hero has, not by its own ambition.
- *
- * Below 960px the hero is one column and the emblem sits under the copy,
- * where a 420px disc pushes the first competition most of a screen further
- * down. It is decoration; it yields.
- */
-.vault-emblem {
-  width: min(58%, 300px);
-  height: auto;
-  filter: drop-shadow(0 24px 48px rgb(0 0 0 / 45%));
-}
-
-@media (min-width: 960px) {
-  .vault-emblem {
-    width: min(100%, 420px);
-  }
-}
-
-/* Narrower still: above the copy rather than below it, so the heading is the
-   first thing on the page rather than the thing after the decoration. */
-@media (max-width: 640px) {
-  .home-hero__art {
-    order: -1;
-  }
-
-  .vault-emblem {
-    width: min(64%, 240px);
-  }
-}
+/* ================================================= shared page furniture
+   What survived the homepage redesign because other pages use it: the market
+   link row (listing) and the numbered steps (competition detail). */
 
 /* ----------------------------------------------------- market link row */
 
@@ -1346,80 +1320,6 @@ table.data th {
 .step p {
   color: var(--muted);
   margin: 0;
-}
-
-/* --------------------------------------------------------------- principles */
-
-.principles {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 20px;
-}
-
-@media (min-width: 720px) {
-  .principles {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 28px;
-  }
-}
-
-.principle {
-  padding: 26px 24px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.principle__title {
-  font-size: 1.1rem;
-  margin-bottom: 0.4em;
-}
-
-.principle__title::after {
-  content: '';
-  display: block;
-  width: 28px;
-  height: 2px;
-  margin-top: 10px;
-  background: var(--gold);
-}
-
-.principle p {
-  color: var(--muted);
-  margin: 0;
-}
-
-/* ------------------------------------------------------------- closing cta */
-
-.home-close {
-  position: relative;
-  overflow: hidden;
-  background: var(--ink-2);
-  color: var(--on-ink);
-  padding: clamp(48px, 8vw, 88px) 0;
-}
-
-.home-close::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(60% 120% at 50% 0%, rgb(200 162 74 / 14%) 0%, transparent 62%);
-  pointer-events: none;
-}
-
-.home-close__inner {
-  position: relative;
-  text-align: center;
-}
-
-.home-close h2 {
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  max-width: 18ch;
-  margin-inline: auto;
-  margin-bottom: 1em;
 }
 
 /* ====================================================== competition listing
@@ -1569,4 +1469,1039 @@ table.data th {
 .stack > section > h2 {
   font-size: 1.35rem;
   margin-bottom: 0.6em;
+}
+
+/* ================================================== home page (redesign)
+   White-dominant and editorial. The page owns its own `main`, so the bands
+   run edge to edge while every line of copy stays on the shared measure. */
+
+.home {
+  min-height: 60vh;
+  background: var(--surface);
+}
+
+.home-section {
+  padding: clamp(44px, 6.5vw, 80px) 0;
+}
+
+.home-section--flush {
+  padding-top: 0;
+}
+
+/* ------------------------------------------------------- shared furniture */
+
+/* An eyebrow with a gold rule running off it, as the reference marks every
+   section opening. */
+.rule-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.rule-eyebrow .eyebrow {
+  margin-bottom: 0;
+}
+
+.rule-eyebrow__rule {
+  flex: 1 1 auto;
+  max-width: 96px;
+  height: 1px;
+  background: linear-gradient(to right, var(--gold), rgb(200 162 74 / 0%));
+}
+
+.rule-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: clamp(20px, 3vw, 32px);
+}
+
+.rule-head__title {
+  font-family: var(--font-body);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.rule-head__rule {
+  flex: 1 1 60px;
+  height: 1px;
+  background: linear-gradient(to right, var(--gold), rgb(200 162 74 / 0%));
+}
+
+.rule-head__aside {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.section-intro {
+  max-width: 62ch;
+  margin-bottom: clamp(24px, 3.5vw, 36px);
+}
+
+.section-intro__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.section-intro__icon {
+  width: 22px;
+  height: 22px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+.section-intro__eyebrow .eyebrow {
+  margin-bottom: 0;
+}
+
+.section-intro__title {
+  font-size: clamp(1.7rem, 3.6vw, 2.5rem);
+  margin-bottom: 0.3em;
+}
+
+.section-intro__lede {
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Small capsule for a fact the API actually supplies. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pill--quiet {
+  background: var(--ivory);
+}
+
+.pill__icon {
+  width: 15px;
+  height: 15px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+/* --------------------------------------------------------------- the hero */
+
+.hero-band {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(70% 90% at 88% 18%, rgb(23 35 56 / 10%) 0%, transparent 62%),
+    linear-gradient(180deg, var(--surface) 0%, var(--ivory) 100%);
+  border-bottom: 1px solid var(--line);
+  padding: clamp(32px, 5vw, 64px) 0 clamp(40px, 6vw, 72px);
+}
+
+/* A horizon, drawn rather than photographed: two clipped slabs of ink at low
+   opacity behind the artwork. O14 blocks photography, and an empty right half
+   reads as a missing image. */
+.hero-band::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: min(60%, 760px);
+  height: 62%;
+  background: linear-gradient(160deg, rgb(36 51 77 / 12%) 0%, rgb(36 51 77 / 3%) 100%);
+  clip-path: polygon(0 100%, 18% 46%, 34% 70%, 56% 22%, 76% 58%, 100% 30%, 100% 100%);
+  pointer-events: none;
+}
+
+.hero-band__inner {
+  position: relative;
+  display: grid;
+  gap: clamp(28px, 4vw, 48px);
+  align-items: center;
+}
+
+@media (min-width: 1000px) {
+  .hero-band__inner {
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+    gap: 56px;
+  }
+}
+
+.hero-band__title {
+  font-size: clamp(2.1rem, 5.4vw, 3.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  max-width: 15ch;
+  margin-bottom: 0.4em;
+}
+
+/* The prize is the part worth setting apart. */
+.hero-band__title em {
+  font-style: italic;
+  color: var(--gold-strong);
+}
+
+.hero-band__copy {
+  min-width: 0;
+}
+
+/* Lost when the previous homepage's CSS was removed; without it the primary
+   button and the text link sat flush against one another. */
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+@media (max-width: 400px) {
+  .cta-row .button {
+    width: 100%;
+  }
+}
+
+.hero-band__lede {
+  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.1rem);
+  max-width: 50ch;
+  margin-bottom: 24px;
+}
+
+/* Four facts about how the product works. Each is something the repository
+   already does; none is a statistic, a rating or a claim about the world. */
+/* Two by two. `auto-fit` gave three across and left the fourth stranded on a
+   row of its own, which read as a mistake rather than a layout. */
+.value-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px 24px;
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+}
+
+@media (min-width: 460px) {
+  .value-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.value-row li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.value-row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.value-row strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.value-row__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--gold-strong);
+  flex: none;
+  margin-top: 1px;
+}
+
+.hero-band__stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.hero-band__art {
+  width: 100%;
+  max-width: 520px;
+}
+
+.hero-band__art .prize-art {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lift);
+}
+
+/* --------------------------------------------------- the floating card */
+
+.draw-ticket {
+  width: min(100%, 330px);
+  margin-top: -28px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lift);
+}
+
+@media (min-width: 1000px) {
+  /* Overlapping the artwork, as the reference has it. Static below this
+     width, where it simply follows the image. */
+  .draw-ticket {
+    position: absolute;
+    right: -28px;
+    bottom: -32px;
+    margin-top: 0;
+  }
+}
+
+@media (min-width: 1240px) {
+  .draw-ticket {
+    right: -40px;
+  }
+}
+
+.draw-ticket__price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.draw-ticket__per {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.draw-ticket__notes {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.draw-ticket__notes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-ticket__note-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+/* ------------------------------------------------------------- countdown */
+
+.countdown-block__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.countdown-block__digits {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 34px;
+}
+
+.countdown-unit__value {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-unit__name {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.countdown-block__sep {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--line);
+  line-height: 1;
+}
+
+.countdown-block__pending {
+  display: inline-block;
+  min-height: 42px;
+}
+
+.countdown-block__closed {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- meter */
+
+.meter__figures {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.meter__figures strong {
+  color: var(--text);
+}
+
+.meter__percent {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.meter__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+/* ---------------------------------------------------------- market tiles */
+
+/*
+ * Compact cards, however many there are.
+ *
+ * A `1fr` grid stretched two markets into two half-page panels; the design
+ * wants a row of small cards. Flex with a fixed basis keeps each one the same
+ * size whether there are two markets or six, and wraps rather than scrolling.
+ */
+.tile-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tile-row > li {
+  /* Grows to share the row, but never past a card width - two markets must
+     not become two half-page panels, and six must still fit. */
+  flex: 1 1 196px;
+  max-width: 300px;
+  min-width: 0;
+}
+
+@media (max-width: 519px) {
+  .tile-row > li {
+    flex: 1 1 148px;
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 2px rgb(14 23 38 / 5%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+  border-color: rgb(22 104 220 / 35%);
+  box-shadow: var(--shadow);
+}
+
+/* The lead tile carries the outline the reference uses to mark a selection.
+   Visual emphasis only — the market is chosen by following the link. */
+.tile--lead {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.tile__art {
+  display: block;
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--ink-2);
+}
+
+/* Four drawn scenes instead of four photographs. */
+.tile__scene {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.35s ease;
+}
+
+.tile__scene--0 {
+  background:
+    radial-gradient(60% 70% at 72% 24%, rgb(200 162 74 / 40%) 0%, transparent 60%),
+    linear-gradient(155deg, #16233a 0%, #2b3b58 100%);
+}
+
+.tile__scene--1 {
+  background:
+    radial-gradient(50% 60% at 28% 30%, rgb(200 162 74 / 26%) 0%, transparent 62%),
+    linear-gradient(135deg, #1b2b45 0%, #33456a 100%);
+}
+
+.tile__scene--2 {
+  background:
+    radial-gradient(70% 80% at 50% 88%, rgb(200 162 74 / 22%) 0%, transparent 58%),
+    linear-gradient(200deg, #16233a 0%, #24334d 100%);
+}
+
+.tile__scene--3 {
+  background:
+    radial-gradient(60% 60% at 80% 76%, rgb(200 162 74 / 30%) 0%, transparent 60%),
+    linear-gradient(165deg, #1e2f4b 0%, #0e1726 100%);
+}
+
+.tile:hover .tile__scene {
+  transform: scale(1.05);
+}
+
+.tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 16px 18px;
+  flex: 1;
+  position: relative;
+}
+
+.tile__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--gold-strong);
+  margin-bottom: 4px;
+}
+
+.tile__title {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+
+.tile__note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.tile__go {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 12px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.tile--lead .tile__go {
+  background: var(--blue);
+  color: #fff;
+}
+
+.tile__go svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile__scene {
+    transition: none;
+  }
+
+  .tile:hover {
+    transform: none;
+  }
+
+  .tile:hover .tile__scene {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------- featured composition */
+
+.feature {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+@media (min-width: 860px) {
+  .feature {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  }
+}
+
+.feature__media {
+  position: relative;
+  background: var(--ink-2);
+}
+
+.feature__media .prize-art {
+  height: 100%;
+  aspect-ratio: auto;
+  min-height: 240px;
+}
+
+.feature__flag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 1;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow);
+}
+
+.feature__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(18px, 2.6vw, 28px);
+}
+
+.feature__title {
+  font-size: clamp(1.3rem, 2.4vw, 1.75rem);
+  margin: 0;
+}
+
+.feature__title a {
+  text-decoration: none;
+}
+
+.feature__title a:hover {
+  text-decoration: underline;
+}
+
+.feature__prize {
+  color: var(--muted);
+  margin: 0;
+}
+
+.feature__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 12px 20px;
+  margin: 4px 0;
+  padding: 14px 0;
+  border-block: 1px solid var(--line);
+}
+
+.feature__facts dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.feature__facts dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.feature__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* --------------------------------------------------------- secondary row */
+
+.row-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 1080px) {
+  .row-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.row-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(14 23 38 / 5%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.row-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+@media (min-width: 520px) and (max-width: 1079px) {
+  .row-card {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+}
+
+.row-card__media .prize-art {
+  height: 100%;
+  aspect-ratio: auto;
+  min-height: 100%;
+}
+
+.row-card__media .prize-art__label {
+  display: none;
+}
+
+.row-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+
+.row-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.row-card__winners {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.row-card__title {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.row-card__title a {
+  text-decoration: none;
+}
+
+/* The whole card is the target, through the title. */
+.row-card__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.row-card__prize {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.row-card__meta {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.row-card__meta .countdown-unit__value {
+  font-size: 1.1rem;
+}
+
+.row-card__meta .countdown-block__digits {
+  min-height: 0;
+  gap: 6px;
+}
+
+.row-card__when {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.row-card__cta {
+  width: 100%;
+  margin-top: 4px;
+  min-height: 40px;
+  font-size: 0.85rem;
+}
+
+/* --------------------------------------------------------------- banner */
+
+/*
+ * The one dark band on the page.
+ *
+ * Ink with a drawn barrel-stave texture: repeating vertical bands and a warm
+ * pool of light. Short on purpose — it is a signpost, not a section.
+ */
+.banner {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 28px;
+  padding: clamp(24px, 4vw, 40px);
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(48% 120% at 78% 50%, rgb(200 162 74 / 20%) 0%, transparent 62%),
+    repeating-linear-gradient(90deg, rgb(245 241 232 / 4%) 0 1px, transparent 1px 42px);
+  pointer-events: none;
+}
+
+.banner__icon {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  color: var(--gold);
+  flex: none;
+}
+
+.banner__copy {
+  position: relative;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.banner__title {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  margin-bottom: 0.25em;
+}
+
+.banner__copy p {
+  color: var(--on-ink-muted);
+  margin: 0;
+  max-width: 56ch;
+}
+
+.banner .button {
+  position: relative;
+}
+
+/* ----------------------------------------------------------- how it works */
+
+.flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: flow;
+}
+
+@media (min-width: 860px) {
+  .flow {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+}
+
+.flow__step {
+  position: relative;
+  padding-right: 12px;
+}
+
+/* The gold chevron between steps, on the three that have a successor. */
+@media (min-width: 860px) {
+  .flow__step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 26px;
+    right: -6px;
+    width: 9px;
+    height: 9px;
+    border-top: 2px solid var(--gold);
+    border-right: 2px solid var(--gold);
+    rotate: 45deg;
+  }
+}
+
+.flow__disc {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--gold);
+}
+
+.flow__disc svg {
+  width: 26px;
+  height: 26px;
+}
+
+.flow__title {
+  font-size: 1.05rem;
+  margin-bottom: 0.3em;
+}
+
+.flow__number {
+  color: var(--gold-strong);
+}
+
+.flow__step p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ----------------------------------------------------------- trust strip */
+
+.trust-strip {
+  border-block: 1px solid var(--line);
+  padding: clamp(24px, 3.5vw, 36px) 0;
+  background: var(--surface);
+}
+
+.trust-strip__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 900px) {
+  .trust-strip__row {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.trust-strip__row li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.trust-strip__row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.trust-strip__row strong {
+  color: var(--text);
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.trust-strip__icon {
+  width: 24px;
+  height: 24px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+/* Below 400px two columns of this leave no room for the words. */
+@media (max-width: 399px) {
+  .trust-strip__row {
+    grid-template-columns: 1fr;
+  }
 }
