@@ -151,3 +151,129 @@ export function ArrowIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/* ------------------------------------------------------------- the rest */
+
+/** Shipping. */
+export function TruckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M2.8 6.6h10.4v9.6H2.8z" />
+      <path d="M13.2 10.2h3.6l3.4 3.2v2.8h-7z" />
+      <circle cx="7" cy="18.2" r="1.9" />
+      <circle cx="16.6" cy="18.2" r="1.9" />
+    </Icon>
+  );
+}
+
+/** A rating. */
+export function StarIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m12 3.2 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.6l6-.9Z" />
+    </Icon>
+  );
+}
+
+/** People. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="9.2" cy="8.4" r="3.4" />
+      <path d="M2.8 19.4c.6-3.3 3.2-5.4 6.4-5.4s5.8 2.1 6.4 5.4" />
+      <path d="M16 5.4a3.4 3.4 0 0 1 0 6.6M17.6 14.4c2 .7 3.3 2.4 3.7 4.6" />
+    </Icon>
+  );
+}
+
+/** A prize. */
+export function GiftIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.4 9.6h17.2v3.2H3.4zM4.8 12.8h14.4v7.6H4.8z" />
+      <path d="M12 9.6v10.8" />
+      <path d="M12 9.6S10.6 4 8.2 4a2.4 2.4 0 0 0 0 5.6M12 9.6S13.4 4 15.8 4a2.4 2.4 0 0 1 0 5.6" />
+    </Icon>
+  );
+}
+
+/** Save for later. */
+export function HeartIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 20.2S3.8 15.4 3.8 9.6A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 8.2 2.4c0 5.8-8.2 10.6-8.2 10.6Z" />
+    </Icon>
+  );
+}
+
+/** Notes, for a cash prize. */
+export function CashIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.6" y="6.4" width="18.8" height="11.2" rx="1.6" />
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M6 9.4h.01M18 14.6h.01" />
+    </Icon>
+  );
+}
+
+/** A card, for site credit. */
+export function CardIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.6" y="5.4" width="18.8" height="13.2" rx="2" />
+      <path d="M2.6 9.8h18.8M6 14.6h3.4" />
+    </Icon>
+  );
+}
+
+/** The basket. */
+export function CartIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M2.8 3.6h2.6l2.4 11.2h9.6l2.2-8H6.4" />
+      <circle cx="9.4" cy="19" r="1.6" />
+      <circle cx="16.8" cy="19" r="1.6" />
+    </Icon>
+  );
+}
+
+/** The caret beside a navigation item that opens something. */
+export function CaretIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m6.5 9.5 5.5 5.5 5.5-5.5" />
+    </Icon>
+  );
+}
+
+/**
+ * The social marks.
+ *
+ * Drawn as simple glyphs rather than each brand's registered logo: a brand
+ * mark is the property of its owner, and none of these accounts is configured
+ * in this repository anyway. Swap in the official assets alongside the real
+ * account URLs.
+ */
+export function SocialIcon({ name, ...props }: IconProps & { name: string }) {
+  const glyph: Record<string, React.ReactNode> = {
+    Facebook: (
+      <path d="M13.8 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3A21 21 0 0 0 14.6 4c-2.4 0-4 1.4-4 4.1v2.3H8v3h2.6V21Z" />
+    ),
+    Instagram: (
+      <>
+        <rect x="3.4" y="3.4" width="17.2" height="17.2" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <path d="M17.2 6.9h.01" />
+      </>
+    ),
+    YouTube: (
+      <>
+        <rect x="2.6" y="5.6" width="18.8" height="12.8" rx="4" />
+        <path d="m10.2 9.2 5.2 2.8-5.2 2.8Z" />
+      </>
+    ),
+    TikTok: <path d="M14.2 3.4v10.9a3.1 3.1 0 1 1-3.1-3.1h.6M14.2 3.4c.4 2.3 1.9 3.9 4.3 4.1" />,
+  };
+  return <Icon {...props}>{glyph[name] ?? <circle cx="12" cy="12" r="9" />}</Icon>;
+}

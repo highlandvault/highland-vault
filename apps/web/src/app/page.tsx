@@ -2,54 +2,64 @@ import type { Market, PublicDrawSummary } from '@hv/contracts';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DrawCountdown } from '@/components/draw-countdown';
-import { DrawRowCard } from '@/components/draw-row-card';
 import {
   ArrowIcon,
   BottleIcon,
-  ClockIcon,
+  CardIcon,
+  CashIcon,
   DiamondIcon,
-  GlobeIcon,
+  GiftIcon,
+  HeartIcon,
   ListIcon,
   QuestionIcon,
   ShieldIcon,
+  StarIcon,
   TicketIcon,
   TrophyIcon,
+  TruckIcon,
+  UsersIcon,
 } from '@/components/icons';
-import { PrizeArt } from '@/components/prize-art';
-import { StatusBadge } from '@/components/status-badge';
+import { Scene } from '@/components/scene';
 import { fetchDraws } from '@/lib/draws';
 import { formatCount, formatDateTime, formatPrice } from '@/lib/format';
 import { fetchAvailability } from '@/lib/reservations';
 import { fetchMarkets } from '@/markets';
+import {
+  CATEGORIES,
+  DRAW_TAGS,
+  INSTANT_PRIZES,
+  PROMISES,
+  SOCIAL_PROOF,
+  TRUST,
+} from './home-content';
 
 export const metadata: Metadata = {
-  title: { absolute: 'Highland Vault — exceptional prizes, one fair draw' },
+  title: { absolute: 'Highland Vault — whisky competitions' },
   description:
-    'Carefully selected prize draws with transparent entry, clear rules and a simple way to play.',
+    'Rare bottles, collector’s editions and exceptional prizes. Transparent entry, clear rules and a skill question on every entry.',
 };
 
-// Which markets are open, and which draws are live in them, are both facts
-// about right now.
 export const dynamic = 'force-dynamic';
 
-type Featured = { draw: PublicDrawSummary; market: Market };
+type Entry = { draw: PublicDrawSummary; market: Market };
 
-/**
- * The draws worth the front page, across every open market.
- *
- * There is no cross-market draw endpoint, so the open markets are asked in
- * parallel and their answers merged: live before scheduled, soonest closing
- * first. A market whose listing fails contributes nothing rather than failing
- * the page — the right trade for a homepage and the wrong one for a listing.
- */
-async function featuredDraws(markets: Market[]): Promise<Featured[]> {
+const PROMISE_ICONS = {
+  diamond: DiamondIcon,
+  shield: ShieldIcon,
+  trophy: TrophyIcon,
+  truck: TruckIcon,
+};
+const TRUST_ICONS = { shield: ShieldIcon, star: StarIcon, users: UsersIcon, gift: GiftIcon };
+
+/** Live before scheduled, soonest closing first, across every open market. */
+async function allDraws(markets: Market[]): Promise<Entry[]> {
   const perMarket = await Promise.all(
     markets.map(async (market) => {
       const result = await fetchDraws(market.code);
       return result.ok ? result.draws.map((draw) => ({ draw, market })) : [];
     }),
   );
-  const rank = (status: string) => (status === 'live' ? 0 : 1);
+  const rank = (s: string) => (s === 'live' ? 0 : 1);
   return perMarket
     .flat()
     .filter(({ draw }) => draw.status === 'live' || draw.status === 'scheduled')
@@ -61,53 +71,41 @@ async function featuredDraws(markets: Market[]): Promise<Featured[]> {
 }
 
 export default async function HomePage() {
-  const markets = await fetchMarkets();
-  const open = markets ?? [];
-  const all = open.length > 0 ? await featuredDraws(open) : [];
+  const markets = (await fetchMarkets()) ?? [];
+  const all = markets.length > 0 ? await allDraws(markets) : [];
   const featured = all[0] ?? null;
-  const secondary = all.slice(1, 4);
+  const rest = all.slice(1, 4);
 
-  /*
-   * Availability for the headline draw only.
-   *
-   * One request, not one per card. The listing endpoint carries no ticket
-   * counts, so a progress figure has to come from the per-draw availability
-   * route, and asking it for every card on the page is the N+1 this project
-   * has already refused once. The headline draw is where the figure earns its
-   * request; the cards below show price and timing, which the list payload
-   * already has.
-   */
+  // One request, for the headline draw only. Asking per card is the N+1 this
+  // project has refused before; the cards below use the list payload.
   const availability = featured
     ? await fetchAvailability(featured.market.code, featured.draw.slug)
     : null;
-  // `available` counts tickets nobody holds, so taken = total − available. That
-  // includes live holds as well as sold tickets, which is what "entries" means
-  // to somebody deciding whether to join.
   const taken = availability ? availability.total - availability.available : null;
   const percent =
     availability && availability.total > 0 && taken !== null
       ? Math.min(100, Math.round((taken / availability.total) * 100))
       : null;
 
-  const featuredHref = featured
-    ? `/${featured.market.code}/draws/${featured.draw.slug}`
-    : open.length === 1
-      ? `/${open[0]!.code}/draws`
-      : '#competitions';
-  const browseHref = open.length === 1 ? `/${open[0]!.code}/draws` : '#competitions';
+  const href = (e: Entry) => `/${e.market.code}/draws/${e.draw.slug}`;
+  const browse = markets.length === 1 ? `/${markets[0]!.code}/draws` : '#competitions';
+  const enterHref = featured ? href(featured) : browse;
+  const money = (e: Entry) =>
+    formatPrice(e.draw.ticketPriceMinor, e.draw.currency, e.market.locale);
 
   return (
     <main id="main" className="home">
-      {/* -------------------------------------------------------------- hero */}
-      <section className="hero-band" aria-labelledby="hero-heading">
-        <div className="container hero-band__inner">
-          <div className="hero-band__copy">
+      {/* ================================================================ hero */}
+      <section className="hero-shot" aria-labelledby="hero-heading">
+        <Scene kind="highland" className="hero-shot__bg" />
+        <div className="container hero-shot__inner">
+          <div className="hero-shot__copy">
             <p className="rule-eyebrow">
-              <span className="eyebrow">{featured ? 'Featured draw' : 'Highland Vault'}</span>
+              <span className="eyebrow">Featured draw</span>
               <span className="rule-eyebrow__rule" aria-hidden="true" />
             </p>
 
-            <h1 id="hero-heading" className="hero-band__title" data-testid="hero-title">
+            <h1 id="hero-heading" className="hero-shot__title" data-testid="hero-title">
               {featured ? (
                 <>
                   Win <em>{featured.draw.headlinePrize ?? featured.draw.title}</em>
@@ -116,301 +114,262 @@ export default async function HomePage() {
                 <>
                   Exceptional prizes.
                   <br />
-                  One fair draw.
+                  <em>One fair draw.</em>
                 </>
               )}
             </h1>
 
-            <p className="hero-band__lede">
-              {featured
-                ? 'Every draw shows its prizes, closing time and entry price before you enter. Every entry answers a skill question.'
-                : 'Carefully selected prize draws with transparent entry, clear rules and a simple way to play.'}
+            <p className="hero-shot__lede">
+              A legendary expression. A once-in-a-lifetime opportunity.
             </p>
 
-            {/* Badges the data actually supports: nothing here is decoration. */}
-            {featured && (
-              <ul className="pill-row" data-testid="hero-badges">
-                <li>
-                  <span className="pill">
-                    <GlobeIcon className="pill__icon" />
-                    {featured.market.name}
-                  </span>
-                </li>
-                <li>
-                  <StatusBadge status={featured.draw.status} />
-                </li>
-                {featured.draw.winnerPositions > 1 && (
-                  <li>
-                    <span className="pill">
-                      <TrophyIcon className="pill__icon" />
-                      {featured.draw.winnerPositions} winner positions
-                    </span>
-                  </li>
-                )}
-              </ul>
-            )}
-
-            <ul className="value-row" data-testid="hero-values">
-              <li>
-                <QuestionIcon className="value-row__icon" />
-                <span>
-                  <strong>Skill question</strong>
-                  On every entry
-                </span>
-              </li>
-              <li>
-                <ShieldIcon className="value-row__icon" />
-                <span>
-                  <strong>Secure checkout</strong>
-                  Card details never held here
-                </span>
-              </li>
-              <li>
-                <ClockIcon className="value-row__icon" />
-                <span>
-                  <strong>Tickets held</strong>
-                  From the moment you add them
-                </span>
-              </li>
-              <li>
-                <ListIcon className="value-row__icon" />
-                <span>
-                  <strong>Published rules</strong>
-                  Prizes and timings up front
-                </span>
-              </li>
-            </ul>
-
-            <div className="cta-row">
-              <Link className="button button--blue" href={featuredHref}>
-                Enter now
-                <ArrowIcon className="button__arrow" />
-              </Link>
-              <Link className="link-arrow" href={browseHref}>
-                View all competitions <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* ------------------------------------------------- hero artwork */}
-          <div className="hero-band__stage">
-            <div className="hero-band__art">
-              <PrizeArt
-                title={featured?.draw.headlinePrize ?? featured?.draw.title ?? 'Highland Vault'}
-              />
-            </div>
-
-            {featured && (
-              <div className="draw-ticket" data-testid="hero-card">
-                <DrawCountdown
-                  to={
-                    featured.draw.status === 'live' ? featured.draw.closesAt : featured.draw.opensAt
-                  }
-                  label={featured.draw.status === 'live' ? 'Draw closes in' : 'Draw opens in'}
-                />
-
-                {taken !== null && percent !== null && availability && (
-                  <div className="meter" data-testid="hero-entries">
-                    <p className="meter__figures">
-                      <strong>{formatCount(taken, featured.market.locale)}</strong> /{' '}
-                      {formatCount(availability.total, featured.market.locale)} entries
-                      <span className="meter__percent">{percent}%</span>
-                    </p>
-                    <div
-                      className="meter__track"
-                      role="progressbar"
-                      aria-valuenow={percent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label="Entries taken"
-                    >
-                      <span className="meter__fill" style={{ width: `${percent}%` }} />
-                    </div>
-                  </div>
-                )}
-
-                <p className="draw-ticket__price">
-                  <span className="price">
-                    {formatPrice(
-                      featured.draw.ticketPriceMinor,
-                      featured.draw.currency,
-                      featured.market.locale,
+            <ul className="tag-row" data-testid="hero-badges">
+              {DRAW_TAGS.map((tag, i) => (
+                <li key={tag}>
+                  <span className="tag">
+                    {i === 0 ? (
+                      <BottleIcon className="tag__icon" />
+                    ) : i === 1 ? (
+                      <DiamondIcon className="tag__icon" />
+                    ) : (
+                      <TicketIcon className="tag__icon" />
                     )}
+                    {tag}
                   </span>
-                  <span className="draw-ticket__per">per entry</span>
-                </p>
-
-                <Link className="button button--blue button--block" href={featuredHref}>
-                  Enter now
-                  <ArrowIcon className="button__arrow" />
-                </Link>
-
-                <ul className="draw-ticket__notes">
-                  <li>
-                    <TicketIcon className="draw-ticket__note-icon" />
-                    Up to {formatCount(featured.draw.maxPerPerson, featured.market.locale)} per
-                    person
-                  </li>
-                  <li>
-                    <ClockIcon className="draw-ticket__note-icon" />
-                    <time
-                      dateTime={featured.draw.closesAt}
-                      title={formatDateTime(
-                        featured.draw.closesAt,
-                        featured.market.locale,
-                        featured.market.code,
-                      )}
-                    >
-                      Closes{' '}
-                      {formatDateTime(
-                        featured.draw.closesAt,
-                        featured.market.locale,
-                        featured.market.code,
-                      )}
-                    </time>
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------- markets */}
-      {open.length > 0 && (
-        <section className="home-section" aria-labelledby="markets-heading">
-          <div className="container">
-            <div className="rule-head">
-              <h2 id="markets-heading" className="rule-head__title">
-                Choose your market
-              </h2>
-              <span className="rule-head__rule" aria-hidden="true" />
-              <p className="rule-head__aside">Select a market to see its current draws</p>
-            </div>
-
-            <ul className="tile-row" data-testid="markets">
-              {open.map((market, index) => (
-                <li key={market.code}>
-                  {/* The first is outlined the way the reference marks a
-                      selection. It is a visual lead, not a stored choice: the
-                      market is decided by the URL, and the API decides which
-                      markets exist at all. */}
-                  <Link
-                    className={`tile${index === 0 ? ' tile--lead' : ''}`}
-                    href={`/${market.code}/draws`}
-                  >
-                    <span className="tile__art" aria-hidden="true">
-                      <span className={`tile__scene tile__scene--${index % 4}`} />
-                    </span>
-                    <span className="tile__body">
-                      <GlobeIcon className="tile__icon" />
-                      <span className="tile__title">{market.name}</span>
-                      <span className="tile__note">Draws priced in {market.currency}</span>
-                      <span className="tile__go" aria-hidden="true">
-                        <ArrowIcon />
-                      </span>
-                    </span>
-                  </Link>
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
-      )}
 
-      {/* ----------------------------------------------------- competitions */}
-      <section className="home-section" id="competitions" aria-labelledby="competitions-heading">
+            <ul className="promise-row" data-testid="hero-values">
+              {PROMISES.map((p) => {
+                const I = PROMISE_ICONS[p.icon];
+                return (
+                  <li key={p.title}>
+                    <I className="promise-row__icon" />
+                    <span>
+                      <strong>{p.title}</strong>
+                      {p.note}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <Link className="button button--blue button--lg" href={enterHref}>
+              Enter now
+              <ArrowIcon className="button__arrow" />
+            </Link>
+
+            <div className="proof" data-testid="social-proof">
+              <span className="proof__faces" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span className="proof__copy">
+                <strong>{SOCIAL_PROOF.winners}</strong>
+                <span className="proof__stars">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <StarIcon key={i} />
+                  ))}
+                  <span>
+                    {SOCIAL_PROOF.rating} {SOCIAL_PROOF.reviews}
+                  </span>
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* ------------------------------------------------- the draw card */}
+          {featured && (
+            <aside className="draw-ticket" data-testid="hero-card" aria-label="This draw">
+              <DrawCountdown
+                to={
+                  featured.draw.status === 'live' ? featured.draw.closesAt : featured.draw.opensAt
+                }
+                label={featured.draw.status === 'live' ? 'Draw closes in' : 'Draw opens in'}
+              />
+
+              {taken !== null && percent !== null && availability && (
+                <div className="meter" data-testid="hero-entries">
+                  <p className="meter__figures">
+                    <strong>{formatCount(taken, featured.market.locale)}</strong>
+                    <span className="meter__of">
+                      / {formatCount(availability.total, featured.market.locale)} entries
+                    </span>
+                    <span className="meter__percent">{percent}%</span>
+                  </p>
+                  <div
+                    className="meter__track"
+                    role="progressbar"
+                    aria-valuenow={percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Entries taken"
+                  >
+                    <span className="meter__fill" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <p className="draw-ticket__price">
+                <span className="price">{money(featured)}</span>
+                <span className="draw-ticket__per">per entry</span>
+              </p>
+
+              <Link className="button button--blue button--block" href={enterHref}>
+                Enter now
+                <ArrowIcon className="button__arrow" />
+              </Link>
+
+              <ul className="draw-ticket__notes">
+                <li>
+                  <TicketIcon className="draw-ticket__note-icon" />
+                  Instant win
+                </li>
+                <li>
+                  <StarIcon className="draw-ticket__note-icon" />
+                  VIP experience
+                </li>
+              </ul>
+            </aside>
+          )}
+        </div>
+      </section>
+
+      {/* ========================================================== categories */}
+      <section className="home-section" aria-labelledby="categories-heading">
+        <div className="container">
+          <div className="rule-head">
+            <h2 id="categories-heading" className="rule-head__title">
+              Choose your category
+            </h2>
+            <span className="rule-head__rule" aria-hidden="true" />
+            <p className="rule-head__aside">Select a category to view its current draws</p>
+          </div>
+
+          <ul className="cat-row" data-testid="categories">
+            {CATEGORIES.map((cat, i) => {
+              const inner = (
+                <>
+                  <span className="cat__art">
+                    <Scene kind={cat.scene} />
+                  </span>
+                  <span className="cat__body">
+                    <span className="cat__head">
+                      <BottleIcon className="cat__icon" />
+                      <span className="cat__title">{cat.title}</span>
+                    </span>
+                    <span className="cat__blurb">{cat.blurb}</span>
+                    <span className="cat__go" aria-hidden="true">
+                      <ArrowIcon />
+                    </span>
+                  </span>
+                </>
+              );
+              const className = `cat${i === 0 ? ' cat--lead' : ''}`;
+              return (
+                <li key={cat.slug}>
+                  {cat.href ? (
+                    <Link className={className} href={cat.href}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    // No category endpoint exists, so these lead nowhere yet.
+                    <span className={`${className} cat--inert`}>{inner}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
+
+      {/* ========================================================= whisky draws */}
+      <section className="home-section" id="competitions" aria-labelledby="draws-heading">
         <div className="container">
           <div className="section-intro">
-            <p className="section-intro__eyebrow">
+            <h2 id="draws-heading" className="section-intro__title">
               <BottleIcon className="section-intro__icon" />
-              <span className="eyebrow">Live competitions</span>
-            </p>
-            <h2 id="competitions-heading" className="section-intro__title">
-              Iconic prizes. Real chances.
+              Whisky draws
             </h2>
             <p className="section-intro__lede">
-              Every competition below is open or opening soon, with its prizes, closing time and
-              entry price shown before you enter.
+              Iconic bottles, rare releases and collector’s editions from the world’s finest
+              distilleries.
             </p>
           </div>
 
           {!featured ? (
             <div className="empty-state" data-testid="no-draws">
               <h3>No competitions are open right now</h3>
-              <p>
-                New draws appear here as soon as they are published. Each one shows its prizes,
-                closing time and entry price before you enter.
-              </p>
+              <p>New draws appear here as soon as they are published.</p>
             </div>
           ) : (
             <>
-              {/* ------------------------------------------ featured composition */}
-              <article className="feature" data-testid="featured-draw">
-                <div className="feature__media">
-                  <span className="feature__flag">Featured</span>
-                  <PrizeArt title={featured.draw.headlinePrize ?? featured.draw.title} />
-                </div>
-
-                <div className="feature__body">
-                  <div className="row-card__head">
-                    <StatusBadge status={featured.draw.status} />
-                    <span className="pill pill--quiet">
-                      <GlobeIcon className="pill__icon" />
-                      {featured.market.name}
-                    </span>
+              {/* ------------------------------------- featured + instant prizes */}
+              <div className="showcase">
+                <article className="showcase__draw" data-testid="featured-draw">
+                  <div className="showcase__media">
+                    <span className="showcase__flag">Featured</span>
+                    <Scene kind="whisky" />
                   </div>
 
-                  <h3 className="feature__title">
-                    <Link href={featuredHref}>{featured.draw.title}</Link>
-                  </h3>
-
-                  {featured.draw.headlinePrize && (
-                    <p className="feature__prize">Top prize: {featured.draw.headlinePrize}</p>
-                  )}
-
-                  <dl className="feature__facts">
-                    <div>
-                      <dt>Entry</dt>
-                      <dd className="price">
-                        {formatPrice(
-                          featured.draw.ticketPriceMinor,
-                          featured.draw.currency,
-                          featured.market.locale,
-                        )}
-                      </dd>
+                  <div className="showcase__body">
+                    <div className="showcase__top">
+                      <h3 className="showcase__title">
+                        <Link href={enterHref}>{featured.draw.title}</Link>
+                      </h3>
+                      <button type="button" className="heart" aria-label="Save this draw">
+                        <HeartIcon />
+                      </button>
                     </div>
-                    <div>
-                      <dt>Tickets</dt>
-                      <dd>{formatCount(featured.draw.totalTickets, featured.market.locale)}</dd>
-                    </div>
-                    <div>
-                      <dt>{featured.draw.winnerPositions === 1 ? 'Winner' : 'Winner positions'}</dt>
-                      <dd>{formatCount(featured.draw.winnerPositions, featured.market.locale)}</dd>
-                    </div>
-                  </dl>
 
-                  {taken !== null && percent !== null && availability && (
-                    <div className="meter">
-                      <p className="meter__figures">
-                        <strong>{formatCount(taken, featured.market.locale)}</strong> /{' '}
-                        {formatCount(availability.total, featured.market.locale)} entries
-                        <span className="meter__percent">{percent}%</span>
-                      </p>
-                      <div
-                        className="meter__track"
-                        role="progressbar"
-                        aria-valuenow={percent}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label="Entries taken"
-                      >
-                        <span className="meter__fill" style={{ width: `${percent}%` }} />
+                    <ul className="tag-row tag-row--sm">
+                      <li>
+                        <span className="tag tag--green">
+                          <DiamondIcon className="tag__icon" />
+                          {DRAW_TAGS[1]}
+                        </span>
+                      </li>
+                      <li>
+                        <span className="tag tag--blue">
+                          <TicketIcon className="tag__icon" />
+                          {DRAW_TAGS[2]}
+                        </span>
+                      </li>
+                    </ul>
+
+                    {featured.draw.headlinePrize && (
+                      <p className="showcase__prize">{featured.draw.headlinePrize}</p>
+                    )}
+
+                    <p className="showcase__price">
+                      <span className="price">{money(featured)}</span>
+                      <span className="showcase__per">per entry</span>
+                    </p>
+
+                    {taken !== null && percent !== null && availability && (
+                      <div className="meter meter--warm">
+                        <div
+                          className="meter__track"
+                          role="progressbar"
+                          aria-valuenow={percent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="Entries taken"
+                        >
+                          <span className="meter__fill" style={{ width: `${percent}%` }} />
+                        </div>
+                        <p className="meter__figures">
+                          <span className="meter__of">
+                            {formatCount(taken, featured.market.locale)} /{' '}
+                            {formatCount(availability.total, featured.market.locale)} entries
+                          </span>
+                          <span className="meter__percent">{percent}%</span>
+                        </p>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div className="feature__foot">
                     <DrawCountdown
                       to={
                         featured.draw.status === 'live'
@@ -419,63 +378,152 @@ export default async function HomePage() {
                       }
                       label={featured.draw.status === 'live' ? 'Draw ends in' : 'Draw opens in'}
                     />
-                    <Link className="button button--blue" href={featuredHref}>
+
+                    <Link className="button button--blue button--block" href={enterHref}>
                       Enter now
                       <ArrowIcon className="button__arrow" />
                     </Link>
                   </div>
-                </div>
-              </article>
+                </article>
 
-              {/* ------------------------------------------- secondary cards */}
-              {secondary.length > 0 && (
-                <ul className="row-grid" data-testid="home-draws">
-                  {secondary.map(({ draw, market }) => (
-                    <li key={`${market.code}/${draw.slug}`}>
-                      <DrawRowCard draw={draw} market={market} />
+                {/* Placeholder content: instant wins are Phase 8 and have no
+                    table, contract or API field. See `home-content.ts`. */}
+                <aside className="instant" aria-labelledby="instant-heading" data-testid="instant">
+                  <div className="instant__head">
+                    <GiftIcon className="instant__head-icon" />
+                    <h3 id="instant-heading">Instant prizes in this draw</h3>
+                    <span className="instant__help">How instant prizes work →</span>
+                  </div>
+
+                  <ul className="instant__grid">
+                    {INSTANT_PRIZES.map((prize) => (
+                      <li key={prize.label} className="ip">
+                        <span className="ip__art">
+                          {prize.kind === 'cash' ? <CashIcon /> : <CardIcon />}
+                        </span>
+                        <span className="ip__label">{prize.label}</span>
+                        <span className="ip__left">{prize.remaining}</span>
+                        <span className="ip__kind">
+                          {prize.kind === 'cash' ? 'Cash' : 'Site credit'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <ul className="instant__foot">
+                    <li>
+                      <DiamondIcon />
+                      <span>
+                        <strong>Verified product</strong>100% genuine
+                      </span>
+                    </li>
+                    <li>
+                      <TruckIcon />
+                      <span>
+                        <strong>Worldwide shipping</strong>Where available
+                      </span>
+                    </li>
+                    <li>
+                      <ShieldIcon />
+                      <span>
+                        <strong>Secure checkout</strong>Your details are protected
+                      </span>
+                    </li>
+                  </ul>
+                </aside>
+              </div>
+
+              {/* ------------------------------------------- the three cards */}
+              {rest.length > 0 && (
+                <ul className="mini-row" data-testid="home-draws">
+                  {rest.map((entry) => (
+                    <li key={`${entry.market.code}/${entry.draw.slug}`}>
+                      <article className="mini" data-testid="row-card">
+                        <div className="mini__media">
+                          <Scene kind="whisky" />
+                        </div>
+                        <div className="mini__body">
+                          <div className="mini__top">
+                            <h3 className="mini__title">
+                              <Link href={href(entry)}>{entry.draw.title}</Link>
+                            </h3>
+                            <button type="button" className="heart" aria-label="Save this draw">
+                              <HeartIcon />
+                            </button>
+                          </div>
+                          <ul className="tag-row tag-row--sm">
+                            <li>
+                              <span className="tag tag--green">{DRAW_TAGS[1]}</span>
+                            </li>
+                            <li>
+                              <span className="tag tag--blue">{DRAW_TAGS[2]}</span>
+                            </li>
+                          </ul>
+                          {entry.draw.headlinePrize && (
+                            <p className="mini__prize">{entry.draw.headlinePrize}</p>
+                          )}
+                          <p className="mini__price">
+                            <span className="price">{money(entry)}</span>
+                            <span className="mini__per">per entry</span>
+                          </p>
+                          <p className="mini__when">
+                            <time dateTime={entry.draw.closesAt}>
+                              {formatDateTime(
+                                entry.draw.closesAt,
+                                entry.market.locale,
+                                entry.market.code,
+                              )}
+                            </time>
+                          </p>
+                          <Link className="button button--blue button--block" href={href(entry)}>
+                            Enter now
+                            <ArrowIcon className="button__arrow" />
+                          </Link>
+                        </div>
+                        <div className="mini__ends">
+                          <DrawCountdown
+                            to={
+                              entry.draw.status === 'live'
+                                ? entry.draw.closesAt
+                                : entry.draw.opensAt
+                            }
+                            label={entry.draw.status === 'live' ? 'Ends in' : 'Opens in'}
+                          />
+                        </div>
+                      </article>
                     </li>
                   ))}
                 </ul>
               )}
-
-              <nav className="market-links" aria-label="Competitions by market">
-                {open.map((market) => (
-                  <Link key={market.code} className="link-arrow" href={`/${market.code}/draws`}>
-                    {open.length === 1
-                      ? 'View all competitions'
-                      : `All ${market.name} competitions`}{' '}
-                    <span aria-hidden="true">→</span>
-                  </Link>
-                ))}
-              </nav>
             </>
           )}
         </div>
       </section>
 
-      {/* ------------------------------------------------- editorial banner */}
+      {/* ============================================================== banner */}
       <section className="home-section home-section--flush" aria-labelledby="discover-heading">
         <div className="container">
           <div className="banner">
+            <Scene kind="barrels" className="banner__bg" />
             <DiamondIcon className="banner__icon" />
             <div className="banner__copy">
               <h2 id="discover-heading" className="banner__title">
-                Discover the vault
+                Discover rare whiskies
               </h2>
               <p>
-                Open and upcoming competitions, each with its prizes, its closing time and its rules
-                in plain sight.
+                From iconic distilleries to limited editions. Exceptional bottles. Extraordinary
+                stories.
               </p>
             </div>
-            <Link className="button button--sand" href={browseHref}>
-              Explore competitions
+            <Link className="button button--sand" href={browse}>
+              Explore whisky draws
               <ArrowIcon className="button__arrow" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* -------------------------------------------------------- how it works */}
+      {/* ========================================================= how it works */}
       <section className="home-section" id="how-it-works" aria-labelledby="how-heading">
         <div className="container">
           <div className="rule-head">
@@ -486,81 +534,63 @@ export default async function HomePage() {
           </div>
 
           <ol className="flow">
-            <li className="flow__step">
-              <span className="flow__disc" aria-hidden="true">
-                <ListIcon />
-              </span>
-              <h3 className="flow__title">
-                <span className="flow__number">1.</span> Choose a market
-              </h3>
-              <p>Browse the competitions open in your market.</p>
-            </li>
-            <li className="flow__step">
-              <span className="flow__disc" aria-hidden="true">
-                <TicketIcon />
-              </span>
-              <h3 className="flow__title">
-                <span className="flow__number">2.</span> Select a draw
-              </h3>
-              <p>Pick your prize and choose how many entries you want.</p>
-            </li>
-            <li className="flow__step">
-              <span className="flow__disc" aria-hidden="true">
-                <QuestionIcon />
-              </span>
-              <h3 className="flow__title">
-                <span className="flow__number">3.</span> Answer and enter
-              </h3>
-              <p>Answer the skill question and pay securely at checkout.</p>
-            </li>
-            <li className="flow__step">
-              <span className="flow__disc" aria-hidden="true">
-                <TrophyIcon />
-              </span>
-              <h3 className="flow__title">
-                <span className="flow__number">4.</span> Follow your order
-              </h3>
-              <p>Track your order and see the outcome when the draw is settled.</p>
-            </li>
+            {[
+              {
+                Icon: ListIcon,
+                title: 'Choose a Category',
+                note: 'Browse our exciting competitions.',
+              },
+              {
+                Icon: TicketIcon,
+                title: 'Select a Draw',
+                note: 'Pick your favourite prize and choose your entries.',
+              },
+              {
+                Icon: QuestionIcon,
+                title: 'Enter & Win',
+                note: 'Complete your entry securely online.',
+              },
+              {
+                Icon: TrophyIcon,
+                title: 'See the Results',
+                note: 'Follow your order and see the outcome when the draw is settled.',
+              },
+            ].map((step, i) => (
+              <li className="flow__step" key={step.title}>
+                <span className="flow__disc" aria-hidden="true">
+                  <step.Icon />
+                </span>
+                <div>
+                  <h3 className="flow__title">
+                    <span className="flow__number">{i + 1}.</span> {step.title}
+                  </h3>
+                  <p>{step.note}</p>
+                </div>
+              </li>
+            ))}
           </ol>
         </div>
       </section>
 
-      {/* --------------------------------------------------------- trust strip */}
+      {/* =========================================================== trust strip */}
       <section className="trust-strip" aria-labelledby="trust-heading">
         <div className="container">
           <h2 id="trust-heading" className="visually-hidden">
             What to expect
           </h2>
           <ul className="trust-strip__row" data-testid="trust-strip">
-            <li>
-              <ShieldIcon className="trust-strip__icon" />
-              <span>
-                <strong>Secure checkout</strong>
-                Card details are never held by Highland Vault.
-              </span>
-            </li>
-            <li>
-              <QuestionIcon className="trust-strip__icon" />
-              <span>
-                <strong>A skill question</strong>
-                Every entry answers one, checked by the server.
-              </span>
-            </li>
-            <li>
-              <ListIcon className="trust-strip__icon" />
-              <span>
-                <strong>Published rules</strong>
-                Prizes, timings and limits shown before you enter.
-              </span>
-            </li>
-            <li>
-              <ClockIcon className="trust-strip__icon" />
-              <span>
-                <strong>Tickets held for you</strong>
-                Your numbers are reserved the moment you add them.
-              </span>
-            </li>
+            {TRUST.map((item) => {
+              const I = TRUST_ICONS[item.icon];
+              return (
+                <li key={item.title}>
+                  <I className="trust-strip__icon" />
+                  <span>
+                    <strong>{item.title}</strong>
+                    {item.note}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </section>
