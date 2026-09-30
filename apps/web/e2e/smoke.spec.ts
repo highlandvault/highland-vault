@@ -25,7 +25,10 @@ test('the homepage leads with the featured draw from the API', async ({ page }) 
   // copy out of the one place it would do real harm.
   const title = page.getByTestId('hero-title');
   await expect(title).toBeVisible();
-  await expect(title).toContainText('A week in a Highland lodge');
+  // The article is lowercased so the sentence reads 'Win a week in a
+  // Highland lodge' rather than 'Win A week', and the tail is set in gold.
+  await expect(title).toContainText('week in a Highland lodge');
+  await expect(title).toContainText('Win a');
   await expect(title).not.toContainText('Macallan');
 });
 

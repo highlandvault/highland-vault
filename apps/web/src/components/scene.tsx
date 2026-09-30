@@ -25,6 +25,24 @@ import type { ReactNode } from 'react';
 export type SceneKind =
   'highland' | 'whisky' | 'tech' | 'cars' | 'property' | 'experiences' | 'barrels';
 
+/**
+ * The photograph for each slot, once it exists.
+ *
+ * `apps/web/public/images/README.md` lists the filenames and the aspect each
+ * container expects. Add a file, add its name here, and that slot becomes a
+ * photograph — the box, the ratio and everything around it stay exactly as
+ * they are.
+ */
+const PHOTOS: Partial<Record<SceneKind, string>> = {
+  // highland: '/images/hero.jpg',
+  // whisky: '/images/draw-featured.jpg',
+  // tech: '/images/cat-tech.jpg',
+  // cars: '/images/cat-cars.jpg',
+  // property: '/images/cat-property.jpg',
+  // experiences: '/images/cat-experiences.jpg',
+  // barrels: '/images/barrels.jpg',
+};
+
 export function Scene({
   kind,
   className,
@@ -34,10 +52,20 @@ export function Scene({
   className?: string;
   children?: ReactNode;
 }) {
+  const photo = PHOTOS[kind];
   return (
     <span className={`scene scene--${kind}${className ? ` ${className}` : ''}`} aria-hidden="true">
-      <span className="scene__wash" />
-      {SILHOUETTES[kind]}
+      {photo ? (
+        // Decorative: the prize, the category or the heading always names the
+        // thing in words beside it, so the alt text is deliberately empty.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="scene__photo" src={photo} alt="" loading="lazy" decoding="async" />
+      ) : (
+        <>
+          <span className="scene__wash" />
+          {SILHOUETTES[kind]}
+        </>
+      )}
       {children}
     </span>
   );

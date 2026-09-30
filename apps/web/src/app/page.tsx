@@ -43,6 +43,36 @@ export const dynamic = 'force-dynamic';
 
 type Entry = { draw: PublicDrawSummary; market: Market };
 
+/**
+ * "Win a Macallan Sherry Oak **30 Year Old**".
+ *
+ * The design sets the tail of the prize in gold italic and leaves the rest in
+ * navy, so the eye lands on what makes this bottle the one. The split is by
+ * words rather than by a field, because the API has one `headlinePrize` string
+ * and no notion of a qualifier.
+ *
+ * "A week in a Highland lodge" also loses its capital on the article, so the
+ * sentence reads "Win a week in a Highland lodge" rather than "Win A week".
+ */
+function headline(prize: string) {
+  const lead = /^(a|an|the) /i.test(prize) ? prize[0]!.toLowerCase() + prize.slice(1) : prize;
+  const words = lead.split(' ');
+  // Two words is enough to be a qualifier and short enough not to swallow the
+  // whole line; below four words there is nothing to split.
+  const tail = words.length >= 4 ? words.splice(-2).join(' ') : '';
+  return (
+    <>
+      Win {words.join(' ')}
+      {tail && (
+        <>
+          {' '}
+          <em>{tail}</em>
+        </>
+      )}
+    </>
+  );
+}
+
 const PROMISE_ICONS = {
   diamond: DiamondIcon,
   shield: ShieldIcon,
@@ -106,11 +136,8 @@ export default async function HomePage() {
             </p>
 
             <h1 id="hero-heading" className="hero-shot__title" data-testid="hero-title">
-              {featured ? (
-                <>
-                  Win <em>{featured.draw.headlinePrize ?? featured.draw.title}</em>
-                </>
-              ) : (
+              {featured ? headline(featured.draw.headlinePrize ?? featured.draw.title) : null}
+              {!featured && (
                 <>
                   Exceptional prizes.
                   <br />
@@ -291,7 +318,7 @@ export default async function HomePage() {
           <div className="section-intro">
             <h2 id="draws-heading" className="section-intro__title">
               <BottleIcon className="section-intro__icon" />
-              Whisky draws
+              Whisky Draws
             </h2>
             <p className="section-intro__lede">
               Iconic bottles, rare releases and collector’s editions from the world’s finest
