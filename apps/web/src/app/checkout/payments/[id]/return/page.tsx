@@ -64,7 +64,7 @@ export default async function PaymentReturnPage() {
   const price = (minor: number) => formatPrice(minor, order.currency, 'en-GB');
 
   return (
-    <main className="page" data-testid="payment-return">
+    <main id="main" className="page" data-testid="payment-return">
       <h1>Order {order.orderNumber}</h1>
 
       <p className={`notice notice--${state.tone}`} data-testid="return-status">

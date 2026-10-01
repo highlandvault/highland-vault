@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: 'Payment cancelled', robots: { index:
  */
 export default function PaymentCancelledPage() {
   return (
-    <main className="page" data-testid="payment-cancelled">
+    <main id="main" className="page" data-testid="payment-cancelled">
       <h1>Payment not completed</h1>
       <p className="notice notice--info" data-testid="cancel-status">
         You came back without paying, so nothing has been charged. Your tickets are still held for a
