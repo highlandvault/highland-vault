@@ -9,6 +9,10 @@ import {
 } from '@hv/contracts';
 import { apiFetch } from './api';
 
+// The refusal wording lives in its own module: it is pure presentation, and
+// this one is `server-only`, which a unit test cannot import.
+export { checkoutErrorMessage, SHOWN_ERROR_CODES, type ShownErrorCode } from './checkout-errors';
+
 /**
  * Basket, order and payment data for the customer pages (P6-8).
  *
@@ -53,31 +57,4 @@ export async function fetchOrder(market: string, id: string): Promise<OrderLooku
     return { ok: false, reason: 'verification_required' };
   }
   return { ok: false, reason: 'not_found' };
-}
-
-/** What the customer is told when the API refuses something at checkout. */
-const CHECKOUT_MESSAGES: Record<string, string> = {
-  CART_EMPTY: 'Your basket is empty. Add a draw before checking out.',
-  CART_CHANGED: 'Your basket changed while you were checking out. Look it over and try again.',
-  TERMS_NOT_ACCEPTED: 'Accept the terms and conditions to continue.',
-  TERMS_VERSION_MISMATCH:
-    'The terms were updated while you were checking out. Read them again and accept to continue.',
-  SKILL_ANSWER_REQUIRED: 'Answer the question for each draw to continue.',
-  SKILL_ANSWER_INCORRECT:
-    'That answer was not correct, so nothing has been bought and your basket is unchanged. Try again.',
-  VERIFICATION_REQUIRED: 'Verify your email address to continue.',
-  TICKET_CAP_EXCEEDED: 'That would take you past the limit for this draw.',
-  RESERVATION_EXPIRED: 'Your tickets were held for too long and have been released.',
-  ORDER_NOT_PAYABLE: 'This order is no longer awaiting payment.',
-  PAYMENT_DEADLINE_PASSED: 'The time to pay for this order has passed.',
-  PAYMENT_WINDOW_TOO_SHORT:
-    'There is not enough time left to pay for this order. Add the tickets to your basket again.',
-  PAYMENT_PROVIDER_UNAVAILABLE: 'Payments are temporarily unavailable. Try again in a moment.',
-  RATE_LIMITED: 'Too many attempts. Wait a moment and try again.',
-  IDEMPOTENCY_KEY_REUSED: 'That checkout was already used. Start again from your basket.',
-};
-
-export function checkoutErrorMessage(code: string | undefined): string | null {
-  if (!code) return null;
-  return CHECKOUT_MESSAGES[code] ?? 'Something went wrong. Try again.';
 }

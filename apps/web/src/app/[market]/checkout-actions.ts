@@ -21,12 +21,44 @@ import { ORDER_ID } from '@/lib/checkout';
  * status check, server-side, and a browser is neither.
  */
 
+/** A key the checkout page minted for one render of the form. */
+const IDEMPOTENCY_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Back to checkout with a refusal the customer can read.
+ *
+ * The fragment is what moves them to it. The page gives the banner that id and
+ * a `tabIndex`, so the browser scrolls to it and focuses it on arrival —
+ * without JavaScript, which is the only way this page is allowed to work.
+ */
+function refuse(checkout: string, code: string): never {
+  redirect(`${checkout}?error=${code}#checkout-error`);
+}
+
 export async function placeOrder(market: string, form: FormData): Promise<void> {
   if (!isMarketCode(market)) redirect('/');
   const checkout = `/${market}/checkout`;
 
   const rawTerms = form.get('termsVersion');
   const termsVersion = typeof rawTerms === 'string' ? rawTerms : '';
+  /**
+   * ONE RENDER, ONE KEY — and therefore one order.
+   *
+   * It comes from the form rather than being minted here, so a double click,
+   * a resubmitted page or a back-then-submit is the same request to the API.
+   * It replays the order it already made instead of finding the basket its own
+   * first attempt emptied and refusing it as empty, which is what a fresh key
+   * per submission used to produce.
+   *
+   * Trusting the form with it is safe because the API does not trust it: the
+   * key is bound to a digest of the buyer and the exact purchase, so reusing
+   * one for different contents is refused and one belonging to somebody else
+   * matches nothing. A missing or malformed value is simply a request that
+   * does not get the replay, never one that gets somebody else's order.
+   */
+  const supplied = form.get('idempotencyKey');
+  const idempotencyKey =
+    typeof supplied === 'string' && IDEMPOTENCY_KEY.test(supplied) ? supplied : randomUUID();
   // One entry per basket line, each naming its draw and — where the draw asks
   // a question — the option the customer chose. The API checks every one of
   // them against the basket it holds (ADR-0032).
@@ -59,21 +91,19 @@ export async function placeOrder(market: string, form: FormData): Promise<void> 
     });
     if (!accepted.ok) {
       if (accepted.status === 401) redirect(`/login?next=${encodeURIComponent(checkout)}`);
-      redirect(`${checkout}?error=${accepted.code}`);
+      refuse(checkout, accepted.code);
     }
   }
 
   const result = await apiFetch(`/markets/${market}/checkout/orders`, {
     method: 'POST',
     body: { items, termsVersion },
-    // A fresh key per submission: this is one attempt to buy, and the API
-    // refuses a key reused for different contents.
-    headers: { 'idempotency-key': randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     parse: (json) => OrderResponseSchema.parse(json).order,
   });
   if (!result.ok) {
     if (result.status === 401) redirect(`/login?next=${encodeURIComponent(checkout)}`);
-    redirect(`${checkout}?error=${result.code}`);
+    refuse(checkout, result.code);
   }
   redirect(`/${market}/orders/${result.data.id}`);
 }

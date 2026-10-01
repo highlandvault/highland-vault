@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Response } from '@playwright/test';
 import { registerCustomer } from './fixtures';
 
 /**
@@ -267,4 +267,434 @@ test('coming back from the provider cannot mark an order paid (toward G4.1)', as
   // and claims nothing.
   await page.goto(`/checkout/payments/${paymentId}/cancel`);
   await expect(page.getByTestId('cancel-status')).toContainText('nothing has been charged');
+});
+
+// ===========================================================================
+// UI-5: the checkout page itself.
+//
+// The tests above cover the journey and the payment boundary. These cover what
+// checkout says and does when something is wrong — which, before UI-5, was
+// mostly "Something went wrong. Try again." because the error map held codes
+// the API never sends.
+//
+// ## The four-ticket fixture
+//
+// Only ONE test here takes a `last-tickets` entry, and only one. That draw has
+// four tickets in total and `reservations.spec.ts` asserts all four are free
+// at its start, so every extra consumer in a `fullyParallel` suite is a race
+// against it. Two basket lines need two live draws and the fixtures seed only
+// two, so the multi-line case is deliberately a single test holding a single
+// ticket for a few seconds.
+//
+// ## Why these share one account, in order
+//
+// Registering is limited to twenty attempts per hour per IP (B19), and every
+// e2e test reaches the API from 127.0.0.1 — `TRUST_PROXY` is empty, so there
+// is no header that could say otherwise and no way for a test to present a
+// different address. The suite was already using sixteen of those twenty
+// before UI-5; ten more registrations put it over, and the tests that drew the
+// short straw failed on `/register?error=RATE_LIMITED` — including tests in
+// other files that had nothing to do with this change.
+//
+// So this block registers ONE customer and runs serially against it, which
+// costs one of the twenty instead of ten. Each test leaves the basket as it
+// found it. The ceiling itself is reported to the owner rather than worked
+// around any further: at sixteen of twenty, the suite had no room for a
+// feature's worth of coverage, and that is a fixture problem rather than a
+// checkout one.
+// ===========================================================================
+
+/** The one sentence a refused skill answer may ever produce (ADR-0030). */
+const ANSWER_REFUSED =
+  'That answer was not correct. Nothing has been bought and your basket is unchanged — check your answer and try again.';
+
+test.describe('checkout', () => {
+  // Serial: they share one signed-in customer, so they must not overlap.
+  test.describe.configure({ mode: 'serial' });
+
+  let context: BrowserContext;
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext();
+    page = await context.newPage();
+    await registerCustomer(page, 'ui5-checkout');
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  /**
+   * Leaves the basket empty, whatever the last test left in it.
+   *
+   * Reloaded between removals on purpose. A live line carries a countdown that
+   * reticks every second, so the row never settles and a second click lands on
+   * an element the re-render has already replaced — Playwright reports it as
+   * detached, having retried until the hook ran out of time. Taking one line
+   * per freshly drawn page is slower by a navigation and never races.
+   */
+  async function clearBasket(): Promise<void> {
+    for (let guard = 0; guard < 6; guard++) {
+      await page.goto('/uk/basket');
+      const lines = await page.getByTestId('basket-item').count();
+      if (lines === 0) break;
+      await page.getByRole('button', { name: 'Remove' }).first().click();
+      await expect(page.getByTestId('basket-item')).toHaveCount(lines - 1);
+    }
+    await expect(page.getByTestId('basket-empty')).toBeVisible();
+  }
+
+  test.beforeEach(async () => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await clearBasket();
+  });
+
+  /** Puts a draw in the basket and stops on the checkout page. */
+  async function toCheckout(slug: string, entries = 1): Promise<void> {
+    await page.goto(`/uk/draws/${slug}`);
+    for (let i = 1; i < entries; i++) {
+      await page.getByRole('button', { name: 'One more entry' }).click();
+    }
+    await page.getByRole('button', { name: 'Add to basket' }).click();
+    await expect(page).toHaveURL(/\/uk\/basket$/);
+    await page.getByTestId('basket-checkout').click();
+    await expect(page).toHaveURL(/\/uk\/checkout$/);
+  }
+
+  /** Ticks the terms box, whatever state the page rendered it in. */
+  async function acceptTerms(): Promise<void> {
+    await page.getByTestId('checkout-accept-terms').check();
+  }
+
+  /*
+   * FIRST in this block, and it has to be.
+   *
+   * Accepting is a RECORD, not a checkbox — the API stores it against the
+   * version and re-reads it when the order is created. Once any test here has
+   * accepted, this customer can never again be one who has not, and the server
+   * half of this test would be checking nothing: an unticked box would simply
+   * find the stored acceptance and let the order through, which is correct
+   * behaviour and the opposite of what this asserts.
+   */
+  test('the terms have to be accepted, in the browser and on the server', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+
+    // (1) An honest browser never sends it: native validation holds the form.
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/checkout$/);
+    await expect(page.getByTestId('checkout-error')).toHaveCount(0);
+    await expect(page.getByTestId('checkout-accept-terms')).not.toBeChecked();
+
+    // (2) A client that ignores the attribute is refused by the API, and told
+    // which thing to fix rather than "something went wrong".
+    await page.evaluate(() => {
+      document.querySelector('input[name="acceptTerms"]')?.removeAttribute('required');
+    });
+    await page.getByTestId('checkout-submit').click();
+    await expect(page.getByTestId('checkout-error')).toHaveText(
+      'Accept the terms and conditions to continue.',
+    );
+    await expect(page).toHaveURL(/\/uk\/checkout\?error=TERMS_NOT_ACCEPTED/);
+  });
+
+  test('a wrong answer is refused in plain words, and the basket survives it', async () => {
+    await toCheckout('highland-lodge-escape', 2);
+
+    await page.getByRole('radio', { name: WRONG, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+
+    // The exact sentence, not merely "an error happened".
+    await expect(page.getByTestId('checkout-error')).toHaveText(ANSWER_REFUSED);
+    await expect(page).toHaveURL(/\/uk\/checkout\?error=INVALID_SKILL_ANSWER/);
+    // The browser was sent to the message, so a keyboard user lands on it.
+    expect(page.url()).toContain('#checkout-error');
+
+    // Nothing was bought and nothing was released: the hold is still running.
+    await page.goto('/uk/basket');
+    await expect(page.getByTestId('basket-item')).toHaveCount(1);
+    await expect(page.getByTestId('basket-total')).toHaveText('£5.98');
+    await expect(page.getByTestId('countdown')).toHaveText(/^\d{1,2}:\d{2}$/);
+    await expect(page.getByTestId('basket-line-expired')).toHaveCount(0);
+    // And the tickets are still ours to look at, so no order took them.
+    await page.getByTestId('basket-line-tickets').click();
+    await expect(page.getByTestId('ticket-number')).toHaveCount(2);
+  });
+
+  test('a missing answer is refused in exactly the same words as a wrong one', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await acceptTerms();
+
+    // `required` stops an honest browser from sending this at all, which is why
+    // it is removed here: the point is that the SERVER refuses it, and refuses
+    // it identically. A client that does not enforce the attribute must learn
+    // nothing a client that does would not.
+    await page.evaluate(() => {
+      document.querySelectorAll('input[type="radio"]').forEach((input) => {
+        input.removeAttribute('required');
+      });
+    });
+    await page.getByTestId('checkout-submit').click();
+
+    await expect(page.getByTestId('checkout-error')).toHaveText(ANSWER_REFUSED);
+    await expect(page).toHaveURL(/\/uk\/checkout\?error=INVALID_SKILL_ANSWER/);
+  });
+
+  test('one wrong answer rejects the whole order, not just its line', async () => {
+    // The only test here that touches the four-ticket draw: see the note above.
+    await page.goto('/uk/draws/highland-lodge-escape');
+    await page.getByRole('button', { name: 'Add to basket' }).click();
+    await expect(page).toHaveURL(/\/uk\/basket$/);
+    await page.goto('/uk/draws/last-tickets');
+    await page.getByRole('button', { name: 'Add to basket' }).click();
+    await expect(page).toHaveURL(/\/uk\/basket$/);
+
+    await page.getByTestId('basket-checkout').click();
+    await expect(page).toHaveURL(/\/uk\/checkout$/);
+    await expect(page.getByTestId('checkout-line')).toHaveCount(2);
+
+    // Right on the first line, wrong on the second.
+    const lines = page.getByTestId('checkout-line');
+    await lines.first().getByRole('radio', { name: RIGHT, exact: true }).check();
+    await lines.last().getByRole('radio', { name: WRONG, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+
+    // All or nothing: the correct line buys nothing either.
+    await expect(page.getByTestId('checkout-error')).toHaveText(ANSWER_REFUSED);
+    await page.goto('/uk/basket');
+    await expect(page.getByTestId('basket-item')).toHaveCount(2);
+    await expect(page.getByTestId('basket-line-expired')).toHaveCount(0);
+  });
+
+  test('submitting twice buys once', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+
+    /*
+     * The duplicate is the browser's own submission, sent a second time.
+     *
+     * Clicking twice cannot produce it — React drops a second submit while the
+     * first is in flight, so that version of this test passes without testing
+     * anything. Rebuilding the request by hand cannot produce it either: a
+     * hydrated form's `action` is React's `javascript:` sentinel, not an address.
+     *
+     * So the real request is captured as it leaves and replayed verbatim: same
+     * endpoint, same headers, same body — and therefore the same
+     * `idempotencyKey`, which is exactly what a second click or a resubmitted
+     * page sends.
+     */
+    let sent: { url: string; headers: Record<string, string>; body: string } | null = null;
+    page.on('request', (request) => {
+      if (!sent && request.method() === 'POST' && request.url().includes('/uk/checkout')) {
+        sent = { url: request.url(), headers: request.headers(), body: request.postData() ?? '' };
+      }
+    });
+
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    const orderUrl = page.url();
+    const orderId = orderUrl.split('/').pop()!;
+
+    const captured = sent as unknown as {
+      url: string;
+      headers: Record<string, string>;
+      body: string;
+    };
+    expect(captured, 'the submission was captured').toBeTruthy();
+    expect(captured.body, 'it carried this render’s key').toContain('idempotencyKey');
+
+    /*
+     * Sent again from inside the page, not from the test runner.
+     *
+     * The API refuses a state-changing request that arrives without an allowed
+     * `Origin`, which is the CSRF guard doing its job — and Playwright's request
+     * context cannot set that header, so a replay from the runner is refused
+     * before it ever reaches the idempotency check. The page's own `fetch`
+     * carries the real origin and the session cookie, which is what a second
+     * click would.
+     */
+    const replay = await page.evaluate(
+      async ({
+        url,
+        headers,
+        body,
+      }: {
+        url: string;
+        headers: Record<string, string>;
+        body: string;
+      }) => {
+        const send: Record<string, string> = {};
+        for (const [key, value] of Object.entries(headers)) {
+          // The browser sets these itself and refuses to be told.
+          if (['content-length', 'host', 'connection', 'origin', 'referer'].includes(key)) continue;
+          send[key] = value;
+        }
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: send,
+          body,
+          credentials: 'include',
+        });
+        return { status: response.status, text: await response.text() };
+      },
+      captured,
+    );
+
+    // Answered, not refused — and above all never told the basket was empty,
+    // which is what a freshly minted key per submission used to produce.
+    expect(replay.status, 'the duplicate was answered').toBeLessThan(400);
+    expect(replay.text, 'the duplicate replayed rather than refusing').not.toContain(
+      'BASKET_EMPTY',
+    );
+    // It resolved to the SAME order: one purchase, not two.
+    expect(replay.text, 'the duplicate resolved to the first order').toContain(orderId);
+
+    // One order, one set of tickets: the basket was emptied once and stays empty.
+    await page.goto('/uk/basket');
+    await expect(page.getByTestId('basket-empty')).toBeVisible();
+    await page.goto(orderUrl);
+    await expect(page.getByTestId('order-total')).toHaveText('£2.99');
+    await expect(page.getByTestId('order-status')).toContainText('Your tickets are held');
+  });
+
+  test('a hold that ends between the page and the button is explained, not crashed', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+
+    // The hold ends out of band — released here rather than waited out, which
+    // reaches the same state in milliseconds instead of five minutes. The
+    // checkout page in `page` is now describing a purchase that cannot happen.
+    const other = await context.newPage();
+    try {
+      await other.goto('/uk/basket');
+      await other.getByTestId('basket-line-tickets').click();
+      await other.getByRole('button', { name: 'Release these tickets' }).click();
+      await expect(other.getByTestId('reservation-title')).toHaveText(
+        'You released this reservation',
+      );
+    } finally {
+      await other.close();
+    }
+
+    await page.getByTestId('checkout-submit').click();
+
+    /*
+     * The customer ends up at the basket, and is told why.
+     *
+     * Checkout cannot show the message itself: with the hold gone there is
+     * nothing live to check out, so the page sends them to the basket — where
+     * the lapsed line is, and where the refusal is carried with them rather than
+     * dropped on the way.
+     */
+    await expect(page).toHaveURL(/\/uk\/basket/);
+    await expect(page.getByTestId('basket-error')).toBeVisible();
+    await expect(page.getByTestId('basket-error')).not.toHaveText(
+      'Something went wrong. Try again.',
+    );
+    // And the line is there, plainly lapsed, with nothing bought.
+    await expect(page.getByTestId('basket-line-expired')).toHaveCount(1);
+    await expect(page.getByTestId('basket-total')).toHaveText('—');
+  });
+
+  test('a basket cannot be checked out through another market', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+
+    // Ireland has its own basket, which is empty — so there is nothing to check
+    // out and the page says so by sending the customer to it.
+    await page.goto('/ie/checkout');
+    await expect(page).toHaveURL(/\/ie\/basket$/);
+    await expect(page.getByTestId('basket-empty')).toBeVisible();
+
+    // Germany is closed, checkout included.
+    expect((await page.goto('/de/checkout'))?.status()).toBe(404);
+
+    // The UK checkout is exactly as it was.
+    await page.goto('/uk/checkout');
+    await expect(page.getByTestId('checkout-line')).toHaveCount(1);
+  });
+
+  test('terms already accepted come back accepted', async () => {
+    // By now this customer has accepted the active version — earlier tests in
+    // this block did. The page reads that from the API rather than asking them
+    // to agree to the same version twice, and says why the box is ticked.
+    await toCheckout('highland-lodge-escape', 1);
+    await expect(page.getByTestId('checkout-accept-terms')).toBeChecked();
+    await expect(page.getByTestId('checkout-terms-accepted')).toBeVisible();
+    // The version in force is still named, not merely implied.
+    await expect(page.getByTestId('checkout-terms-version')).not.toBeEmpty();
+  });
+
+  test('checkout can be completed with the keyboard alone', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+
+    // Every control is reached and operated by key, never by a click.
+    await page.getByRole('radio', { name: RIGHT, exact: true }).focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('radio', { name: RIGHT, exact: true })).toBeChecked();
+
+    // This customer has already accepted, so the box arrives ticked. Space is
+    // still what operates it: toggled off, then on again, by key alone.
+    const terms = page.getByTestId('checkout-accept-terms');
+    await terms.focus();
+    if (await terms.isChecked()) {
+      await page.keyboard.press('Space');
+      await expect(terms).not.toBeChecked();
+    }
+    await page.keyboard.press('Space');
+    await expect(terms).toBeChecked();
+
+    await page.getByTestId('checkout-submit').focus();
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    await expect(page.getByTestId('order-status')).toContainText('Your tickets are held');
+  });
+
+  test('checkout works on a narrow phone', async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await toCheckout('highland-lodge-escape', 3);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(0);
+
+    // Answers are real targets, not default radio dots.
+    const option = page.locator('.option').first();
+    const box = (await option.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(44);
+
+    const submit = page.getByTestId('checkout-submit');
+    await expect(submit).toBeVisible();
+    const cta = (await submit.boundingBox())!;
+    expect(cta.height).toBeGreaterThanOrEqual(44);
+    expect(Math.round(cta.x + cta.width)).toBeLessThanOrEqual(390);
+
+    // And it still works at this size.
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await submit.click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+  });
+
+  test('checkout and the order page each have exactly one main landmark', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await expect(page.locator('main#main')).toHaveCount(1);
+    await expect(page.locator('main')).toHaveCount(1);
+    // One h1, and the sections below it are h2s.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    await expect(page.locator('main#main')).toHaveCount(1);
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  });
 });
