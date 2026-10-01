@@ -29,6 +29,7 @@ export default defineConfig({
       { find: /^@hv\/db$/, replacement: src('db') },
       { find: /^@hv\/domain$/, replacement: src('domain') },
       { find: /^@hv\/contracts$/, replacement: src('contracts') },
+      { find: /^@hv\/payments$/, replacement: src('payments') },
     ],
   },
   test: {
@@ -37,7 +38,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['{apps,packages}/*/src/**/*.test.ts'],
+          // Tooling under tools/ is plain ESM with no build step, so its
+          // unit tests live beside it rather than in a workspace package.
+          include: ['{apps,packages}/*/src/**/*.test.ts', 'tools/**/*.test.mjs'],
           environment: 'node',
         },
       },

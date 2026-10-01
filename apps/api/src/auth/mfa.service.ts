@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { MfaVerifyRequest, TotpConfirmResponse, TotpSetupResponse } from '@hv/contracts';
 import { type Database, sql, withTransaction } from '@hv/db';
+import { SecretBox } from '@hv/domain';
 import { AuditService } from '../audit/audit.service';
 import { Errors } from '../common/errors';
 import type { AuthContext, RequestMeta } from '../common/request-context';
 import { API_ENV, type ApiEnv } from '../config/env';
 import { DATABASE } from '../database/database.module';
 import { RATE_LIMITS, RateLimiter } from './rate-limiter';
-import { SecretBox } from './secret-box';
 import { SessionsRepository } from './sessions.repository';
 import { generateTotpSecret, matchTotp, otpauthUri, base32Encode } from './totp';
 import { RECOVERY_CODE_COUNT, generateRecoveryCode, normalizeRecoveryCode, sha256 } from './tokens';

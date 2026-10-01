@@ -7,7 +7,11 @@ import { LivenessResponseSchema, ReadinessResponseSchema } from '@hv/contracts';
 import { createTestDatabase, type TestDatabase } from '@hv/db/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
-import { DEV_PLACEHOLDER_MFA_KEY, parseApiEnv } from '../src/config/env';
+import {
+  DEV_PLACEHOLDER_INTERNAL_TOKEN,
+  DEV_PLACEHOLDER_MFA_KEY,
+  parseApiEnv,
+} from '../src/config/env';
 
 function testRedisUrl(): string {
   const url = process.env.TEST_REDIS_URL;
@@ -24,6 +28,11 @@ async function start(overrides: Record<string, string>, database: TestDatabase) 
     ENABLED_MARKETS: 'uk,ie',
     WEB_ORIGINS: 'http://127.0.0.1:3000',
     MFA_ENCRYPTION_KEY: DEV_PLACEHOLDER_MFA_KEY,
+    // Required since P5-4. Low-entropy on purpose: production refuses it.
+    OUTBOX_ENCRYPTION_KEY: '0'.repeat(64),
+    // Port 0: these apps only need the internal listener to open somewhere.
+    INTERNAL_API_TOKEN: DEV_PLACEHOLDER_INTERNAL_TOKEN,
+    INTERNAL_API_PORT: '0',
     ...overrides,
   });
   const app = await createApp(env);

@@ -27,6 +27,35 @@ export async function enableMarketsForTesting(
     [codes, TEST_FIXTURE_COMPLIANCE.min_age, TEST_FIXTURE_COMPLIANCE.self_exclusion_required],
   );
   await db.query(`UPDATE markets SET is_enabled = true WHERE code = ANY($1)`, [codes]);
+  await configurePaymentsForTesting(db, codes);
+}
+
+/**
+ * Points the given markets at the fake provider (P6-7).
+ *
+ * Since P6-7 a market pays through the provider its `market_payment_configs`
+ * row names, and a market with none cannot take a payment at all — the correct
+ * state in production until O13 is answered. A test that enables a market and
+ * expects to pay therefore has to configure one too, exactly as it has to
+ * supply the compliance values above.
+ *
+ * `config_ref` is a reference, never a secret (I15). The fake provider takes
+ * its signing key from the environment like every other credential, so this
+ * value is only a label — and a labelled one, so that a row found in a real
+ * database is obviously a test fixture.
+ */
+export async function configurePaymentsForTesting(
+  db: Queryable,
+  codes: readonly ('uk' | 'ie' | 'de')[],
+  providerCode = 'fake',
+): Promise<void> {
+  await db.query(
+    `UPDATE market_payment_configs c
+        SET provider_code = $2, config_ref = $3
+       FROM markets m
+      WHERE m.id = c.market_id AND m.code = ANY($1)`,
+    [codes, providerCode, `test-fixture-${providerCode}`],
+  );
 }
 
 /**
@@ -143,4 +172,33 @@ export async function insertFixtureDraw(
     await db.query(`UPDATE draws SET status = 'live' WHERE id = $1`, [id]);
   }
   return id;
+}
+
+/**
+ * Publishes and activates a terms version for the given markets (P6-8).
+ *
+ * Checkout refuses to create an order without an active version (ADR-0031), so
+ * a test database that expects to reach checkout needs one. Labelled a test
+ * fixture, like the compliance values above: it is not legal copy and must
+ * never be mistaken for any.
+ */
+export async function activateTermsForTesting(
+  db: Queryable,
+  codes: readonly ('uk' | 'ie' | 'de')[],
+  version = 'test-fixture-terms-v1',
+): Promise<void> {
+  await db.query(
+    `INSERT INTO terms_versions (market_id, version, published_at)
+       SELECT id, $2, now() FROM markets WHERE code = ANY($1)
+       ON CONFLICT (market_id, version) DO NOTHING`,
+    [codes, version],
+  );
+  await db.query(
+    `UPDATE market_settings s
+        SET active_terms_version_id = t.id
+       FROM terms_versions t, markets m
+      WHERE m.id = s.market_id AND t.market_id = m.id
+        AND t.version = $2 AND m.code = ANY($1)`,
+    [codes, version],
+  );
 }

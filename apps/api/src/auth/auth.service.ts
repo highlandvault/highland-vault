@@ -1,13 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { LoginRequest, MeResponse, RegisterRequest } from '@hv/contracts';
-import { type Database, withTransaction } from '@hv/db';
+import { type Database, lockEntrantEmail, withTransaction } from '@hv/db';
 import { EmailError, parseEmail } from '@hv/domain';
 import { randomBytes } from 'node:crypto';
+import { AuditService } from '../audit/audit.service';
 import { Errors } from '../common/errors';
 import { isUniqueViolation } from '../common/pg-errors';
 import type { AuthContext, RequestMeta } from '../common/request-context';
 import { DATABASE } from '../database/database.module';
 import { RbacService } from '../rbac/rbac.service';
+import { CapBridgingRepository } from '../tickets/cap-bridging.repository';
 import { UsersRepository } from '../users/users.repository';
 import { hashPassword, needsRehash, verifyPassword } from './password';
 import { RATE_LIMITS, RateLimiter } from './rate-limiter';
@@ -34,6 +36,8 @@ export class AuthService {
     private readonly sessions: SessionsService,
     private readonly rbac: RbacService,
     private readonly rateLimiter: RateLimiter,
+    private readonly capBridging: CapBridgingRepository,
+    private readonly audit: AuditService,
   ) {}
 
   async register(input: RegisterRequest, meta: RequestMeta): Promise<SignInResult> {
@@ -44,11 +48,39 @@ export class AuthService {
 
     try {
       return await withTransaction(this.db, async (trx) => {
+        // Before the account exists, so a guest allocation for this same
+        // address either finishes first and is bridged below, or waits here
+        // and then resolves to the account (ADR-0021). A row lock cannot do
+        // this: the counter row it would write may not exist yet.
+        await lockEntrantEmail(trx, email);
+
         const user = await this.users.insert(trx, email, passwordHash);
         await trx
           .insertInto('user_roles')
           .values({ user_id: user.id, role_code: 'customer' })
           .execute();
+
+        // Whatever this address already holds as a guest becomes the
+        // account's, counters and live holds together (ADR-0021). In the same
+        // transaction as the account: a half-bridged cap is worse than none.
+        const bridged = await this.capBridging.bridge(trx, email, user.id);
+        if (bridged.counters > 0 || bridged.reservations > 0) {
+          await this.audit.record(trx, {
+            actor: { type: 'user', userId: user.id },
+            action: 'entrant.cap.bridged',
+            entityType: 'user',
+            entityId: user.id,
+            // Counts only. The address is the account's own and is already on
+            // the user row; repeating it here adds nothing but exposure.
+            after: {
+              draws: bridged.counters,
+              reservations: bridged.reservations,
+              tickets: bridged.tickets,
+            },
+            meta: { ip: meta.ip, requestId: meta.requestId },
+          });
+        }
+
         const session = await this.sessions.issue(trx, user.id, false, meta);
         return { status: 'authenticated' as const, session };
       });

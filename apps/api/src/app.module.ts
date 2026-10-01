@@ -3,16 +3,23 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { CartModule } from './cart/cart.module';
 import { ApiExceptionFilter } from './common/exception.filter';
 import { API_ENV, type ApiEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
 import { DrawsModule } from './draws/draws.module';
+import { GuestsModule } from './guests/guests.module';
 import { HealthController } from './health/health.controller';
+import { InternalModule } from './internal/internal.module';
 import { MarketsModule } from './markets/markets.module';
 import { AccessGuard } from './rbac/access.guard';
 import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
+import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
+import { TermsModule } from './terms/terms.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Global()
 @Module({})
@@ -53,8 +60,15 @@ export class AppModule {
         RbacModule,
         MarketsModule,
         AuthModule,
+        GuestsModule,
         DrawsModule,
         TicketsModule,
+        TermsModule,
+        CartModule,
+        OrdersModule,
+        PaymentsModule,
+        WebhooksModule,
+        InternalModule,
       ],
       controllers: [HealthController],
       providers: [

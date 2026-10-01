@@ -14,6 +14,7 @@ import {
 import { ReservationRefused } from '@hv/domain';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { UsersRepository } from '../src/users/users.repository';
 import { TicketAllocator } from '../src/tickets/ticket-allocator';
 import {
   type AllocatableDraw,
@@ -37,7 +38,7 @@ describe('ticket engine concurrency (real PostgreSQL)', { timeout: 120_000 }, ()
     // Enough connections for dozens of transactions to be in flight at once.
     db = createDb({ connectionString: database.url, applicationName: 'hv-test-gates', max: 60 });
     sql = new pg.Pool({ connectionString: database.url, max: 4 });
-    allocator = new TicketAllocator(db, repo);
+    allocator = new TicketAllocator(db, repo, new UsersRepository());
     await enableMarketsForTesting(sql, ['uk']);
     const users = await sql.query<{ id: string }>(
       `INSERT INTO users (email, password_hash)
@@ -88,8 +89,14 @@ describe('ticket engine concurrency (real PostgreSQL)', { timeout: 120_000 }, ()
 
   /** One reservation attempt in its own transaction: the numbers, or the refusal reason. */
   async function attempt(draw: AllocatableDraw, entrant: EntrantRef, quantity: number, ttl = 600) {
+    // The allocator resolves the cap identity itself now (ADR-0021); these
+    // gates drive it with already-known users, so the intent is direct.
+    const intent =
+      entrant.type === 'user'
+        ? ({ kind: 'user', userId: entrant.userId! } as const)
+        : ({ kind: 'verifiedEmail', email: entrant.ref } as const);
     try {
-      const result = await allocator.reserve(draw, entrant, quantity, ttl);
+      const result = await allocator.reserve(draw, intent, quantity, ttl);
       return {
         ok: true as const,
         numbers: result.ticketNumbers,

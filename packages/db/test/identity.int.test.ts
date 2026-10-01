@@ -216,6 +216,32 @@ describe('identity, RBAC and audit (database layer)', () => {
       expect(matrix.fulfilment).not.toContain('customers.pii.read');
     });
 
+    it('seeds payments.reconcile for finance, admin and super_admin only (0025, D13a)', async () => {
+      const { rows } = await client.query<{ description: string }>(
+        `SELECT description FROM permissions WHERE code = 'payments.reconcile'`,
+      );
+      expect(rows).toHaveLength(1);
+      // The table has no sensitivity column, so the description is the only
+      // place a reader of the database learns that step-up MFA applies. The
+      // route decorator is what enforces it.
+      expect(rows[0]!.description).toContain('Sensitive operation');
+
+      const { rows: holders } = await client.query<{ role_code: string }>(
+        `SELECT role_code FROM role_permissions
+          WHERE permission_code = 'payments.reconcile' ORDER BY role_code`,
+      );
+      expect(holders.map((r) => r.role_code)).toEqual(['admin', 'finance', 'super_admin']);
+    });
+
+    it('does not give viewing a payment a permission of its own (D13a)', async () => {
+      // Viewing reuses `orders.read`, which every staff role already holds.
+      // A `payments.read` appearing here would mean someone split the decision.
+      const { rows } = await client.query<{ code: string }>(
+        `SELECT code FROM permissions WHERE code LIKE 'payments.%' ORDER BY code`,
+      );
+      expect(rows.map((r) => r.code)).toEqual(['payments.reconcile']);
+    });
+
     it('allows one grant per user, role and market scope (NULL = all markets counts once)', async () => {
       const userId = await insertFixtureUser(client, 'grants@example.com');
       const grant = (role: string, market: string | null) =>

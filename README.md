@@ -62,10 +62,43 @@ Market gate changes (`/admin/markets/:market/...` on the API) are sensitive oper
 | `pnpm test:integration`                              | Integration tests against the **real** PostgreSQL and Redis containers                             |
 | `pnpm test:e2e`                                      | Playwright smoke tests: built API (:4100) + web (:3100) on a throwaway DB (run `pnpm build` first) |
 | `pnpm build`                                         | Build every workspace                                                                              |
-| `pnpm verify`                                        | Everything CI runs, in order (except the secret scan and e2e)                                      |
+| `pnpm secrets:scan`                                  | Secret scan over the whole git history, the same one CI runs                                       |
+| `pnpm verify`                                        | Everything CI runs, in order (except e2e)                                                          |
 | `pnpm db:migrate up \| status \| verify`             | Migration tool (see [packages/db/README.md](packages/db/README.md))                                |
 | `pnpm db:codegen`                                    | Regenerate Kysely types after a migration                                                          |
 | `pnpm infra:down` / `pnpm infra:reset`               | Stop the stack, or wipe its volumes and start it again                                             |
+
+## Secret scanning
+
+`pnpm secrets:scan` runs **gitleaks 8.30.1** over the whole git history — the
+same version, arguments and `.gitleaksignore` that CI uses, so a finding here
+is a finding there. `pnpm verify` runs it first, before the slower checks.
+
+History, not just the working tree: a secret removed in a later commit is
+still in the repository, and CI will still fail on it.
+
+**First run** downloads the pinned binary (a few seconds), checks it against
+the official release checksums, and caches it in `.cache/gitleaks/` — which is
+gitignored and keyed by version, operating system and architecture. Later runs
+reuse it and take about a second. Nothing unverified is ever extracted or run.
+
+There is no way to skip the scan: if the binary cannot be downloaded, verified
+or executed, verification fails. “The scan did not happen” must never look like
+“the scan found nothing”.
+
+If the download or the checksum check fails:
+
+- a checksum mismatch means the artifact is not what it claims to be — do not
+  work around it; delete `.cache/gitleaks/` and retry, and if it persists, stop
+  and raise it;
+- a network or proxy failure is reported as such. Install gitleaks 8.30.1
+  yourself and run `gitleaks git --no-banner --redact .` if you need to work
+  offline.
+
+**Placeholders in committed files must be low-entropy** (`MFA_ENCRYPTION_KEY`
+is 64 zeros, test keys are repeated patterns like `'ab'.repeat(32)`). A
+random-looking placeholder is indistinguishable from a real key to the scanner,
+and production configuration refuses the low-entropy ones anyway.
 
 ## Local services
 

@@ -8,8 +8,28 @@
  * each one ends at most once, so concurrent or repeated runs cannot double-free
  * a ticket or double-decrement a cap counter. Sold tickets are never touched.
  *
- * Phase 6 adds the B9 safety rule: a trusted provider status check before
- * expiring a reservation whose order has a pending payment.
+ * **No provider is consulted before a reservation expires, and that is a
+ * decision rather than an omission (D11a = B).**
+ *
+ * B9's safety rule would have had this check with the provider before expiring
+ * a hold whose order has a payment in flight. Phase 6 does not, because under
+ * **D1 = B** the check could never fire: an order's payment deadline is
+ * `min(created_at + 600s, earliest reservation expiry − 90s)`, so the deadline
+ * always passes at least 90 seconds BEFORE the hold does. By the time a
+ * reservation is due here, its order was already unpayable a sweep or three
+ * ago, and there is nothing in flight to protect.
+ *
+ * A second, independent guard stands behind that arithmetic: **D10 = B** made
+ * `hv_tickets_guard` refuse `reserved → sold` unless the reservation is
+ * `active` with `expires_at > now()` (migration 0022). So even if this sweep
+ * did race a confirmation, the database would refuse the sale on its own.
+ *
+ * **Re-evaluate this if the D1 margin changes.** The safety rule becomes
+ * reachable the moment an order's deadline can outlive its hold —
+ * `PAYMENT_MARGIN_SECONDS` reaching zero, or the deadline being derived from
+ * anything other than the earliest reservation expiry. The guard would still
+ * refuse the sale, but the customer would be paying for tickets already back
+ * in the pool, which is the case D11 existed to avoid.
  */
 import { type Database, sql } from '@hv/db';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
