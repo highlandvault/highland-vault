@@ -1,4 +1,6 @@
 import { expect, test, type BrowserContext, type Page, type Response } from '@playwright/test';
+import { createHmac, randomUUID } from 'node:crypto';
+import { E2E_API_ENV, E2E_API_URL } from '../playwright.config';
 import { registerCustomer } from './fixtures';
 
 /**
@@ -79,6 +81,68 @@ async function payAndCaptureProviderUrl(page: Page): Promise<string> {
   } finally {
     await page.unroute('**/fake-provider.invalid/**');
   }
+}
+
+/** The provider's own reference for the attempt, as the redirect carries it. */
+function providerReferenceFrom(providerUrl: string): string {
+  const reference = new URL(providerUrl).searchParams.get('reference');
+  expect(reference, 'the provider redirect names its reference').toBeTruthy();
+  return reference!;
+}
+
+/**
+ * Confirms a payment the way the real thing does: a signed provider webhook.
+ *
+ * This is the only route by which an order becomes paid in a browser test, and
+ * it is deliberately the **real** one — the actual `/webhooks/payments/fake`
+ * endpoint, the actual signature check, the actual intake and finalisation
+ * transaction. Nothing here writes to the database, and no internal or
+ * reconciliation route is called from a test pretending to be a browser.
+ *
+ * The signature is computed here rather than imported because `@hv/payments`
+ * is not a dependency of the web app and adding one for a test would be a
+ * build-config change in aid of a fixture. The scheme it mirrors lives in
+ * `packages/payments/src/webhook-signature.ts`: HMAC-SHA256 over the exact
+ * bytes, hex, in `x-hv-fake-signature`. The bytes are serialised once and
+ * posted unchanged, because a re-serialisation would break the signature —
+ * which is precisely the property P6-3 was built against.
+ *
+ * The amount must be what the ORDER is owed. A different figure is recorded as
+ * an `amount_mismatch` and changes nothing, so a wrong amount here shows up as
+ * a test that never reaches `paid` rather than as a false pass.
+ */
+async function confirmByWebhook(
+  page: Page,
+  providerReference: string,
+  amountMinor: number,
+  currency: 'GBP' | 'EUR' = 'GBP',
+): Promise<void> {
+  const body = Buffer.from(
+    JSON.stringify({
+      id: `evt-${randomUUID()}`,
+      type: 'payment.succeeded',
+      reference: providerReference,
+      state: 'succeeded',
+      amountMinor,
+      currency,
+      occurredAt: new Date().toISOString(),
+    }),
+    'utf8',
+  );
+  const signature = createHmac('sha256', E2E_API_ENV.FAKE_PAYMENT_WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+
+  // Straight to the API, not through the web app: a provider does not go
+  // through anybody's browser. No Origin is sent and none is needed — this is
+  // the one route exempt from the CSRF guard, because a provider has no origin
+  // to offer.
+  const response = await page.request.post(`${E2E_API_URL}/webhooks/payments/fake`, {
+    headers: { 'content-type': 'application/json', 'x-hv-fake-signature': signature },
+    data: body,
+  });
+  // A provider is told nothing but that the delivery was accepted.
+  expect(response.status(), 'the webhook was accepted').toBe(200);
 }
 
 /** The `t=` value the provider was handed, which is the real return link. */
@@ -696,5 +760,183 @@ test.describe('checkout', () => {
     await expect(page.locator('main#main')).toHaveCount(1);
     await expect(page.locator('main')).toHaveCount(1);
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  });
+
+  // ======================================================= UI-6: payment
+  //
+  // These share the block's one account for the same reason the rest do, and
+  // they reach `paid` the only way anything may: a signed provider webhook
+  // against the real endpoint.
+
+  /** Order → provider → signed webhook → genuinely paid. Returns the order url. */
+  async function payInFull(entries = 1): Promise<string> {
+    await toCheckout('highland-lodge-escape', entries);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    const orderUrl = page.url();
+
+    const providerUrl = await payAndCaptureProviderUrl(page);
+    await confirmByWebhook(page, providerReferenceFrom(providerUrl), 299 * entries);
+    return orderUrl;
+  }
+
+  test('a paid order says so, and says it because the webhook said so', async () => {
+    const orderUrl = await payInFull(2);
+
+    // The order page, read fresh. Nothing the browser did confirmed this: the
+    // webhook did, server to server, and finalisation committed it.
+    await page.goto(orderUrl);
+    await expect(page.getByTestId('order-status')).toContainText('Paid');
+    await expect(page.getByTestId('order-total')).toHaveText('£5.98');
+    // Paid orders are not payable, so the invitation is gone.
+    await expect(page.getByTestId('order-pay')).toHaveCount(0);
+
+    // The tickets are sold, so they are the customer's and they are listed.
+    await expect(page.getByTestId('order-items')).toBeVisible();
+  });
+
+  test('the return page shows a paid order as paid', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+
+    const providerUrl = await payAndCaptureProviderUrl(page);
+    const token = accessTokenFrom(providerUrl);
+    await confirmByWebhook(page, providerReferenceFrom(providerUrl), 299);
+
+    // Back through the real exchange, exactly as a customer returns.
+    await page.goto(
+      `/checkout/payments/00000000-0000-4000-8000-000000000000/return/exchange?t=${token}`,
+    );
+    await expect(page).toHaveURL(/\/checkout\/payments\/[0-9a-f-]{36}\/return$/);
+    await expect(page.getByTestId('return-status')).toContainText('Paid');
+    await expect(page.getByTestId('return-total')).toHaveText('£2.99');
+    // One landmark, and a heading structure that starts at h1.
+    await expect(page.locator('main#main')).toHaveCount(1);
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  });
+
+  test('a pending payment resolves itself, without the customer reloading', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+
+    const providerUrl = await payAndCaptureProviderUrl(page);
+    const token = accessTokenFrom(providerUrl);
+
+    // Back from the provider BEFORE anything has confirmed: the honest pending
+    // state, which is what a customer sees most of the time.
+    await page.goto(
+      `/checkout/payments/00000000-0000-4000-8000-000000000000/return/exchange?t=${token}`,
+    );
+    await expect(page).toHaveURL(/\/checkout\/payments\/[0-9a-f-]{36}\/return$/);
+    await expect(page.getByTestId('return-status')).toContainText('Waiting');
+    await expect(page.getByTestId('return-pending-note')).toBeVisible();
+    // The watcher is running and says so out loud, politely.
+    const watch = page.getByTestId('payment-watch');
+    await expect(watch).toBeVisible();
+    await expect(watch).toHaveAttribute('aria-live', 'polite');
+    // Nothing is claimed while it waits.
+    await expect(page.getByTestId('return-status')).not.toContainText('Paid');
+
+    // The webhook lands while the customer sits on the page, touching nothing.
+    await confirmByWebhook(page, providerReferenceFrom(providerUrl), 299);
+
+    // No reload, no click: the watcher notices and the SERVER re-renders.
+    await expect(page.getByTestId('return-status')).toContainText('Paid', { timeout: 20_000 });
+    // The server re-rendered, so the waiting UI is gone with it.
+    await expect(page.getByTestId('return-pending-note')).toHaveCount(0);
+  });
+
+  test('a customer sent back by a failure is invited to try again', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    const orderUrl = page.url();
+
+    // The order is still payable, so the page offers the payment again rather
+    // than reporting a failure the order never had.
+    await page.goto(`${orderUrl}?error=PAYMENT_PROVIDER_UNAVAILABLE`);
+    await expect(page.getByTestId('order-error')).toBeVisible();
+    await expect(page.getByTestId('order-retry-note')).toBeVisible();
+    const pay = page.getByTestId('order-pay');
+    await expect(pay).toBeVisible();
+    await expect(pay).toHaveText('Try again');
+    // And the order has not moved: nothing about a refusal failed it.
+    await expect(page.getByTestId('order-status')).toContainText('Awaiting payment');
+  });
+
+  test('the cancel page comes back to the order it belongs to', async () => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    const orderUrl = page.url();
+
+    const providerUrl = await payAndCaptureProviderUrl(page);
+    const token = accessTokenFrom(providerUrl);
+    const attemptId = new URL(new URL(providerUrl).searchParams.get('return_to')!).pathname.split(
+      '/',
+    )[3]!;
+
+    // The access cookie exists only once they have come back once.
+    await page.goto(
+      `/checkout/payments/00000000-0000-4000-8000-000000000000/return/exchange?t=${token}`,
+    );
+    await expect(page).toHaveURL(/\/return$/);
+
+    // Now the cancel address for that same attempt: it can prove which order
+    // this is, so it links straight to it.
+    await page.goto(`/checkout/payments/${attemptId}/cancel`);
+    await expect(page.getByTestId('cancel-status')).toContainText('nothing has been charged');
+    await page.getByTestId('cancel-order-link').click();
+    await expect(page).toHaveURL(orderUrl);
+    // Reaching cancel changed nothing: the order is still payable.
+    await expect(page.getByTestId('order-pay')).toBeVisible();
+  });
+
+  test('the cancel page offers no order it cannot prove is yours', async () => {
+    // A cancel address for an attempt the access cookie knows nothing about.
+    await page.goto('/checkout/payments/00000000-0000-4000-8000-000000000000/cancel');
+    await expect(page.getByTestId('cancel-status')).toBeVisible();
+    await expect(page.getByTestId('cancel-order-link')).toHaveCount(0);
+    await expect(page.getByTestId('cancel-account-link')).toBeVisible();
+    await expect(page.locator('main#main')).toHaveCount(1);
+  });
+
+  test('the payment pages carry one landmark and do not overflow a phone', async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await toCheckout('highland-lodge-escape', 2);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+
+    for (const check of ['order', 'return'] as const) {
+      if (check === 'return') {
+        const providerUrl = await payAndCaptureProviderUrl(page);
+        const token = accessTokenFrom(providerUrl);
+        await page.goto(
+          `/checkout/payments/00000000-0000-4000-8000-000000000000/return/exchange?t=${token}`,
+        );
+        await expect(page).toHaveURL(/\/return$/);
+      }
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${check} at 390px`).toBe(0);
+      await expect(page.locator('main#main')).toHaveCount(1);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    }
   });
 });

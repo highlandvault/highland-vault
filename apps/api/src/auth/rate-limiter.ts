@@ -50,18 +50,23 @@ export const RATE_LIMITS = {
   // how often a customer may START something. This bounds how often they may
   // ASK — and asking is a page refresh, so the honest ceiling is generous.
   //
-  // It is here because the status route may make a TRUSTED PROVIDER STATUS
-  // CHECK (OD-5), which is a network call to the provider on our merchant
-  // account. Without a limit one customer polling their own order could spend
-  // the provider's rate budget and degrade payments for everybody else. The
-  // limit is what bounds that, not any assumption about how often a browser
-  // chooses to poll: P6-8's return page polls by design, and a client-side
-  // interval is a courtesy, never a control.
+  // It was originally here because the status route could make a TRUSTED
+  // PROVIDER STATUS CHECK (OD-5) — a network call on our merchant account that
+  // one customer refreshing could have spent the budget of. **ADR-0035 removed
+  // that call**, so the route now answers from the database alone and costs a
+  // provider nothing.
   //
-  // 120 in 10 minutes is one request every 5 seconds sustained, which is
-  // comfortably above any sensible poll and far below a budget-exhausting
-  // loop. An attempt only lives 120 seconds (D3a), so a single attempt can
-  // cost at most a fraction of this.
+  // The limit stays, for the reason that outlived the first one: this is an
+  // unauthenticated-by-default read of somebody's order, and B19's "endpoint
+  // abuse" is about how fast a thing can be asked, not only what asking costs
+  // us. It is also consumed fail-closed, so a Redis outage refuses the read
+  // rather than leaving it unbounded.
+  //
+  // 120 in 10 minutes is one request every 5 seconds sustained. UI-6's return
+  // page polls this at a 4-second interval for at most the 120 seconds an
+  // attempt lives (D3a), so a whole attempt's worth of watching fits inside a
+  // quarter of the allowance — and a client-side interval is a courtesy in any
+  // case, never a control.
   paymentStatusPerOwner: { name: 'payment-status-owner', limit: 120, windowSeconds: 10 * 60 },
   // Presenting a return link, per IP (OD-2, D18 = B, P6-8). The token is a
   // bearer credential that arrives in a URL, so the thing to bound is how fast
