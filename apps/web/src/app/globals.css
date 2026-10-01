@@ -975,6 +975,25 @@ a {
   color: var(--danger);
 }
 
+/*
+ * The other two tones.
+ *
+ * Both were already being asked for — the order page picks its banner tone
+ * from the order's status, and the payment return and cancel pages name them
+ * too — and neither had a rule, so every non-danger status notice rendered in
+ * the default gold. They reuse the status palette the badges already use, so
+ * "held" reads the same here as it does on a card.
+ */
+.notice--info {
+  background: var(--closed-soft);
+  color: var(--ink-2);
+}
+
+.notice--success {
+  background: var(--open-soft);
+  color: var(--open);
+}
+
 .hint {
   font-size: 0.85rem;
   color: var(--muted);
@@ -1989,5 +2008,79 @@ table.data th {
   .basket-summary {
     position: sticky;
     top: 24px;
+  }
+}
+
+/* =============================================================== checkout
+   /[market]/checkout. The layout is the basket's — two columns, lines left and
+   a summary that follows you down the page — because it is the same purchase,
+   one step on, and it should not look like somewhere else. Only the parts the
+   basket has no equivalent of are defined here. */
+
+/*
+ * A question, as a group.
+ *
+ * The browser's default fieldset border and padding are removed rather than
+ * restyled: the panel around it already does that job, and two nested boxes
+ * read as two separate things. The legend keeps its semantics either way,
+ * which is the part that matters.
+ */
+.checkout-skill {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.checkout-skill legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 0.975rem;
+  color: var(--ink);
+}
+
+/*
+ * A real tap target on every answer.
+ *
+ * `.option` is 12px of padding around an 18px control, which lands a shade
+ * under the 44px a finger needs. Set here rather than on `.option` itself so
+ * the admin form that shares the class is left exactly as it was.
+ */
+.checkout .option {
+  min-height: 44px;
+}
+
+/* The question is part of the line, so it sits below the figures rather than
+   beside them, with a rule to separate the two. */
+.checkout .basket-line__body .checkout-skill {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* The binding hold, in the summary: the first of them to run out ends the
+   whole checkout, so it is shown once, next to the total it applies to. */
+.checkout-hold {
+  margin: 14px 0;
+}
+
+/*
+ * The error, when the customer is sent back to it.
+ *
+ * It is focused by the `#checkout-error` fragment, and a focused paragraph
+ * would otherwise show the browser's default outline in a place that reads as
+ * a mistake rather than a target. The ring is deliberate instead.
+ */
+.checkout [id='checkout-error']:focus {
+  outline: 2px solid var(--danger);
+  outline-offset: 3px;
+}
+
+/* Checkout has no line actions, so its lines keep their figures and question
+   in one column on narrow screens without the basket's action grid. */
+@media (max-width: 519px) {
+  .checkout .basket-line__media {
+    min-height: 108px;
   }
 }
