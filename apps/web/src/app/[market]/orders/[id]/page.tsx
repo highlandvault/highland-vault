@@ -49,7 +49,7 @@ export default async function OrderPage({
   const state = ORDER_STATES[order.status] ?? ORDER_STATES.default!;
 
   return (
-    <main className="page" data-testid="order">
+    <div data-testid="order">
       <h1>Order {order.orderNumber}</h1>
 
       {message && (
@@ -108,7 +108,7 @@ export default async function OrderPage({
       <Link className="button button--quiet" href={`/${market.code}/draws`}>
         Browse more draws
       </Link>
-    </main>
+    </div>
   );
 }
 

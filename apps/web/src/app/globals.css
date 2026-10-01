@@ -423,6 +423,30 @@ a {
   color: var(--text);
 }
 
+/*
+ * A low-emphasis action: remove a line, look at tickets, go back.
+ *
+ * Referenced by the basket, the checkout, the order page and both payment
+ * pages, and defined nowhere — so every one of those buttons has been
+ * rendering with the base `.button` rule alone: a transparent background and a
+ * transparent border, which is to say invisible apart from its text. Generic on
+ * purpose, since five pages share it.
+ */
+.button--quiet {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text);
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.button--quiet:hover {
+  background: var(--ivory);
+  border-color: var(--muted);
+}
+
 .button--danger {
   background: var(--danger);
   color: #fff;
@@ -1760,5 +1784,210 @@ table.data th {
 @media (max-width: 959px) {
   .detail__aside {
     order: -1;
+  }
+}
+
+/* ================================================================= basket
+   /[market]/basket, and the page wrapper the payment pages use. */
+
+/*
+ * The standalone page wrapper.
+ *
+ * Used by the pages that sit under the ROOT layout rather than a market one —
+ * the payment return and cancel pages — which have no container around them.
+ * It supplies the measure, the gutter and the vertical rhythm that
+ * `site-main` + `container` give everywhere else.
+ */
+.page {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 48px) var(--gutter) 64px;
+}
+
+.basket-head {
+  margin-bottom: clamp(20px, 3vw, 28px);
+}
+
+.basket-head h1 {
+  margin-bottom: 0.25em;
+}
+
+.basket-head__note {
+  color: var(--muted);
+  max-width: 60ch;
+  margin: 0;
+}
+
+/* Lines left, summary right, once there is room for both. */
+.basket {
+  display: grid;
+  gap: clamp(20px, 3vw, 32px);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .basket {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
+  }
+}
+
+/* ---------------------------------------------------------------- lines */
+
+.basket-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.basket-line {
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+@media (min-width: 520px) {
+  .basket-line {
+    grid-template-columns: 148px minmax(0, 1fr);
+  }
+}
+
+/* A lapsed hold is still shown, and still readable — it is just plainly no
+   longer live. The words say so too; the colour is not carrying it alone. */
+.basket-line--lapsed {
+  background: var(--ivory);
+  border-color: var(--line);
+}
+
+.basket-line--lapsed .basket-line__title a {
+  color: var(--muted);
+}
+
+.basket-line__media {
+  position: relative;
+  min-height: 132px;
+}
+
+.basket-line__media .prize-art {
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.basket-line__media .prize-art__label {
+  display: none;
+}
+
+.basket-line__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(14px, 2vw, 20px);
+  min-width: 0;
+}
+
+.basket-line__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.basket-line__title {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.basket-line__title a {
+  text-decoration: none;
+}
+
+.basket-line__title a:hover {
+  text-decoration: underline;
+}
+
+/* Three figures, side by side while they fit. */
+.basket-line__facts {
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 10px 18px;
+}
+
+.basket-line .countdown {
+  align-self: flex-start;
+}
+
+/* --------------------------------------------------------------- actions */
+
+.basket-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.basket-line-actions form {
+  margin: 0;
+}
+
+/* Below this the three actions cannot sit side by side and stay tappable. */
+@media (max-width: 439px) {
+  .basket-line-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .basket-line-actions .button,
+  .basket-line-actions form {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------- summary */
+
+.basket-summary__title {
+  font-size: 1.05rem;
+  margin-bottom: 0.8em;
+}
+
+.basket-summary__facts {
+  margin-bottom: 16px;
+}
+
+.basket-summary .total {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.basket-summary .hint {
+  margin-bottom: 14px;
+}
+
+.basket-summary__back {
+  display: inline-block;
+  margin-top: 14px;
+}
+
+/*
+ * Sticky only where there is vertical room for it.
+ *
+ * A sticky summary on a short viewport pins a panel over the lines the
+ * customer is trying to read, so it is switched on at the width where the two
+ * columns appear and only when the viewport is tall enough to hold it.
+ */
+@media (min-width: 960px) and (min-height: 720px) {
+  .basket-summary {
+    position: sticky;
+    top: 24px;
   }
 }

@@ -53,7 +53,7 @@ export default async function CheckoutPage({
 
   if (!terms?.checkoutAllowed || !terms.active) {
     return (
-      <main className="page">
+      <>
         <h1>Checkout</h1>
         <p className="notice notice--danger" data-testid="checkout-unavailable">
           This market cannot take orders yet.
@@ -61,12 +61,12 @@ export default async function CheckoutPage({
         <Link className="button button--quiet" href={`/${market.code}/basket`}>
           Back to your basket
         </Link>
-      </main>
+      </>
     );
   }
 
   return (
-    <main className="page" data-testid="checkout">
+    <div data-testid="checkout">
       <h1>Checkout</h1>
 
       {message && (
@@ -146,6 +146,6 @@ export default async function CheckoutPage({
           </Link>
         </section>
       </form>
-    </main>
+    </div>
   );
 }
