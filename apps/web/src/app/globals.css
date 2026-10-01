@@ -2084,3 +2084,205 @@ table.data th {
     min-height: 108px;
   }
 }
+
+/* ================================================================ payment
+   The order page and the two pages a customer comes back to from a provider.
+   The basket's layout language, one step further on: lines on the left, the
+   thing you act on in a panel beside them. */
+
+.order-page,
+.payment-page {
+  display: block;
+}
+
+.payment-head {
+  margin-bottom: clamp(18px, 3vw, 26px);
+}
+
+.payment-head h1 {
+  margin-bottom: 0;
+}
+
+.payment-head .eyebrow {
+  margin-bottom: 6px;
+}
+
+/*
+ * A state, said twice.
+ *
+ * The label is the state in words and the sentence repeats it in full, so
+ * nothing here is carried by the tone alone — which matters on a monochrome
+ * display, to a screen reader, and to the eight percent of men who would
+ * otherwise be reading a green box and a red box as the same box.
+ */
+.payment-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.payment-state__label {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.payment-state__label::after {
+  content: ' ·';
+  opacity: 0.5;
+}
+
+/* ------------------------------------------------------------- the waiting */
+
+.payment-pending {
+  margin-bottom: clamp(18px, 3vw, 26px);
+}
+
+.payment-pending p {
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.payment-waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+
+.payment-waiting__spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--gold-strong);
+  animation: payment-spin 900ms linear infinite;
+  flex: none;
+}
+
+@keyframes payment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A spinner is decoration; the sentence beside it is the status. Somebody who
+   has asked for less movement loses nothing by it stopping. */
+@media (prefers-reduced-motion: reduce) {
+  .payment-waiting__spinner {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.order-layout {
+  display: grid;
+  gap: clamp(20px, 3vw, 32px);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .order-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
+  }
+}
+
+.payment-aside__title {
+  font-size: 1.05rem;
+  margin-bottom: 0.8em;
+}
+
+.payment-aside .countdown {
+  margin: 12px 0;
+}
+
+.payment-aside form {
+  margin: 14px 0 0;
+}
+
+/* Sticky only where there is room for it, exactly as the basket's summary is:
+   a panel pinned over a short viewport covers the thing it describes. */
+@media (min-width: 960px) and (min-height: 720px) {
+  .payment-aside {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+/* ------------------------------------------------------------------- lines */
+
+.payment-lines {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.payment-line {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+@media (min-width: 520px) {
+  .payment-line {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+}
+
+.payment-line__media {
+  position: relative;
+  min-height: 104px;
+}
+
+.payment-line__media .prize-art {
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.payment-line__media .prize-art__label {
+  display: none;
+}
+
+.payment-line__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(12px, 2vw, 18px);
+  min-width: 0;
+}
+
+.payment-line__title {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.payment-line__body .facts {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px 18px;
+}
+
+/* ----------------------------------------------------------------- actions */
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(18px, 3vw, 26px);
+}
+
+/* Below this the two buttons cannot sit side by side and stay comfortable. */
+@media (max-width: 439px) {
+  .payment-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
