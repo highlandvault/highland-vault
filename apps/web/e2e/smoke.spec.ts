@@ -12,53 +12,58 @@ import { expect, test } from '@playwright/test';
  * page now, so they assert the product: that the draws on it are the API's
  * real draws, that the market gate reaches all the way to the front page, and
  * that infrastructure status is no longer published to the public.
+ *
+ * **The homepage assertions were rewritten for the reference design.** The
+ * page itself changed — a hero built around the featured draw, category cards,
+ * a showcase and a trust strip, in place of the hero/steps/principles band
+ * that came before — so the assertions describe what is there now. Everything
+ * about the chrome, the market gate and the downstream routes is unchanged,
+ * and so are the tests for it.
  */
 
 test('the homepage leads with the product', async ({ page }) => {
   const response = await page.goto('/');
   expect(response?.status()).toBe(200);
 
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Exceptional prizes.');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('One fair draw.');
+  // The heading names a real prize, read from the payload rather than typed
+  // into the page. This is the assertion that keeps the design's placeholder
+  // copy out of the one place it would do real harm.
+  const title = page.getByTestId('hero-title');
+  await expect(title).toBeVisible();
+  // The article is lowercased, so the sentence reads 'Win a week in a Highland
+  // lodge' rather than 'Win A week', and the tail is set apart.
+  await expect(title).toContainText('Win a');
+  await expect(title).toContainText('week in a Highland lodge');
+  // The seeded draw the design's own copy names, which must never appear: the
+  // page shows the API's prize, not the mock-up's.
+  await expect(title).not.toContainText('Macallan');
 
-  // Both calls to action: the hero's and the closing section's.
-  await expect(page.getByRole('link', { name: 'Explore competitions' })).toHaveCount(2);
-  await expect(page.getByRole('link', { name: 'How it works', exact: true })).toHaveCount(2);
+  // The hero's own card is the featured draw, with its live entry meter.
+  await expect(page.getByTestId('hero-card')).toBeVisible();
+  await expect(page.getByTestId('hero-entries')).toBeVisible();
 
-  // How it works, and the principles band.
-  await expect(page.getByRole('heading', { name: 'Three steps, start to finish.' })).toBeVisible();
-  for (const step of ['Choose your draw', 'Answer and enter', 'Check your result']) {
-    await expect(page.getByRole('heading', { name: step })).toBeVisible();
-  }
-  for (const principle of ['Clear entry', 'Transparent draws', 'Secure checkout']) {
-    await expect(page.getByRole('heading', { name: principle })).toBeVisible();
-  }
-  await expect(page.getByRole('heading', { name: 'Find your next prize.' })).toBeVisible();
+  // The sections the design is built from.
+  await expect(page.getByTestId('categories')).toBeVisible();
+  await expect(page.getByTestId('trust-strip')).toBeVisible();
+  // The call to action on the featured draw, which is the page's whole point.
+  await expect(page.getByRole('link', { name: 'Enter now' }).first()).toBeVisible();
 });
 
 test('the homepage shows real draws from the API, and only permitted ones', async ({ page }) => {
   await page.goto('/');
 
   const draws = page.getByTestId('home-draws');
-  await expect(draws.getByTestId('draw-card').first()).toBeVisible();
+  await expect(draws.getByTestId('row-card').first()).toBeVisible();
   // Seeded, live, and in an open market.
-  await expect(draws).toContainText('Highland lodge escape');
+  await expect(page.getByTestId('featured-draw')).toContainText('Highland lodge escape');
 
   // The gate reaches the front page. Each of these exists in the database and
   // none of them may appear: the German draw is live but its market is not
   // approved, and the other two are a draft and a cancelled draw.
-  await expect(draws).not.toContainText('German draw');
-  await expect(draws).not.toContainText('Secret draft');
-  await expect(draws).not.toContainText('Withdrawn draw');
-
-  // Every open market is offered, and no closed one is.
-  const markets = page.getByTestId('markets');
-  await expect(markets.getByRole('link', { name: /United Kingdom/ })).toHaveAttribute(
-    'href',
-    '/uk/draws',
-  );
-  await expect(markets.getByRole('link', { name: /Ireland/ })).toHaveAttribute('href', '/ie/draws');
-  await expect(markets.locator('a[href^="/de"]')).toHaveCount(0);
+  const main = page.locator('main#main');
+  await expect(main).not.toContainText('German draw');
+  await expect(main).not.toContainText('Secret draft');
+  await expect(main).not.toContainText('Withdrawn draw');
 });
 
 test('the homepage does not publish the API health readout', async ({ page }) => {
@@ -67,6 +72,18 @@ test('the homepage does not publish the API health readout', async ({ page }) =>
   // database and Redis were up. The component still exists for internal use.
   await expect(page.getByTestId('api-status')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('redis');
+});
+
+/**
+ * The homepage carries claims this repository cannot substantiate — a review
+ * score, a winner count, a Trustpilot rating, a registered address — all of
+ * them from the design and all of them flagged in `home-content.ts`. The one
+ * thing standing between them and a search index is this tag, so it is
+ * asserted rather than trusted.
+ */
+test('the site is not indexable while the design carries placeholder claims', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
 });
 
 test('the footer carries real navigation only', async ({ page }) => {
@@ -78,16 +95,25 @@ test('the footer carries real navigation only', async ({ page }) => {
     '/uk/draws',
   );
   await expect(footer.getByRole('link', { name: /Ireland/ })).toHaveAttribute('href', '/ie/draws');
-  await expect(footer.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
-  await expect(footer.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
-    'href',
-    '/register',
-  );
   await expect(footer).toContainText(String(new Date().getFullYear()));
 
   // No closed market, and nothing internal.
   await expect(footer.locator('a[href^="/de"]')).toHaveCount(0);
   await expect(footer.locator('a[href^="/admin"]')).toHaveCount(0);
+});
+
+/**
+ * The header is the only route to an account now: the design replaced the
+ * explicit "Sign in" and "Register" links with one account action, and
+ * `/account` sends a signed-out visitor to the sign-in page. Registration is
+ * still one link from there, which is what this asserts — the journey has to
+ * survive the chrome being redrawn.
+ */
+test('an account is still reachable from the chrome', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'My Account' }).click();
+  await expect(page).toHaveURL(/\/login\?next=%2Faccount$/);
+  await expect(page.getByRole('link', { name: 'Register' })).toHaveAttribute('href', '/register');
 });
 
 test('the skip link still reaches the main landmark', async ({ page }) => {
