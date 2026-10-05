@@ -12,6 +12,13 @@
   --gold: #c8a24a;
   --gold-strong: #a9832c;
   --gold-soft: #f3ead3;
+  /* Primary action. New in the visual redesign: the brand is navy and gold,
+     and the call to action is deliberately neither, so it cannot be mistaken
+     for decoration. Contrast against white is 4.6:1 at --blue. */
+  --blue: #1668dc;
+  --blue-strong: #0f52b0;
+  --blue-soft: #eaf2fd;
+  --sand: #f0e4c4;
   --ivory: #f7f4ee;
   --surface: #ffffff;
   --line: #e4ddcf;
@@ -114,18 +121,28 @@ a {
 
 /* ---------------------------------------------------------------- header */
 
+/*
+ * White, low and quiet.
+ *
+ * It used to be an ink bar, which competed with every dark section beneath it.
+ * The page is now 70-80% white and the header is part of that: one hairline
+ * under it, compact type, and the only saturated thing in it is the call to
+ * action.
+ */
 .site-header {
-  background: var(--ink);
-  color: var(--on-ink);
-  border-bottom: 1px solid rgb(200 162 74 / 25%);
+  position: relative;
+  z-index: 10;
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
 }
 
 .site-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 64px;
+  gap: 12px 28px;
+  min-height: 76px;
 }
 
 .brand {
@@ -133,84 +150,141 @@ a {
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  color: inherit;
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .brand__mark {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   flex: none;
 }
 
-.site-header__nav {
+.brand__name {
   display: flex;
-  align-items: center;
-  gap: 8px 28px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand__tag {
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .site-nav {
-  display: flex;
-  gap: 4px 18px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  font-size: 0.925rem;
+  display: none;
+  align-items: center;
+  gap: 4px 26px;
+  font-size: 0.9rem;
 }
 
-/* The account links sit quieter than the product ones, and separated by a
-   hairline rather than by distance — at narrow widths distance runs out. */
-.site-nav--account {
-  position: relative;
-  padding-left: 28px;
-}
-
-.site-nav--account::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  translate: 0 -50%;
-  width: 1px;
-  height: 18px;
-  background: rgb(245 241 232 / 18%);
-}
-
-@media (max-width: 720px) {
-  .site-nav--account {
-    padding-left: 0;
-  }
-
-  .site-nav--account::before {
-    display: none;
+@media (min-width: 1080px) {
+  .site-nav {
+    display: flex;
   }
 }
 
 .site-nav a {
-  color: var(--on-ink-muted);
+  color: var(--text);
   text-decoration: none;
   padding: 6px 0;
+  border-bottom: 2px solid transparent;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .site-nav a:hover {
-  color: var(--on-ink);
+  border-bottom-color: var(--gold);
 }
 
-@media (max-width: 480px) {
-  .site-header__inner {
-    flex-wrap: wrap;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    gap: 8px;
-  }
+.site-nav__caret {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
 
-  .site-header__nav {
-    gap: 4px 16px;
-    width: 100%;
-    justify-content: flex-start;
+/* Sections that have no page yet. Text, not a link, and dimmed enough to read
+   as "not here" without being invisible. */
+.site-nav__soon,
+.site-footer__soon {
+  color: var(--muted);
+  opacity: 0.65;
+  cursor: default;
+}
+
+.site-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.icon-link svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.icon-link:hover {
+  background: var(--ivory);
+}
+
+/* The label goes when there is no room for it; the icon and its accessible
+   name stay. */
+.icon-link--labelled span {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .icon-link--labelled span {
+    display: inline;
+  }
+}
+
+/* Measured at 320px: brand + search + account + the call to action came to
+   354px against a 288px container. The search icon goes first - it is the
+   least load-bearing of the four, and the listing's own toolbar still has a
+   search field. */
+/* Measured at 320px: brand, search, account, basket and the call to action
+   overflow a 288px container. Search goes first, then the basket - both are
+   reachable from the pages themselves. */
+@media (max-width: 720px) {
+  .site-header__actions .icon-link--cart {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .site-header__actions .icon-link:not(.icon-link--labelled):not(.icon-link--cart) {
+    display: none;
+  }
+}
+
+@media (max-width: 519px) {
+  .site-header__inner {
+    min-height: 64px;
+    gap: 8px;
   }
 
   .brand {
@@ -218,10 +292,12 @@ a {
     gap: 8px;
   }
 
-  .site-nav {
-    gap: 4px 12px;
-    font-size: 0.85rem;
-    flex-wrap: nowrap;
+  .brand__tag {
+    display: none;
+  }
+
+  .site-header__actions {
+    gap: 4px;
   }
 }
 
@@ -253,100 +329,89 @@ a {
   padding: clamp(24px, 5vw, 48px) 0 64px;
 }
 
+/*
+ * The footer: one row, in daylight.
+ *
+ * Brand left, sections centred, social marks right, with the address and the
+ * legal line beneath. The contour wash is two repeating gradients at very low
+ * opacity - a texture, not a picture, and nothing to download.
+ */
 .site-footer {
-  background: var(--ink);
-  color: var(--on-ink-muted);
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--muted);
   font-size: 0.875rem;
-  padding: clamp(40px, 6vw, 64px) 0 32px;
-  border-top: 1px solid rgb(200 162 74 / 25%);
+  padding: clamp(28px, 4vw, 44px) 0 24px;
+  border-top: 1px solid var(--line);
 }
 
-.site-footer p {
-  margin: 0.25em 0;
+.site-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(112deg, rgb(200 162 74 / 8%) 0 1px, transparent 1px 54px),
+    repeating-linear-gradient(68deg, rgb(200 162 74 / 6%) 0 1px, transparent 1px 78px);
+  pointer-events: none;
+}
+
+.site-footer .container {
+  position: relative;
 }
 
 .site-footer a {
-  color: var(--on-ink-muted);
+  color: var(--muted);
   text-decoration: none;
 }
 
 .site-footer a:hover {
-  color: var(--on-ink);
-  text-decoration: underline;
+  color: var(--text);
 }
 
-.site-footer__grid {
-  display: grid;
-  gap: 32px;
-  grid-template-columns: 1fr;
-}
-
-@media (min-width: 720px) {
-  .site-footer__grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 40px;
-  }
-}
-
-@media (min-width: 1080px) {
-  .site-footer__grid {
-    /* The brand column is wider than the three link columns. */
-    grid-template-columns: 1.6fr 1fr 1fr 1.3fr;
-    gap: 48px;
-  }
+.site-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 32px;
 }
 
 .site-footer__brand .brand {
-  color: var(--on-ink);
-  margin-bottom: 12px;
+  color: var(--text);
 }
 
-.site-footer__brand p {
-  max-width: 34ch;
+.site-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  font-size: 0.85rem;
 }
 
-.site-footer__heading {
-  font-family: var(--font-body);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--on-ink);
-  margin: 0 0 14px;
-}
-
-.site-footer__col ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-
-.site-footer__col p {
-  max-width: 38ch;
-}
-
-.site-footer__meta {
-  color: rgb(185 192 204 / 65%);
-  font-size: 0.8em;
-  letter-spacing: 0.06em;
+.site-footer__soon {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: default;
 }
 
 .site-footer__base {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px 24px;
-  margin-top: clamp(32px, 5vw, 48px);
-  padding-top: 20px;
-  border-top: 1px solid rgb(245 241 232 / 10%);
-  font-size: 0.8rem;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .site-footer__base p {
   margin: 0;
-  max-width: 62ch;
+}
+
+.site-footer__meta {
+  font-size: 0.85em;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
 }
 
 /* ------------------------------------------------------------------ hero */
@@ -445,6 +510,79 @@ a {
 .button--quiet:hover {
   background: var(--ivory);
   border-color: var(--muted);
+}
+
+.button--danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.button[disabled],
+.button[aria-disabled='true'] {
+  background: var(--closed-soft);
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+
+/* The primary action. Blue so it is not gold, not navy, and impossible to
+   read as decoration on a page made of both. */
+.button--blue {
+  background: var(--blue);
+  color: #fff;
+}
+
+.button--blue:hover {
+  background: var(--blue-strong);
+}
+
+/* For the one dark band, where blue would disappear into navy. */
+.button--sand {
+  background: var(--sand);
+  color: var(--ink);
+}
+
+.button--sand:hover {
+  background: var(--gold-soft);
+}
+
+.button--lg {
+  min-height: 54px;
+  padding: 0 28px;
+  font-size: 1rem;
+}
+
+.button--sm {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+}
+
+.button__arrow {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.button--gold {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.button--gold:hover {
+  background: var(--gold-strong);
+}
+
+.button--ghost {
+  background: transparent;
+  border-color: rgb(245 241 232 / 40%);
+  color: var(--on-ink);
+}
+
+.button--outline {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
 }
 
 .button--danger {
@@ -1190,142 +1328,9 @@ table.data th {
   list-style: none;
 }
 
-/* ================================================================ home page
-   Full-bleed sections. Unlike every other page, the homepage owns its own
-   `main` and each section manages its container, so the ink bands can run
-   edge to edge while the copy stays on the shared 1160px measure. */
-
-.home {
-  /* No `site-main` padding: the first section is the hero and it sets its own. */
-  min-height: 60vh;
-}
-
-.home-section {
-  padding: clamp(48px, 8vw, 88px) 0;
-}
-
-/* A quiet change of surface, not a second colour scheme. */
-.home-section--tint {
-  background: var(--surface);
-  border-block: 1px solid var(--line);
-}
-
-/* ------------------------------------------------------------- home hero */
-
-.home-hero {
-  position: relative;
-  overflow: hidden;
-  background: var(--ink);
-  color: var(--on-ink);
-  padding: clamp(48px, 9vw, 104px) 0 clamp(52px, 9vw, 104px);
-}
-
-/*
- * Depth in three layers rather than one gradient: a warm pool of light behind
- * the emblem, a cool lift from the lower left, and a faint rule grid over the
- * top. Each is weak on its own; together they keep the panel from reading flat.
- */
-.home-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(52% 62% at 76% 34%, rgb(200 162 74 / 16%) 0%, transparent 62%),
-    radial-gradient(60% 70% at 8% 96%, rgb(36 51 77 / 85%) 0%, transparent 60%);
-  pointer-events: none;
-}
-
-.home-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right, rgb(245 241 232 / 4%) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(245 241 232 / 4%) 1px, transparent 1px);
-  background-size: 96px 96px;
-  mask-image: radial-gradient(80% 70% at 50% 40%, #000 0%, transparent 78%);
-  pointer-events: none;
-}
-
-.home-hero__inner {
-  position: relative;
-  display: grid;
-  gap: clamp(32px, 6vw, 56px);
-  align-items: center;
-}
-
-@media (min-width: 960px) {
-  .home-hero__inner {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 64px;
-  }
-}
-
-.home-hero__title {
-  font-size: clamp(2.2rem, 5.2vw, 3.6rem);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
-  /* Wide enough for the longer of the two lines; the <br> does the breaking. */
-  max-width: 20ch;
-  margin-bottom: 0.45em;
-  text-wrap: balance;
-}
-
-.home-hero__lede {
-  color: var(--on-ink-muted);
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
-  max-width: 48ch;
-  margin-bottom: 32px;
-}
-
-.cta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-}
-
-/* Below 400px two pill buttons side by side leave no room for their labels. */
-@media (max-width: 400px) {
-  .cta-row .button {
-    width: 100%;
-  }
-}
-
-.home-hero__art {
-  display: flex;
-  justify-content: center;
-}
-
-/*
- * Sized by how much room the hero has, not by its own ambition.
- *
- * Below 960px the hero is one column and the emblem sits under the copy,
- * where a 420px disc pushes the first competition most of a screen further
- * down. It is decoration; it yields.
- */
-.vault-emblem {
-  width: min(58%, 300px);
-  height: auto;
-  filter: drop-shadow(0 24px 48px rgb(0 0 0 / 45%));
-}
-
-@media (min-width: 960px) {
-  .vault-emblem {
-    width: min(100%, 420px);
-  }
-}
-
-/* Narrower still: above the copy rather than below it, so the heading is the
-   first thing on the page rather than the thing after the decoration. */
-@media (max-width: 640px) {
-  .home-hero__art {
-    order: -1;
-  }
-
-  .vault-emblem {
-    width: min(64%, 240px);
-  }
-}
+/* ================================================= shared page furniture
+   What survived the homepage redesign because other pages use it: the market
+   link row (listing) and the numbered steps (competition detail). */
 
 /* ----------------------------------------------------- market link row */
 
@@ -1389,80 +1394,6 @@ table.data th {
 .step p {
   color: var(--muted);
   margin: 0;
-}
-
-/* --------------------------------------------------------------- principles */
-
-.principles {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 20px;
-}
-
-@media (min-width: 720px) {
-  .principles {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 28px;
-  }
-}
-
-.principle {
-  padding: 26px 24px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.principle__title {
-  font-size: 1.1rem;
-  margin-bottom: 0.4em;
-}
-
-.principle__title::after {
-  content: '';
-  display: block;
-  width: 28px;
-  height: 2px;
-  margin-top: 10px;
-  background: var(--gold);
-}
-
-.principle p {
-  color: var(--muted);
-  margin: 0;
-}
-
-/* ------------------------------------------------------------- closing cta */
-
-.home-close {
-  position: relative;
-  overflow: hidden;
-  background: var(--ink-2);
-  color: var(--on-ink);
-  padding: clamp(48px, 8vw, 88px) 0;
-}
-
-.home-close::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(60% 120% at 50% 0%, rgb(200 162 74 / 14%) 0%, transparent 62%);
-  pointer-events: none;
-}
-
-.home-close__inner {
-  position: relative;
-  text-align: center;
-}
-
-.home-close h2 {
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  max-width: 18ch;
-  margin-inline: auto;
-  margin-bottom: 1em;
 }
 
 /* ====================================================== competition listing
@@ -1612,6 +1543,1119 @@ table.data th {
 .stack > section > h2 {
   font-size: 1.35rem;
   margin-bottom: 0.6em;
+}
+
+/* ================================================== home page (reference)
+   Built to the supplied design. White-dominant, navy type, gold accents,
+   blue primary action. Every photographic area is a drawn scene: there is no
+   image file in this repository and O14 blocks prize photography. */
+
+.home {
+  min-height: 60vh;
+  background: var(--surface);
+}
+
+.home-section {
+  padding: clamp(36px, 5vw, 60px) 0;
+}
+
+.home-section--flush {
+  padding-top: 0;
+}
+
+/* -------------------------------------------------------------- scenes */
+
+/*
+ * A photograph's slot before there is a photograph.
+ *
+ * Each scene is a wash plus a silhouette, filling its container exactly where
+ * the real image goes. Give `Scene` an `src` and an <img> replaces the
+ * artwork without any of these boxes changing size.
+ */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  background: linear-gradient(160deg, #1b2a44 0%, #0e1726 100%);
+  color: #0a1220;
+}
+
+/* A photograph fills its slot exactly as the drawn scene does. */
+.scene__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene__wash {
+  position: absolute;
+  inset: 0;
+}
+
+.scene__art {
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: 72%;
+}
+
+.scene__art--object {
+  inset: 50% 0 auto 50%;
+  translate: -50% -50%;
+  width: 62%;
+  height: auto;
+  color: var(--gold);
+}
+
+.scene--highland {
+  background: linear-gradient(120deg, #f7f4ee 0%, #dfe6ef 34%, #6d8099 62%, #2c3d59 100%);
+  color: #2f4361;
+}
+
+.scene--highland .scene__wash {
+  background: radial-gradient(48% 62% at 74% 26%, rgb(255 246 224 / 62%) 0%, transparent 62%);
+}
+
+.scene--whisky {
+  background: linear-gradient(150deg, #3a2a18 0%, #1a1208 60%, #0d0904 100%);
+}
+
+.scene--whisky .scene__wash {
+  background: radial-gradient(52% 58% at 62% 30%, rgb(214 164 70 / 46%) 0%, transparent 64%);
+}
+
+.scene--tech {
+  background: linear-gradient(150deg, #dfe4ea 0%, #9aa5b3 52%, #4d5765 100%);
+  color: #2a3340;
+}
+
+.scene--cars {
+  background: linear-gradient(150deg, #1f3350 0%, #0f1a2c 100%);
+  color: #6f89ad;
+}
+
+.scene--cars .scene__wash {
+  background: radial-gradient(60% 50% at 50% 22%, rgb(140 178 224 / 30%) 0%, transparent 62%);
+}
+
+.scene--property {
+  background: linear-gradient(150deg, #123a44 0%, #0d2630 60%, #071a22 100%);
+  color: #57a3a8;
+}
+
+.scene--property .scene__wash {
+  background: radial-gradient(52% 48% at 70% 26%, rgb(255 214 140 / 34%) 0%, transparent 62%);
+}
+
+.scene--experiences {
+  background: linear-gradient(150deg, #124055 0%, #0b2b3c 60%, #06202c 100%);
+  color: #3f8fa8;
+}
+
+.scene--experiences .scene__wash {
+  background: radial-gradient(56% 54% at 40% 20%, rgb(255 226 168 / 30%) 0%, transparent 62%);
+}
+
+.scene--barrels {
+  background: linear-gradient(120deg, #0e1726 0%, #1c2942 56%, #0e1726 100%);
+  color: #caa25a;
+}
+
+.scene--barrels .scene__art {
+  inset: 0;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- hero */
+
+.hero-shot {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: clamp(460px, 46vw, 540px);
+  display: flex;
+  align-items: center;
+  padding: clamp(28px, 4vw, 44px) 0;
+}
+
+.hero-shot__bg {
+  z-index: -2;
+}
+
+/* Light from the left, so navy type stays readable over the picture and the
+   artwork keeps its contrast on the right. */
+.hero-shot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    100deg,
+    rgb(255 255 255 / 96%) 0%,
+    rgb(255 255 255 / 88%) 34%,
+    rgb(255 255 255 / 34%) 56%,
+    transparent 76%
+  );
+  pointer-events: none;
+}
+
+.hero-shot__inner {
+  display: grid;
+  gap: clamp(24px, 3vw, 40px);
+  align-items: center;
+}
+
+@media (min-width: 1000px) {
+  .hero-shot__inner {
+    grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
+  }
+}
+
+.hero-shot__copy {
+  min-width: 0;
+  max-width: 640px;
+}
+
+.hero-shot__title {
+  font-size: clamp(2rem, 4.6vw, 3.3rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  max-width: 16ch;
+  margin-bottom: 0.3em;
+}
+
+.hero-shot__title em {
+  font-style: italic;
+  color: var(--gold-strong);
+}
+
+.hero-shot__lede {
+  color: var(--ink-3);
+  font-size: clamp(0.98rem, 1.5vw, 1.1rem);
+  max-width: 46ch;
+  margin-bottom: 18px;
+}
+
+/* ------------------------------------------------------------- promises */
+
+/* Four across on the desktop layout, as the design has them: `auto-fit` put
+   three on one line and left the fourth stranded underneath. */
+.promise-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+}
+
+@media (min-width: 760px) {
+  .promise-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px 16px;
+  }
+}
+
+.promise-row li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.promise-row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.promise-row strong {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.promise-row__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--gold-strong);
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ------------------------------------------------------- the draw card */
+
+.draw-ticket {
+  width: 100%;
+  max-width: 380px;
+  justify-self: end;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lift);
+}
+
+.draw-ticket__price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 14px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.draw-ticket__per {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------ countdown */
+
+.countdown-block__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.countdown-block__digits {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 32px;
+}
+
+.countdown-unit__value {
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-unit__name {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.countdown-block__sep {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--line);
+  line-height: 1;
+}
+
+.countdown-block__pending {
+  display: inline-block;
+  min-height: 44px;
+}
+
+.countdown-block__closed {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- meter */
+
+.meter__figures {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.meter__figures strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.meter__percent {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.meter__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.meter--warm .meter__figures {
+  margin: 8px 0 0;
+}
+
+.meter--warm .meter__fill {
+  background: linear-gradient(to right, var(--gold), var(--gold-strong));
+}
+
+/* ------------------------------------------------------------ categories */
+
+.cat-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 1079px) {
+  .cat-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .cat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 2px rgb(14 23 38 / 5%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+a.cat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: rgb(22 104 220 / 35%);
+}
+
+/* The reference marks the first card as selected. Visual only. */
+.cat--lead {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+/* No category endpoint exists, so these cards lead nowhere yet. */
+.cat--inert {
+  cursor: default;
+}
+
+/*
+ * "Coming soon", on the card.
+ *
+ * Four of the five categories have no draws and no endpoint behind them, and a
+ * tile that looks exactly like the open one promises draws this build cannot
+ * show. A word on the art says so where the eye already is, in the design's
+ * own ink-and-gold rather than a warning colour: the category is not a
+ * problem, it is simply not open yet.
+ */
+.cat__soon {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(14 23 38 / 82%);
+  color: var(--gold-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The art is dimmed a touch so the open category reads as the live one. */
+.cat--inert .cat__art .scene {
+  opacity: 0.72;
+}
+
+.cat__art {
+  position: relative;
+  display: block;
+  /* Close to the reference proportion: a mild portrait, not a tall panel. */
+  aspect-ratio: 9 / 10;
+  overflow: hidden;
+}
+
+.cat__art .scene {
+  transition: transform 0.35s ease;
+}
+
+a.cat:hover .cat__art .scene {
+  transform: scale(1.05);
+}
+
+.cat__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 14px 16px;
+  flex: 1;
+}
+
+.cat__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat__icon {
+  width: 19px;
+  height: 19px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+.cat__title {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.cat__blurb {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.cat__go {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: auto;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.cat--lead .cat__go {
+  background: var(--blue);
+  color: #fff;
+}
+
+.cat__go svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat,
+  .cat__art .scene {
+    transition: none;
+  }
+
+  a.cat:hover,
+  a.cat:hover .cat__art .scene {
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------- section intro */
+
+.section-intro {
+  max-width: 64ch;
+  margin-bottom: clamp(18px, 2.5vw, 26px);
+}
+
+.section-intro__title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  /* Set wide and open, the way the design has the section titles. */
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.25em;
+}
+
+.section-intro__icon {
+  width: 30px;
+  height: 30px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+.section-intro__lede {
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------- featured + instant prizes */
+
+.showcase {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+/*
+ * One column, because there is one thing in it.
+ *
+ * The design put the featured draw beside a list of instant prizes, and that
+ * list has gone: instant wins are a later phase with no table, contract or API
+ * field behind them, so every amount and every "1 of 1 left" in it was
+ * invented. Left as a two-column grid the surviving card would sit in the left
+ * half with the right half empty, so the row collapses to one column and the
+ * card fills it. The second column comes back with the prizes.
+ */
+@media (min-width: 1000px) {
+  .showcase {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.showcase__draw {
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+@media (min-width: 520px) {
+  .showcase__draw {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  }
+}
+
+.showcase__media {
+  position: relative;
+  min-height: 240px;
+}
+
+.showcase__flag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow);
+}
+
+.showcase__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+}
+
+.showcase__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.showcase__title {
+  font-size: 1.35rem;
+  margin: 0;
+  max-width: 18ch;
+}
+
+.showcase__title a {
+  text-decoration: none;
+}
+
+.showcase__title a:hover {
+  text-decoration: underline;
+}
+
+.heart {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.heart:hover {
+  background: var(--ivory);
+  color: var(--danger);
+}
+
+.heart svg {
+  width: 19px;
+  height: 19px;
+}
+
+.showcase__prize,
+.mini__prize {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.showcase__price,
+.mini__price {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 4px 0 0;
+}
+
+.showcase__per,
+.mini__per,
+.draw-ticket__per {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.showcase__body .countdown-block {
+  margin-top: 6px;
+}
+
+.showcase__body .button {
+  margin-top: auto;
+}
+
+/* ------------------------------------------------------------ mini cards */
+
+.mini-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 1000px) {
+  .mini-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.mini {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(14 23 38 / 5%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.mini:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.mini__media {
+  position: relative;
+  min-height: 100%;
+}
+
+.mini__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 12px 14px;
+  min-width: 0;
+}
+
+.mini__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mini__title {
+  font-size: 0.98rem;
+  margin: 0;
+}
+
+.mini__title a {
+  text-decoration: none;
+}
+
+.mini__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.mini__when {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.mini__body .button {
+  margin-top: auto;
+  min-height: 38px;
+  font-size: 0.82rem;
+}
+
+/* The "ends in" rail down the right edge, as the reference has it. */
+.mini__ends {
+  display: flex;
+  align-items: center;
+  padding: 10px 10px 10px 0;
+  border-left: 1px solid var(--line);
+}
+
+.mini__ends .countdown-block__digits {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 0;
+  padding-left: 10px;
+}
+
+.mini__ends .countdown-block__sep {
+  display: none;
+}
+
+.mini__ends .countdown-block__label {
+  writing-mode: horizontal-tb;
+  font-size: 0.56rem;
+  margin: 0 0 6px 10px;
+}
+
+.mini__ends .countdown-unit {
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mini__ends .countdown-unit__value {
+  font-size: 0.95rem;
+}
+
+.mini__ends .countdown-unit__name {
+  font-size: 0.5rem;
+  margin-top: 0;
+}
+
+/* Below the three-column breakpoint the rail has nowhere to go. */
+@media (max-width: 519px) {
+  .mini {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .mini__ends {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------- banner */
+
+.banner {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 26px;
+  padding: clamp(20px, 3vw, 32px) clamp(20px, 3.5vw, 40px);
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.banner__bg {
+  z-index: -2;
+  opacity: 0.55;
+}
+
+.banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    90deg,
+    rgb(14 23 38 / 96%) 0%,
+    rgb(14 23 38 / 72%) 58%,
+    rgb(14 23 38 / 92%) 100%
+  );
+  pointer-events: none;
+}
+
+.banner__icon {
+  width: 34px;
+  height: 34px;
+  color: var(--gold);
+  flex: none;
+}
+
+.banner__copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.banner__title {
+  font-size: clamp(1.4rem, 2.8vw, 2rem);
+  margin-bottom: 0.2em;
+}
+
+.banner__copy p {
+  color: var(--on-ink-muted);
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.9rem;
+}
+
+/* ----------------------------------------------------------- how it works */
+
+.flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 860px) {
+  .flow {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+}
+
+.flow__step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-right: 14px;
+}
+
+@media (min-width: 860px) {
+  .flow__step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 24px;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    border-top: 2px solid var(--gold);
+    border-right: 2px solid var(--gold);
+    rotate: 45deg;
+  }
+}
+
+.flow__disc {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--gold);
+}
+
+.flow__disc svg {
+  width: 25px;
+  height: 25px;
+}
+
+.flow__title {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 0.3em;
+}
+
+.flow__number {
+  color: var(--gold-strong);
+}
+
+.flow__step p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* ----------------------------------------------------------- trust strip */
+
+.trust-strip {
+  border-top: 1px solid var(--line);
+  padding: clamp(18px, 2.6vw, 26px) 0;
+  background: var(--surface);
+}
+
+.trust-strip__row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 899px) {
+  .trust-strip__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 439px) {
+  .trust-strip__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trust-strip__row li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* Hairlines between the columns, as the reference has them. */
+@media (min-width: 900px) {
+  .trust-strip__row li + li {
+    border-left: 1px solid var(--line);
+  }
+}
+
+.trust-strip__row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.trust-strip__row strong {
+  color: var(--text);
+  font-size: 0.85rem;
+  margin-bottom: 1px;
+}
+
+.trust-strip__icon {
+  width: 26px;
+  height: 26px;
+  color: var(--gold-strong);
+  flex: none;
+}
+
+/* ------------------------------------------------- section openings, etc.
+   Rules the reference design needs that went with the previous homepage
+   block. Kept together so the next rewrite can see what the page relies on. */
+
+.rule-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+
+.rule-eyebrow .eyebrow {
+  margin-bottom: 0;
+}
+
+.rule-eyebrow__rule {
+  flex: 1 1 auto;
+  max-width: 88px;
+  height: 1px;
+  background: linear-gradient(to right, var(--gold), rgb(200 162 74 / 0%));
+}
+
+.rule-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: clamp(18px, 2.5vw, 26px);
+}
+
+.rule-head__title {
+  font-family: var(--font-body);
+  font-size: clamp(1rem, 1.9vw, 1.2rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.rule-head__rule {
+  flex: 1 1 60px;
+  max-width: 120px;
+  height: 1px;
+  background: linear-gradient(to right, var(--gold), rgb(200 162 74 / 0%));
+}
+
+.rule-head__aside {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.meter__of {
+  color: var(--muted);
+}
+
+.site-footer__legal,
+.site-footer__markets {
+  color: var(--muted);
 }
 
 /* ==================================================== competition detail
