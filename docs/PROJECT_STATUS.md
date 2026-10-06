@@ -1,14 +1,14 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-10-05_
+_Last updated: 2026-10-06_
 
 ## Current phase
 
-**Phase 6 (payments) is implemented and not yet closed. The customer UI is merged. `develop` is at `b4eb8c7`.**
+**Phase 6 (payments) is implemented and not yet closed. The customer UI is merged through UI-7. `develop` is at `966603c`.**
 
 > **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below the historical heading was written for Phases 4 and 5 and is kept as the record. Where the two disagree about Phase 6, the scope lock wins.
 
-Baseline: `origin/develop` = `b4eb8c7` (**PR #45**), `origin/main` = `c284825` (Phase 4). 27 migrations, 35 ADRs. CI green on PR #45 (run #86).
+Baseline: `origin/develop` = `966603c` (**PR #46**), `origin/main` = `c284825` (Phase 4). 27 migrations, 35 ADRs. CI green on PR #46 (run #88).
 
 ### Payment slices
 
@@ -51,7 +51,7 @@ Signed in: homepage → market → competition listing → competition detail �
 Two things bound that journey:
 
 - **A signed-out visitor cannot enter.** The API supports guests end to end — `phase5-journey.int.test.ts` proves the whole guest path — but the web app never forwards or adopts the `hv_guest` cookie, and the entry panel renders "Sign in to buy". Guest checkout has no web surface.
-- **The journey ends at `paid` and stops there.** There is no order history page, no confirmation email, no ticket numbers after purchase, and no draw outcome.
+- **The journey ends shortly after `paid`.** UI-8 adds the order-history page and the ticket numbers a paid order bought — **implemented on `feature/ui-8-order-history` and not merged**, so neither is on `develop` yet. There is still no confirmation email and no draw outcome.
 
 ### Current admin and UI limitations
 
@@ -68,24 +68,26 @@ The admin web covers **draws only** (list, create, edit, prizes, skill question,
 
 No table, service or route exists for any of these. Only RBAC permission strings were seeded for some of them in Phase 2.
 
-| Capability                              | Status                                                                                                                                                     |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer order history                  | **Not implemented.** `GET /markets/:market/checkout/orders` exists; no web page consumes it                                                                |
-| Post-payment confirmation               | **On-page only.** The order and return pages show `paid`; nothing is sent                                                                                  |
-| Ticket-number visibility after purchase | **Lost on purchase.** `TicketsRepository.ticketNumbers` filters `status = 'reserved'` and finalisation sets `sold`, so a paid order returns an empty array |
-| Confirmation / transactional email      | **Scaffolded only.** Only the guest verification topic relays to SMTP; the four `order.*` topics map to a handler that logs and returns `published`        |
-| Wallet                                  | Not implemented. `orders.wallet_applied_minor` exists and stays 0                                                                                          |
-| Instant wins                            | Not implemented                                                                                                                                            |
-| Settlement                              | Not implemented                                                                                                                                            |
-| Winners                                 | Not implemented                                                                                                                                            |
-| Fulfilment                              | Not implemented                                                                                                                                            |
-| Postal entry                            | Not implemented                                                                                                                                            |
-| Reports / CSV export                    | Not implemented                                                                                                                                            |
-| Referrals                               | Not implemented                                                                                                                                            |
-| Vault Meter                             | Not implemented                                                                                                                                            |
-| Password reset                          | Not implemented. `auth.service.ts` records that it needs transactional email                                                                               |
-| User email verification                 | Not implemented. `users.email_verified_at` exists and is never written by application code                                                                 |
-| Compliance / anonymisation              | Not implemented                                                                                                                                            |
+Two rows are the exception and say so: order history and post-purchase ticket numbers are **UI-8**, implemented on `feature/ui-8-order-history` and not merged. They stay in this table until that lands.
+
+| Capability                              | Status                                                                                                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer order history                  | **Implemented, not merged** (UI-8, `feature/ui-8-order-history`). `GET /markets/:market/checkout/orders` always existed; `/[market]/orders` now consumes it                                     |
+| Post-payment confirmation               | **On-page only.** The order and return pages show `paid`; nothing is sent                                                                                                                       |
+| Ticket-number visibility after purchase | **Implemented, not merged** (UI-8). Nothing was ever lost: the sale keeps `order_items.reservation_id`, and only the read filtered `status = 'reserved'`. `soldOrHeldNumbers` reads both states |
+| Confirmation / transactional email      | **Scaffolded only.** Only the guest verification topic relays to SMTP; the four `order.*` topics map to a handler that logs and returns `published`                                             |
+| Wallet                                  | Not implemented. `orders.wallet_applied_minor` exists and stays 0                                                                                                                               |
+| Instant wins                            | Not implemented                                                                                                                                                                                 |
+| Settlement                              | Not implemented                                                                                                                                                                                 |
+| Winners                                 | Not implemented                                                                                                                                                                                 |
+| Fulfilment                              | Not implemented                                                                                                                                                                                 |
+| Postal entry                            | Not implemented                                                                                                                                                                                 |
+| Reports / CSV export                    | Not implemented                                                                                                                                                                                 |
+| Referrals                               | Not implemented                                                                                                                                                                                 |
+| Vault Meter                             | Not implemented                                                                                                                                                                                 |
+| Password reset                          | Not implemented. `auth.service.ts` records that it needs transactional email                                                                                                                    |
+| User email verification                 | Not implemented. `users.email_verified_at` exists and is never written by application code                                                                                                      |
+| Compliance / anonymisation              | Not implemented                                                                                                                                                                                 |
 
 ### Open owner decisions
 

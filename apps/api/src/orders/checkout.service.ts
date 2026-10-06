@@ -499,8 +499,16 @@ export class CheckoutService {
         quantity: item.quantity,
         unitPriceMinor: item.unitPriceMinor,
         totalMinor: item.totalMinor,
-        // Still held, not sold: the numbers come from the live reservation.
-        ticketNumbers: await this.tickets.ticketNumbers(this.db, item.reservationId),
+        /*
+         * The numbers this line bought, before or after payment (UI-8).
+         *
+         * `ticketNumbers` is `reserved`-only and so answered nothing once an
+         * order was paid for — the tickets were still there, still linked to
+         * this line's reservation, just renamed `sold`. This read covers both
+         * states and still answers nothing for a hold that was released or
+         * expired, because ending a hold detaches its tickets.
+         */
+        ticketNumbers: await this.tickets.soldOrHeldNumbers(this.db, item.reservationId),
       });
     }
     return {

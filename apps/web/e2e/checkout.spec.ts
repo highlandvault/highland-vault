@@ -1,7 +1,8 @@
 import { expect, test, type BrowserContext, type Page, type Response } from '@playwright/test';
 import { createHmac, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { E2E_API_ENV, E2E_API_URL } from '../playwright.config';
-import { registerCustomer } from './fixtures';
+import { STAFF_EMAIL_FILE, registerCustomer, signIn } from './fixtures';
 
 /**
  * The purchase journey, end to end in a real browser (P6-8).
@@ -938,5 +939,126 @@ test.describe('checkout', () => {
       await expect(page.locator('main#main')).toHaveCount(1);
       await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
     }
+  });
+
+  // =================================================== UI-8: order history
+  //
+  // Still the block's one account, and still the real webhook. UI-8 adds **no
+  // registration at all**: the one test that needs a second identity signs
+  // into an account the setup project has already made.
+
+  test('history lists a paid order and leads to its ticket numbers', async () => {
+    const orderUrl = await payInFull(2);
+
+    await page.goto('/uk/orders');
+    await expect(page.getByTestId('orders')).toBeVisible();
+    // Every row here is this customer's, and the newest is the one just paid.
+    const row = page.getByTestId('order-row').first();
+    await expect(row.getByTestId('order-row-status')).toHaveText('Paid');
+    await expect(row.getByTestId('order-row-total')).toHaveText('£5.98');
+
+    // From the list to the order, the way a customer gets there.
+    await row.getByTestId('order-row-link').click();
+    await expect(page).toHaveURL(orderUrl);
+
+    /*
+     * The numbers themselves, on a PAID order.
+     *
+     * This is what UI-8 exists for: the tickets are `sold` rather than
+     * `reserved`, and before the read was widened this list was empty on
+     * exactly the order a customer most wants to see. Two entries were bought,
+     * so two numbers are shown.
+     */
+    await expect(page.getByTestId('order-status')).toContainText('Paid');
+    await expect(page.getByTestId('order-ticket-numbers')).toBeVisible();
+    await expect(page.getByTestId('order-ticket-number')).toHaveCount(2);
+    await expect(page.getByTestId('order-ticket-number').first()).toHaveText(/^#\d+$/);
+  });
+
+  test('history and a paid order hold one landmark and no overflow at any width', async () => {
+    // The same sweep `draws.spec.ts` runs over the competition page, across
+    // the range the design supports. Both pages gained content in UI-8 — the
+    // rows here, the ticket chips there — and both have to hold a long draw
+    // title, a badge and a row of numbers at 320px without pushing the page
+    // sideways.
+    await page.goto('/uk/orders');
+    const orderPath = await page
+      .getByTestId('order-row')
+      .first()
+      .getByTestId('order-row-link')
+      .getAttribute('href');
+    expect(orderPath, 'the history links to an order').toBeTruthy();
+
+    for (const width of [320, 360, 390, 768, 900, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const path of ['/uk/orders', orderPath!]) {
+        await page.goto(path);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} at ${width}px`).toBeLessThanOrEqual(0);
+        // The market layout owns the landmark, so this is also a check that
+        // neither page grew one of its own.
+        await expect(page.locator('main#main')).toHaveCount(1);
+        await expect(page.locator('main')).toHaveCount(1);
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+      }
+    }
+  });
+
+  /**
+   * Whose orders these are.
+   *
+   * The order is left `awaiting_payment` on purpose — paying for it would
+   * prove nothing extra here, and ownership is decided by the session rather
+   * than by anything about the payment.
+   *
+   * **The other account is the support one the setup project already made**,
+   * signed into a context of its own, rather than a freshly registered
+   * customer. Two reasons. The suite's registration budget is nineteen of the
+   * twenty an hour the API allows one address — two staff accounts in setup,
+   * fourteen helper calls, `draws.spec.ts` again on the mobile project, and
+   * two inline in `auth.spec.ts` — so a twentieth would leave no margin at
+   * all. And it asserts something stronger on the way: not merely that
+   * another customer cannot read this order, but that a member of staff
+   * cannot either, because the customer route authorizes the buyer and nobody
+   * else.
+   */
+  test('another account sees neither the order nor it in their history', async ({ browser }) => {
+    await toCheckout('highland-lodge-escape', 1);
+    await page.getByRole('radio', { name: RIGHT, exact: true }).check();
+    await acceptTerms();
+    await page.getByTestId('checkout-submit').click();
+    await expect(page).toHaveURL(/\/uk\/orders\/[0-9a-f-]{36}$/);
+    const orderUrl = page.url();
+
+    const other = await browser.newContext();
+    try {
+      const stranger = await other.newPage();
+      await signIn(stranger, readFileSync(STAFF_EMAIL_FILE, 'utf8').trim());
+      await expect(stranger).toHaveURL(/\/account$/);
+      // Somebody else's order is indistinguishable from one that is not there.
+      expect((await stranger.goto(orderUrl))?.status()).toBe(REFUSED);
+      await stranger.goto('/uk/orders');
+      await expect(stranger.getByTestId('orders-empty')).toBeVisible();
+      await expect(stranger.getByTestId('order-row')).toHaveCount(0);
+    } finally {
+      await other.close();
+    }
+
+    // Signed out, history asks for a sign-in and shows nothing at all.
+    const anonymous = await browser.newContext();
+    try {
+      const visitor = await anonymous.newPage();
+      await visitor.goto('/uk/orders');
+      await expect(visitor).toHaveURL(/\/login\?next=%2Fuk%2Forders/);
+      await expect(visitor.getByTestId('order-row')).toHaveCount(0);
+    } finally {
+      await anonymous.close();
+    }
+
+    // And it is still there for the customer it belongs to.
+    await page.goto('/uk/orders');
+    await expect(page.getByTestId('order-row').first().getByTestId('order-row-link')).toBeVisible();
   });
 });

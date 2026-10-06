@@ -324,6 +324,93 @@ describe('creating an order', () => {
     });
   });
 
+  /**
+   * The numbers on an order's lines (UI-8).
+   *
+   * An order's tickets are the SAME tickets throughout its life, named
+   * differently depending on what has happened to them: `reserved` while the
+   * hold is live, `sold` once it has been paid for, and detached from the
+   * reservation altogether once the hold ends. The order DTO has to tell the
+   * truth in each of those states, and the first two are the ones a customer
+   * actually looks at.
+   *
+   * The paid state is proved in `order-access.int.test.ts`, which has the
+   * payment plumbing to reach it honestly through a signed webhook. Here are
+   * the two states Phase 5 can reach on its own.
+   */
+  describe('the ticket numbers on an order', () => {
+    const reservationOf = async (orderId: string) =>
+      (
+        await h.sql.query<{ reservation_id: string }>(
+          `SELECT reservation_id FROM order_items WHERE order_id = $1`,
+          [orderId],
+        )
+      ).rows[0]!.reservation_id;
+
+    /** What the database says this order's line is holding, in order. */
+    const heldNumbers = async (orderId: string) =>
+      (
+        await h.sql.query<{ ticket_number: number }>(
+          `SELECT t.ticket_number
+             FROM tickets t
+             JOIN order_items oi ON oi.reservation_id = t.reservation_id
+            WHERE oi.order_id = $1 AND t.status = 'reserved'
+            ORDER BY t.ticket_number`,
+          [orderId],
+        )
+      ).rows.map((r) => r.ticket_number);
+
+    it('are the numbers the hold is holding while the order awaits payment', async () => {
+      const client = await readyCustomer(3);
+      const order = orderOf(await place(client, freshKey(), 3));
+      expect(order.status).toBe('awaiting_payment');
+
+      const held = await heldNumbers(order.id);
+      expect(held).toHaveLength(3);
+      // The API's answer, against the database's, including the order.
+      expect(order.items[0]!.ticketNumbers).toEqual(held);
+
+      // And on the read path, not only in the response that created it.
+      const fetched = orderOf(await client.get(`/markets/uk/checkout/orders/${order.id}`));
+      expect(fetched.items[0]!.ticketNumbers).toEqual(held);
+
+      // The list the order-history page reads says the same.
+      const listed = OrderListResponseSchema.parse(
+        (await client.get('/markets/uk/checkout/orders')).json(),
+      ).orders.find((o) => o.id === order.id);
+      expect(listed!.items[0]!.ticketNumbers).toEqual(held);
+    });
+
+    /**
+     * A hold that has ended has no numbers to report, and that is not a
+     * presentation choice: `hv_end_reservation` puts the tickets back in the
+     * draw and sets `reservation_id` to NULL, so the numbers may already
+     * belong to somebody else. Printing them would be a claim about tickets
+     * this order no longer has.
+     *
+     * Driven through the database function the expiry sweep itself calls, so
+     * the state reached here is the state production reaches.
+     */
+    for (const ending of ['expired', 'released'] as const) {
+      it(`are gone once the hold has been ${ending}`, async () => {
+        const client = await readyCustomer(2);
+        const order = orderOf(await place(client, freshKey(), 2));
+        expect(order.items[0]!.ticketNumbers).toHaveLength(2);
+
+        await h.sql.query(`SELECT hv_end_reservation($1::uuid, $2)`, [
+          await reservationOf(order.id),
+          ending,
+        ]);
+
+        const after = orderOf(await client.get(`/markets/uk/checkout/orders/${order.id}`));
+        expect(after.items[0]!.ticketNumbers).toEqual([]);
+        // The line itself is untouched: what was bought is a permanent record.
+        expect(after.items[0]!.quantity).toBe(2);
+        expect(after.totalMinor).toBe(order.totalMinor);
+      });
+    }
+  });
+
   describe('a verified guest', () => {
     it('places an order without an account', async () => {
       const before = await h.sql.query<{ n: number }>(`SELECT count(*)::int AS n FROM users`);

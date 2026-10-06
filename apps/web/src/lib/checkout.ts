@@ -3,6 +3,7 @@ import {
   type Cart,
   CartResponseSchema,
   type Order,
+  OrderListResponseSchema,
   OrderResponseSchema,
   type MarketTermsResponse,
   MarketTermsResponseSchema,
@@ -57,4 +58,34 @@ export async function fetchOrder(market: string, id: string): Promise<OrderLooku
     return { ok: false, reason: 'verification_required' };
   }
   return { ok: false, reason: 'not_found' };
+}
+
+export type OrderListLookup =
+  { ok: true; orders: Order[] } | { ok: false; reason: 'signed_out' | 'unavailable' };
+
+/**
+ * The caller's own orders in this market, newest first as the API returns them
+ * (UI-8).
+ *
+ * Market-scoped because the route is: `GET /markets/{market}/checkout/orders`
+ * answers for one market, and the API decides whose orders those are from the
+ * session it was sent. Nothing here filters, sorts or totals anything — the
+ * order of the list, and the fifty it stops at, are the API's.
+ *
+ * **An empty list and a failed call are different answers**, so they are
+ * different results. Telling a customer they have no orders because the API
+ * could not be reached would be a lie the page has no way to detect.
+ */
+export async function fetchOrders(market: string): Promise<OrderListLookup> {
+  const result = await apiFetch(`/markets/${market}/checkout/orders`, {
+    parse: (json) => OrderListResponseSchema.parse(json).orders,
+  });
+  if (result.ok) return { ok: true, orders: result.data };
+  // The route recognises a caller rather than requiring one, so "nobody is
+  // signed in" arrives as a refusal to resolve an identity, not as a 401. Both
+  // mean the same thing to this page.
+  if (result.status === 401 || result.code === 'CHECKOUT_IDENTITY_REQUIRED') {
+    return { ok: false, reason: 'signed_out' };
+  }
+  return { ok: false, reason: 'unavailable' };
 }

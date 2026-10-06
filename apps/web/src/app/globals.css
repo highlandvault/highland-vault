@@ -1080,6 +1080,18 @@ a {
   color: #fff;
 }
 
+/* A quiet label above the numbers, matching the small caps `.facts dt` wears
+   so the two sit together inside an order line. */
+.ticket-numbers__title {
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+
 .ticket-numbers {
   display: flex;
   flex-wrap: wrap;
@@ -3329,4 +3341,45 @@ a.cat:hover .cat__art .scene {
     display: grid;
     grid-template-columns: 1fr;
   }
+}
+
+/* ----------------------------------------------------------- order history */
+
+/*
+ * One row per order on the list of them (UI-8).
+ *
+ * Deliberately not `.panel`, although it wears the same surface: the rows sit
+ * in a `.payment-lines` grid whose gap already spaces them, and
+ * `.panel + .panel` would stack a margin on top of that gap.
+ */
+.order-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(14px, 2.5vw, 20px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.order-row p {
+  margin: 0;
+}
+
+/* The order number and its state, side by side while they fit and stacked
+   when they do not. */
+.order-row__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+/* Three short facts, so they share a line on a phone instead of leaving the
+   default two-column grid with a lone third below it. */
+.order-row .facts {
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px 18px;
 }

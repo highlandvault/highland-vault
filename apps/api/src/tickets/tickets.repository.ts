@@ -267,12 +267,49 @@ export class TicketsRepository {
     return rows.map(toReservation);
   }
 
+  /**
+   * The numbers a LIVE hold is holding.
+   *
+   * Deliberately `reserved` only. Both callers — the basket line and the
+   * reservation page — guard on the reservation still being active and are
+   * describing something the customer may still lose, so a sold ticket is not
+   * one of the numbers they are asking about. An order that has been paid for
+   * wants `soldOrHeldNumbers` instead.
+   */
   async ticketNumbers(db: DbExecutor, reservationId: string): Promise<number[]> {
     const rows = await db
       .selectFrom('tickets')
       .select('ticket_number')
       .where('reservation_id', '=', reservationId)
       .where('status', '=', 'reserved')
+      .orderBy('ticket_number')
+      .execute();
+    return rows.map((r) => r.ticket_number);
+  }
+
+  /**
+   * The numbers an order bought, whichever side of payment it is on (UI-8).
+   *
+   * The same tickets, under two different names. A hold's tickets are
+   * `reserved`; paying for them sets them `sold` and **leaves
+   * `reservation_id` alone**, so the link from the order's line to its
+   * numbers survives the sale and nothing has to be copied anywhere to keep
+   * it. Only releasing or expiring a hold detaches them, by setting the column
+   * to NULL — which is why a lapsed reservation answers with nothing here
+   * rather than with numbers somebody else may now hold.
+   *
+   * The status filter is therefore belt-and-braces: `tickets_holder_consistent`
+   * already guarantees that a row pointing at a reservation is not
+   * `available`. It is written out so the two states this read is about are
+   * visible, and so a status added later has to be considered rather than
+   * silently included.
+   */
+  async soldOrHeldNumbers(db: DbExecutor, reservationId: string): Promise<number[]> {
+    const rows = await db
+      .selectFrom('tickets')
+      .select('ticket_number')
+      .where('reservation_id', '=', reservationId)
+      .where('status', 'in', ['reserved', 'sold'])
       .orderBy('ticket_number')
       .execute();
     return rows.map((r) => r.ticket_number);
