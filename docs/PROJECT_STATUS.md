@@ -1,32 +1,103 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-10-05_
 
 ## Current phase
 
-**Phase 6 (payments + settlement) is under way. P6-1 through P6-5 are merged into `develop` (`a71e687`); P6-7 is the active task.**
+**Phase 6 (payments) is implemented and not yet closed. The customer UI is merged. `develop` is at `b4eb8c7`.**
 
-> **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below this section was written for Phases 4 and 5 and is kept as the historical record. Where the two disagree about Phase 6, the scope lock wins.
+> **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below the historical heading was written for Phases 4 and 5 and is kept as the record. Where the two disagree about Phase 6, the scope lock wins.
 
-| Slice                                                    | State                                       | Migrations     |
-| -------------------------------------------------------- | ------------------------------------------- | -------------- |
-| **P6-1** Provider port + fake provider                   | merged                                      | none           |
-| **P6-2** Payment attempts + initiation                   | merged                                      | `0019`, `0020` |
-| **P6-3** Webhook persistence + verified intake           | merged                                      | `0021`         |
-| **P6-4** Atomic finalization (Gate 4 work)               | merged                                      | `0022`–`0024`  |
-| **P6-5** Status / reconciliation / expiry / refund retry | merged                                      | `0025`         |
-| **P6-6** Broader refund slice                            | **CONSUMED BY P6-4** — not a separate slice | —              |
-| **P6-7** Per-market payment configuration                | implemented, unmerged                       | `0026`         |
-| **P6-8** Web payment flow                                | **active**                                  | `0027`         |
-| **P6-9** Hardening / Gate 4 sign-off                     | not started                                 | none           |
+Baseline: `origin/develop` = `b4eb8c7` (**PR #45**), `origin/main` = `c284825` (Phase 4). 27 migrations, 35 ADRs. CI green on PR #45 (run #86).
 
-**The web purchase journey is basket-first as of P6-8.** An order is built from the basket and must match it exactly (ADR-0032), so the draw page adds to the basket rather than reserving directly. The allocation is unchanged — `CartService` takes the same hold through the same ticket engine — and the reservation detail page is kept and linked from each basket line.
+### Payment slices
 
-**Gate 4 is not signed off.** All thirteen G4 items in [scope lock §24](PHASE_6_SCOPE_LOCK.md) remain open, and G4.4 ("one credit") is deferred to Gate 6 / P8 by **D8 = A**. A Phase 6 Definition of Done must be committed **before** the phase closes (G4.10).
+| Slice                                                    | State                                       | PR       | Migrations     |
+| -------------------------------------------------------- | ------------------------------------------- | -------- | -------------- |
+| **P6-1** Provider port + fake provider                   | merged (`644a759`)                          | #27      | none           |
+| **P6-2** Payment attempts + initiation                   | merged (`1b38ca5`)                          | #28      | `0019`, `0020` |
+| **P6-3** Webhook persistence + verified intake           | merged (`f56616a`)                          | #29      | `0021`         |
+| **P6-4** Atomic finalisation                             | merged (`b9d6351`)                          | #30      | `0022`–`0024`  |
+| **P6-5** Status / reconciliation / expiry / refund retry | merged (`a71e687`)                          | #31      | `0025`         |
+| **P6-6** Broader refund slice                            | **CONSUMED BY P6-4** — not a separate slice | —        | —              |
+| **P6-7** Per-market payment configuration                | merged (`672c0d7`)                          | #33      | `0026`         |
+| **P6-8** Web payment flow                                | merged (`b8e3133`, `748b9e9`)               | #34, #35 | `0027`         |
+| **P6-9** Customer payment status made read-only          | merged (`0834263`)                          | #36      | none           |
 
-**Open owner decisions in Phase 6**, none of which an implementer may decide: **K-3** (a provider capture against a `cancelled` order — detected, flagged, unprocessed, **no policy**); **K-c** (what makes an order failed — `order.payment_failed` has a handler and no producer); manual retry after a terminal `failed` refund; and **O7**, **O9**, **O12**, **O13**, all deferred beyond Phase 6.
+### Customer UI
 
-**Still true, and now the reason local development needs a decision:** no market can be enabled on a real database until the owner supplies the O12 compliance values (ADR-0016), and since P6-7 an enabled market additionally needs a payment configuration before it can take money.
+| Slice                        | State              | PR  |
+| ---------------------------- | ------------------ | --- |
+| **UI-1** Homepage            | merged (`ff8309b`) | #37 |
+| **UI-2** Competition listing | merged (`c2557cb`) | #38 |
+| **UI-3** Competition detail  | merged (`6da546c`) | #40 |
+| **UI-4** Basket              | merged (`71eff2a`) | #41 |
+| **UI-5** Checkout            | merged (`6d3a984`) | #42 |
+| **UI-6** Payment UX          | merged (`ddc4c74`) | #44 |
+| **Homepage visual redesign** | merged (`b4eb8c7`) | #45 |
+
+**PR #39** (`d6bfa6f`) is net zero: a reservation-countdown fix (`d0f72be`) that was reverted (`3c7a3a5`) after its own negative control showed the regression test could not distinguish the two implementations. The flakiness it chased was host-level browser suspension (`net::ERR_NETWORK_IO_SUSPENDED`), not an application defect.
+
+### Gate 4 is not signed off
+
+The matrix is assembled with repository evidence in [scope lock §24a](PHASE_6_SCOPE_LOCK.md). **Every criterion except G4.4 now has evidence**, G4.8 included: `checkout-orders.int.test.ts` times the order-creation request and asserts it completes inside the three seconds B10 allows. **G4.4 ("one credit") is deferred to Gate 6 / P8 by D8 = A** and Phase 6 does not claim it.
+
+One judgement remains, and it is the owner's: **G4.2 is recorded as met on its outcome invariant rather than on contention.** It and Gates 1 and 2 all race with `Promise.all` rather than the barrier §15 asks for, so either that long-standing method is accepted explicitly or the barrier is adopted — and adopting it would reopen Phase 4, since Gates 1 and 2 would need the same treatment. **The sign-off itself is an owner act and has not occurred**, so the checklist in §24 is deliberately unticked.
+
+### The customer journey as it actually works
+
+Signed in: homepage → market → competition listing → competition detail → **add to basket** (a real hold through the ticket engine) → basket → checkout (skill question + terms) → order `awaiting_payment` → Pay now → provider → return → verified webhook → `paid`. A browser test drives a signed webhook through the real `/webhooks/payments/fake` endpoint and asserts the paid state.
+
+Two things bound that journey:
+
+- **A signed-out visitor cannot enter.** The API supports guests end to end — `phase5-journey.int.test.ts` proves the whole guest path — but the web app never forwards or adopts the `hv_guest` cookie, and the entry panel renders "Sign in to buy". Guest checkout has no web surface.
+- **The journey ends at `paid` and stops there.** There is no order history page, no confirmation email, no ticket numbers after purchase, and no draw outcome.
+
+### Current admin and UI limitations
+
+The admin web covers **draws only** (list, create, edit, prizes, skill question, publish, cancel, inventory) plus a read-only view of the market gate. These API routes exist and have **no interface** in either the web app or the CLI (which holds one command, `grant-role`):
+
+- `PUT /admin/markets/:market/settings` — the O12 compliance values
+- `POST /admin/markets/:market/legal-approval`, `/enable`, `/disable` — **a market cannot be launched through any interface**
+- `GET`/`PUT /admin/markets/:market/payment-config` — **a market cannot be configured to take money**
+- `GET`/`POST /admin/markets/:market/orders/:order/payments`, `/reconcile`, `/payment-events/:event/payload`, `/refund-duplicate`
+- `POST`/`GET /admin/markets/:market/terms`, `/:terms/publish`, `/:terms/activate`
+- `POST /auth/mfa/totp/setup`, `/confirm` — **there is no MFA enrolment UI**, and every sensitive admin action requires step-up MFA
+
+### Not implemented — verified against the repository
+
+No table, service or route exists for any of these. Only RBAC permission strings were seeded for some of them in Phase 2.
+
+| Capability                              | Status                                                                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer order history                  | **Not implemented.** `GET /markets/:market/checkout/orders` exists; no web page consumes it                                                                |
+| Post-payment confirmation               | **On-page only.** The order and return pages show `paid`; nothing is sent                                                                                  |
+| Ticket-number visibility after purchase | **Lost on purchase.** `TicketsRepository.ticketNumbers` filters `status = 'reserved'` and finalisation sets `sold`, so a paid order returns an empty array |
+| Confirmation / transactional email      | **Scaffolded only.** Only the guest verification topic relays to SMTP; the four `order.*` topics map to a handler that logs and returns `published`        |
+| Wallet                                  | Not implemented. `orders.wallet_applied_minor` exists and stays 0                                                                                          |
+| Instant wins                            | Not implemented                                                                                                                                            |
+| Settlement                              | Not implemented                                                                                                                                            |
+| Winners                                 | Not implemented                                                                                                                                            |
+| Fulfilment                              | Not implemented                                                                                                                                            |
+| Postal entry                            | Not implemented                                                                                                                                            |
+| Reports / CSV export                    | Not implemented                                                                                                                                            |
+| Referrals                               | Not implemented                                                                                                                                            |
+| Vault Meter                             | Not implemented                                                                                                                                            |
+| Password reset                          | Not implemented. `auth.service.ts` records that it needs transactional email                                                                               |
+| User email verification                 | Not implemented. `users.email_verified_at` exists and is never written by application code                                                                 |
+| Compliance / anonymisation              | Not implemented                                                                                                                                            |
+
+### Open owner decisions
+
+None may be decided by an implementer. **K-3** — a provider capture against a `cancelled` order; detected, flagged and left unprocessed, with no policy. **K-c** — what makes an order `failed`; `order.payment_failed` has a registered handler and no producer. **Manual retry after a terminal `failed` refund.** **O7** wider refund policy — and `tickets_status_valid` has no `'void'` value, which O7's answer must account for. **O9** the wider sensitive-operation list, answered for payment configuration only. **O12** compliance values — **still blocks enabling any market on a real database**. **O13** the production payment provider — also the dependency for adding its signature header to the pino redaction list. **O14** prize photography — no image exists in the repository and `Scene`'s photo map is commented out in full.
+
+### Test and CI caveats worth keeping
+
+- CI (`ci.yml`, job `verify`) runs format → lint → typecheck → unit → integration → build → e2e on `ubuntu-latest`. **CI remains authoritative.**
+- Suites on this baseline: 23 unit files, 37 integration files, 7 e2e specs.
+- **The worker is not part of the Playwright `webServer`** (it starts `e2e:prepare && api`, plus web), so order expiry and every sweep are integration-only and unreachable from an e2e test.
+- **Registration is limited to 20 per hour per IP and the e2e suite uses about 16 of them** (14 helper calls plus two inline in `auth.spec.ts`). `TRUST_PROXY` is empty, so no test can present a different address. Roughly one more registering test fits before the ceiling is hit.
+- Local-only, on the development machine: Docker Desktop has dropped PostgreSQL mid-run, and the integration suite starves when it follows the browser suite — both produce failures that pass on re-run. Neither has been observed in CI.
 
 ---
 

@@ -8,9 +8,17 @@
  * tickets sold on an order that is not paid, a partial sale, either without the
  * audit entry, or an announcement committed without the change it announces.
  *
- * Several tests attack the invariants in raw SQL with the application bypassed,
- * and the concurrency tests use separate connections with barrier-synchronised
- * starts. An invariant only reachable through the happy path was never one.
+ * Several tests attack the invariants in raw SQL with the application bypassed.
+ * An invariant only reachable through the happy path was never one.
+ *
+ * **On the racing tests, precisely.** They fire ten deliveries with
+ * `Promise.all` through `app.inject`, which is how Gates 1 and 2 are written
+ * too — no test under `apps/api/test` uses the `createBarrier` helper, and this
+ * file opens no dedicated connections. So they prove the FINAL-STATE invariant
+ * — one transition, one sale, one audit row, one outbox row — and they would
+ * reach that same state if the deliveries ran one after another. They do not,
+ * on their own, prove contention. Making them prove it means a barrier and N
+ * connections, which §15 asks for and this file does not yet do.
  */
 import { ErrorResponseSchema, OrderResponseSchema, PaymentResponseSchema } from '@hv/contracts';
 import { enableMarketsForTesting, insertFixtureDraw } from '@hv/db/testing';
