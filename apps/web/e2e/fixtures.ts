@@ -6,6 +6,16 @@ export const PASSWORD = 'correct horse battery staple';
 /** Staff accounts created by global.setup.ts. */
 export const STAFF_EMAIL_FILE = 'test-results/.e2e-staff-email'; // support role
 export const ADMIN_EMAIL_FILE = 'test-results/.e2e-admin-email'; // admin role (draws.write)
+/**
+ * The super_admin used by the market operations tests (UI-10), and its TOTP
+ * secret — written by global.setup.ts because the tests need a current code to
+ * satisfy step-up. `test-results/` is gitignored; neither value is ever
+ * printed by a test.
+ */
+export const SUPER_ADMIN_EMAIL_FILE = 'test-results/.e2e-super-admin-email';
+export const SUPER_ADMIN_TOTP_FILE = 'test-results/.e2e-super-admin-totp';
+/** A super_admin with no second factor, for the step-up refusal path. */
+export const NO_MFA_ADMIN_EMAIL_FILE = 'test-results/.e2e-nomfa-admin-email';
 
 export function uniqueEmail(label: string): string {
   return `${label}-${Date.now().toString(36)}-${randomInt(1e9).toString(36)}@example.com`;

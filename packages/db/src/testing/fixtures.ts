@@ -5,6 +5,7 @@
  * let tests exercise an enabled market. They are NOT compliance decisions and
  * must never be copied into a migration or a real environment.
  */
+import { argon2, randomBytes } from 'node:crypto';
 import type pg from 'pg';
 
 export const TEST_FIXTURE_COMPLIANCE = Object.freeze({
@@ -90,6 +91,47 @@ export async function insertFixtureUser(db: Queryable, email: string): Promise<s
   const result = await db.query<{ id: string }>(
     `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id`,
     [email, FIXTURE_PASSWORD_HASH],
+  );
+  return result.rows[0]!.id;
+}
+
+/**
+ * A fixture user that CAN sign in, for browser tests that need a staff account.
+ *
+ * `insertFixtureUser` above is for rows that never authenticate: its hash
+ * corresponds to no password at all. This one hashes a real (test) password
+ * with the same Argon2id parameters the API uses, so `verifyPassword` accepts
+ * it and `needsRehash` leaves it alone.
+ *
+ * **Why this exists rather than another HTTP registration.** `registerPerIp`
+ * allows twenty registrations an hour per address, `TRUST_PROXY` is empty so
+ * every e2e caller shares one bucket, and a full suite run already uses all
+ * twenty. A staff fixture created here costs none of them and needs no change
+ * to a security limit.
+ *
+ * Node's `crypto.argon2` is built in (Node >= 24.7), so this adds no
+ * dependency. The format is the PHC string `apps/api/src/auth/password.ts`
+ * writes and parses; if the two ever diverge, sign-in fails loudly in the e2e
+ * suite rather than quietly.
+ */
+export async function insertSignInFixtureUser(
+  db: Queryable,
+  email: string,
+  password: string,
+): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await new Promise<Buffer>((resolve, reject) => {
+    argon2(
+      'argon2id',
+      { message: password, nonce: salt, memory: 19_456, passes: 2, parallelism: 1, tagLength: 32 },
+      (error, out) => (error ? reject(error) : resolve(out)),
+    );
+  });
+  const b64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
+  const hash = `$argon2id$v=19$m=19456,t=2,p=1$${b64(salt)}$${b64(derived)}`;
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id`,
+    [email, hash],
   );
   return result.rows[0]!.id;
 }

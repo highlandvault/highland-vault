@@ -22,6 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <nav aria-label="Admin">
             <strong>Admin</strong>
             <Link href="/admin">Market gates</Link>
+            <Link href="/admin/markets">Market operations</Link>
             <Link href="/admin/draws">Draws</Link>
           </nav>
           <span className="hint">

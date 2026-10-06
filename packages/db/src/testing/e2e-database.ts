@@ -16,7 +16,12 @@
 import { Redis } from 'ioredis';
 import pg from 'pg';
 import { migrateUp } from '../migrate/runner';
-import { activateTermsForTesting, enableMarketsForTesting, insertFixtureDraw } from './fixtures';
+import {
+  activateTermsForTesting,
+  enableMarketsForTesting,
+  insertFixtureDraw,
+  insertSignInFixtureUser,
+} from './fixtures';
 import { MIGRATIONS_DIR, databaseUrl, testAdminUrl, withAdminClient } from './index';
 
 export const E2E_DB = 'hv_e2e';
@@ -37,6 +42,28 @@ async function main(): Promise<void> {
   await client.connect();
   try {
     await enableMarketsForTesting(client, ['uk', 'ie']);
+    /*
+     * The staff account the admin browser tests sign in as (UI-10).
+     *
+     * Created here rather than by registering over HTTP, because a full
+     * Playwright run already spends all twenty registrations an hour the API
+     * allows one address and this needs none. The role is granted afterwards
+     * by the operator CLI, exactly as the other staff fixtures are; this only
+     * creates a user that can sign in.
+     *
+     * Skipped silently when the variables are absent, so `e2e:prepare` still
+     * works when it is run by hand.
+     */
+    const staffEmail = process.env.E2E_STAFF_FIXTURE_EMAIL;
+    const staffPassword = process.env.E2E_STAFF_FIXTURE_PASSWORD;
+    if (staffEmail && staffPassword) {
+      await insertSignInFixtureUser(client, staffEmail, staffPassword);
+    }
+    // The same, without a second factor, so a test can reach STEP_UP_REQUIRED.
+    const noMfaEmail = process.env.E2E_NO_MFA_STAFF_EMAIL;
+    if (noMfaEmail && staffPassword) {
+      await insertSignInFixtureUser(client, noMfaEmail, staffPassword);
+    }
     // Checkout cannot create an order without an active terms version
     // (ADR-0031), and the e2e journey goes through checkout since P6-8.
     await activateTermsForTesting(client, ['uk', 'ie']);
