@@ -293,6 +293,35 @@ describe('creating an order', () => {
       ).orders;
       expect(theirs.map((o) => o.id)).not.toContain(order.id);
     });
+
+    /**
+     * B10's "checkout under 3 s excluding the provider" (Gate 4.8).
+     *
+     * **Order creation reaches no provider**, so this one request is the whole
+     * of what the clause measures: it locks the order row, re-reads the basket,
+     * re-checks the terms, marks the skill answer, prices every line from the
+     * reservation and writes the order and its items in one transaction — and
+     * then stops. A provider is first contacted by `POST …/payments`, which is
+     * a separate request and deliberately not timed here.
+     *
+     * Only the request is measured. The customer, the basket and the terms
+     * acceptance are set up first and left outside the clock, because none of
+     * them is checkout.
+     *
+     * Three seconds is the specification's number rather than a target: this
+     * takes well under a tenth of it locally, so the assertion has room for a
+     * loaded CI runner and still fails if the path acquires something slow.
+     */
+    it('creates the order well inside the three seconds B10 allows', async () => {
+      const client = await readyCustomer(3);
+
+      const started = process.hrtime.bigint();
+      const response = await place(client, freshKey(), 3);
+      const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+
+      expect(response.statusCode).toBe(201);
+      expect(elapsedMs).toBeLessThan(3000);
+    });
   });
 
   describe('a verified guest', () => {
