@@ -37,6 +37,21 @@ type Params = Promise<{ market: string; id: string }>;
  * This page cannot see the attempt — the order contract carries no payment —
  * so it does not guess at one. It says what it knows: the order is still
  * payable, here is how long for, and here is the button.
+ *
+ * ## The ticket numbers (UI-8)
+ *
+ * Each line shows the numbers it holds or bought. **The same tickets, under
+ * two names:** held tickets are `reserved` and paying for them sets them
+ * `sold` without detaching them from the line, so the numbers a customer was
+ * shown before paying are the numbers they keep afterwards. UI-6 left this
+ * block out because the API's read was `reserved`-only and so answered
+ * nothing for the one order a customer most wants to see — the paid one; the
+ * read now covers both states and the block is back.
+ *
+ * It is absent, rather than empty, when a hold has been released or has
+ * expired. Ending a hold puts its tickets back in the draw for somebody else,
+ * and numbers that now belong to another entrant are not this order's to
+ * print.
  */
 export default async function OrderPage({
   params,
@@ -135,6 +150,29 @@ export default async function OrderPage({
                       <dd className="price">{price(item.totalMinor)}</dd>
                     </div>
                   </dl>
+                  {/*
+                    Shown when there are numbers, and absent when there are
+                    not — which is the honest rendering of both states rather
+                    than two separate claims. A hold that was released or has
+                    expired has no numbers to show, because its tickets went
+                    back into the draw for somebody else.
+                  */}
+                  {item.ticketNumbers.length > 0 && (
+                    <div>
+                      <h4 className="ticket-numbers__title">
+                        {item.ticketNumbers.length === 1
+                          ? 'Your ticket number'
+                          : 'Your ticket numbers'}
+                      </h4>
+                      <ul className="ticket-numbers" data-testid="order-ticket-numbers">
+                        {item.ticketNumbers.map((n) => (
+                          <li key={n} className="ticket" data-testid="order-ticket-number">
+                            #{n}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </li>
             ))}

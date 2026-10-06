@@ -36,6 +36,16 @@ export const metadata: Metadata = { title: 'Your payment', robots: { index: fals
  * `succeeded` has delivered nothing until the order says `paid`, so the
  * attempt's own status is shown as a quiet aside and decides no wording.
  *
+ * ## The ticket numbers (UI-8)
+ *
+ * Shown here as well as on the order page. This widens what the return link
+ * displays, and deliberately so: the link already shows the order's lines,
+ * quantities and total, and a customer who has just paid on a device they may
+ * not be signed in on should be able to see what they bought. The numbers are
+ * part of the order, not of the payment — nothing about the provider, the
+ * reference or the instrument appears here, and the token still reaches one
+ * order and still only reads.
+ *
  * ## This page reads; it never writes
  *
  * The token arrives in the URL the provider was given, and the Route Handler
@@ -135,6 +145,28 @@ export default async function PaymentReturnPage() {
                     <dd className="price">{price(item.totalMinor)}</dd>
                   </div>
                 </dl>
+                {/*
+                  The numbers, when the order has them. Nothing about the
+                  payment: no provider, no reference, no card. The token's
+                  authority is "show me this one order", and these are part of
+                  that order exactly as the quantity and the total are.
+                */}
+                {item.ticketNumbers.length > 0 && (
+                  <div>
+                    <h4 className="ticket-numbers__title">
+                      {item.ticketNumbers.length === 1
+                        ? 'Your ticket number'
+                        : 'Your ticket numbers'}
+                    </h4>
+                    <ul className="ticket-numbers" data-testid="return-ticket-numbers">
+                      {item.ticketNumbers.map((n) => (
+                        <li key={n} className="ticket" data-testid="return-ticket-number">
+                          #{n}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </li>
           ))}

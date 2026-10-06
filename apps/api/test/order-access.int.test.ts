@@ -189,6 +189,24 @@ describe('the order return link', () => {
     (await h.sql.query<{ status: string }>(`SELECT status FROM orders WHERE id = $1`, [id]))
       .rows[0]!.status;
 
+  /**
+   * The tickets on this order's line, by the name they currently go under.
+   *
+   * Read through `order_items.reservation_id`, which is how the order reaches
+   * its tickets at all: the sale renames them and leaves that link alone.
+   */
+  const ticketNumbers = async (orderId: string, status: 'reserved' | 'sold') =>
+    (
+      await h.sql.query<{ ticket_number: number }>(
+        `SELECT t.ticket_number
+           FROM tickets t
+           JOIN order_items oi ON oi.reservation_id = t.reservation_id
+          WHERE oi.order_id = $1 AND t.status = $2
+          ORDER BY t.ticket_number`,
+        [orderId, status],
+      )
+    ).rows.map((r) => r.ticket_number);
+
   const tokenRow = async (orderId: string) =>
     (
       await h.sql.query<{ token_hash: Buffer; expires_at: Date; revoked_at: Date | null }>(
@@ -235,6 +253,49 @@ describe('the order return link', () => {
       const after = (await present(token)).json<{ order: { status: string } }>();
       expect(after.order.status).toBe('paid');
       expect(await orderStatus(order.id)).toBe('paid');
+    });
+
+    /**
+     * The ticket numbers, across the sale (UI-8).
+     *
+     * **The same tickets the whole way through.** A hold's tickets are
+     * `reserved`; the sale sets them `sold` and leaves
+     * `order_items.reservation_id` pointing at the same reservation, so the
+     * numbers a customer was shown before paying are the numbers they keep.
+     * Nothing is copied anywhere to achieve that, which is why this asserts
+     * the two sets are equal rather than merely both present.
+     *
+     * Both read paths are checked, because they are genuinely two routes to
+     * one answer: the return link, which authenticates nobody, and the
+     * customer's own order, which the session authorizes. They share the DTO
+     * and must not diverge.
+     */
+    it('reports the same ticket numbers before and after the sale, on both paths', async () => {
+      const { client, order, token, reference } = await paidJourney(3);
+
+      const held = await ticketNumbers(order.id, 'reserved');
+      expect(held).toHaveLength(3);
+      expect(order.items[0]!.ticketNumbers).toEqual(held);
+
+      expect((await settle(order, reference)).statusCode).toBe(200);
+      expect(await orderStatus(order.id)).toBe('paid');
+
+      // Renamed, not replaced, and not detached.
+      const sold = await ticketNumbers(order.id, 'sold');
+      expect(sold).toEqual(held);
+      expect(await ticketNumbers(order.id, 'reserved')).toEqual([]);
+
+      // The return link shows them...
+      const viaLink = (await present(token)).json<{
+        order: { status: string; items: { ticketNumbers: number[] }[] };
+      }>();
+      expect(viaLink.order.status).toBe('paid');
+      expect(viaLink.order.items[0]!.ticketNumbers).toEqual(sold);
+
+      // ...and so does the customer's own order, through the session.
+      const mine = orderOf(await client.get(`/markets/uk/checkout/orders/${order.id}`));
+      expect(mine.status).toBe('paid');
+      expect(mine.items[0]!.ticketNumbers).toEqual(sold);
     });
   });
 
