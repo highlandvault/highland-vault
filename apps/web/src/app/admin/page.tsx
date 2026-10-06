@@ -1,4 +1,5 @@
 import { AdminMarketListResponseSchema } from '@hv/contracts';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 
 const yesNo = (value: boolean) => (value ? 'yes' : 'no');
@@ -35,7 +36,9 @@ export default async function AdminHomePage() {
             {result.data.map((market) => (
               <tr key={market.code} data-testid={`gate-${market.code}`}>
                 <td>
-                  {market.name} ({market.code})
+                  {/* The gate readout stays what it was; each row now leads to
+                      the page where it can be changed (UI-10). */}
+                  <Link href={`/admin/markets/${market.code}`}>{market.name}</Link> ({market.code})
                 </td>
                 <td>{market.currency}</td>
                 <td>{yesNo(market.isEnabled)}</td>

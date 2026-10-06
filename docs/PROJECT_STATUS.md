@@ -1,14 +1,14 @@
 # Highland Vault — Project Status
 
-_Last updated: 2026-10-07_
+_Last updated: 2026-10-08_
 
 ## Current phase
 
-**Phase 6 (payments) is implemented and not yet closed. The customer UI is merged through UI-8. `develop` is at `94a681f`.**
+**Phase 6 (payments) is implemented and not yet closed. The customer UI is merged through UI-9. `develop` is at `b72b8fe`.**
 
 > **[PHASE_6_SCOPE_LOCK.md](PHASE_6_SCOPE_LOCK.md) is the authority for Phase 6.** Everything below the historical heading was written for Phases 4 and 5 and is kept as the record. Where the two disagree about Phase 6, the scope lock wins.
 
-Baseline: `origin/develop` = `94a681f` (**PR #47**), `origin/main` = `c284825` (Phase 4). 27 migrations, 35 ADRs. CI green on PR #47 (run #89) and on `develop` after the merge (run #90).
+Baseline: `origin/develop` = `b72b8fe` (**PR #48**), `origin/main` = `c284825` (Phase 4). 27 migrations, 35 ADRs. CI green on PR #48 (run #91) and on `develop` after the merge (run #92).
 
 ### Payment slices
 
@@ -57,12 +57,12 @@ Two things bound that journey:
 
 The admin web covers **draws only** (list, create, edit, prizes, skill question, publish, cancel, inventory) plus a read-only view of the market gate. These API routes exist and have **no interface** in either the web app or the CLI (which holds one command, `grant-role`):
 
-- `PUT /admin/markets/:market/settings` — the O12 compliance values
-- `POST /admin/markets/:market/legal-approval`, `/enable`, `/disable` — **a market cannot be launched through any interface**
+- `PUT /admin/markets/:market/settings` — the O12 compliance values; **given an interface by UI-10**, which enters them without deciding them
+- `POST /admin/markets/:market/legal-approval`, `/enable`, `/disable` — **given an interface by UI-10** (`feature/ui-10-admin-market-operations`, implemented, not merged): `/admin/markets/:market` carries the settings, legal-approval, enable and disable forms, each with a reason and behind fresh step-up. **O12 is still open**, so the values themselves remain an owner decision and the UI only collects what is typed
 - `GET`/`PUT /admin/markets/:market/payment-config` — **a market cannot be configured to take money**
 - `GET`/`POST /admin/markets/:market/orders/:order/payments`, `/reconcile`, `/payment-events/:event/payload`, `/refund-duplicate`
 - `POST`/`GET /admin/markets/:market/terms`, `/:terms/publish`, `/:terms/activate`
-- `POST /auth/mfa/totp/setup`, `/confirm` — **closed by UI-9** (`feature/ui-9-mfa-enrolment`, implemented, not merged): `/account/security` now enrols TOTP, so the step-up that every sensitive admin action requires has a product path for the first time. Turning a factor off, moving it to another authenticator and re-issuing recovery codes still have no route at all
+- `POST /auth/mfa/totp/setup`, `/confirm` — **closed by UI-9** (PR #48): `/account/security` now enrols TOTP, so the step-up that every sensitive admin action requires has a product path for the first time. Turning a factor off, moving it to another authenticator and re-issuing recovery codes still have no route at all
 
 ### Not implemented — verified against the repository
 

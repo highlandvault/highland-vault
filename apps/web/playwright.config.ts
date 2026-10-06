@@ -29,6 +29,35 @@ export const E2E_API_URL = 'http://127.0.0.1:4100';
  */
 export const E2E_RESERVATION_TTL_SECONDS = 300;
 
+/**
+ * The staff account the admin tests sign in as (UI-10).
+ *
+ * Seeded straight into the e2e database by `e2e:prepare`, which costs none of
+ * the twenty registrations an hour the API allows one address — a full run
+ * already uses all twenty, and raising that limit is a change to a security
+ * value rather than to test configuration.
+ *
+ * It is NOT one of the accounts `global.setup.ts` registers: those two are
+ * shared by the auth and draw specs, which sign into them expecting a single
+ * step, so giving either a second factor would break them. This one is used by
+ * the admin market tests and nothing else.
+ *
+ * The password is the suite's own test constant, not a secret.
+ */
+export const E2E_STAFF_FIXTURE_EMAIL = 'ui10-market-ops@example.com';
+/**
+ * A second super_admin, deliberately WITHOUT a second factor.
+ *
+ * It exists to reach `STEP_UP_REQUIRED` at all. An account that has enrolled
+ * cannot even open the admin area without verifying first — the session is
+ * `mfa_required` until it does — so its step-up is always fresh, and the
+ * fifteen-minute lapse cannot be reproduced in a test without waiting fifteen
+ * minutes. An account with the permission and no factor hits the same refusal
+ * immediately, which is the case an operator is most likely to meet.
+ */
+export const E2E_NO_MFA_STAFF_EMAIL = 'ui10-market-ops-nomfa@example.com';
+export const E2E_STAFF_FIXTURE_PASSWORD = 'correct horse battery staple';
+
 function e2eDatabaseUrl(): string {
   const url = new URL(required('TEST_DATABASE_ADMIN_URL'));
   url.pathname = '/hv_e2e';
@@ -74,6 +103,11 @@ export const E2E_API_ENV = {
   // built there, so neither guard is weakened by its presence.
   FAKE_PAYMENT_WEBHOOK_SECRET: 'e2e-fake-provider-webhook-secret',
   RESERVATION_TTL_SECONDS: String(E2E_RESERVATION_TTL_SECONDS),
+  // Read by e2e:prepare (packages/db/src/testing/e2e-database.ts), which runs
+  // in the same command as the API server. The API itself ignores them.
+  E2E_STAFF_FIXTURE_EMAIL,
+  E2E_NO_MFA_STAFF_EMAIL,
+  E2E_STAFF_FIXTURE_PASSWORD,
 } as const;
 
 // Smoke tests run against the production builds (`pnpm build` must have run first).

@@ -202,5 +202,6 @@ export {
   enableMarketsForTesting,
   insertFixtureDraw,
   insertFixtureUser,
+  insertSignInFixtureUser,
   type FixtureDrawOptions,
 } from './fixtures';
