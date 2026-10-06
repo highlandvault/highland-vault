@@ -33,7 +33,15 @@ export default async function AccountPage() {
           </div>
           <div>
             <dt>Two-step verification</dt>
-            <dd>{me.user.mfaEnabled ? 'On' : 'Off'}</dd>
+            <dd data-testid="account-mfa">
+              {me.user.mfaEnabled ? 'On' : 'Off'} &middot;{' '}
+              {/* The only way to enrol, so it is a link rather than a note
+                  (UI-9). Reads "Set up" when there is nothing yet, because
+                  "Manage" would promise switches the API does not have. */}
+              <Link href="/account/security" data-testid="account-security-link">
+                {me.user.mfaEnabled ? 'Security' : 'Set up'}
+              </Link>
+            </dd>
           </div>
           <div>
             <dt>Roles</dt>
