@@ -3383,3 +3383,99 @@ a.cat:hover .cat__art .scene {
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 8px 18px;
 }
+
+/* ------------------------------------------------- MFA enrolment (UI-9) */
+
+/*
+ * The setup key and the recovery codes.
+ *
+ * Both are long, both have to be read character by character and typed
+ * somewhere else, and both have to do that inside a 320px panel without
+ * pushing the page sideways. So: a monospace face, tabular figures, and
+ * `overflow-wrap: anywhere` — `break-word` alone will not break a
+ * sixteen-character base32 run, because it has no word boundary to break at.
+ */
+.secret-field {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.secret-grouped {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+
+/* The otpauth URI: one unbroken string, often over a hundred characters. */
+.secret-uri {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ivory);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+  /* Selectable as one unit, so copying it does not need a button. */
+  user-select: all;
+}
+
+.setup-steps {
+  margin: 0 0 1.5em;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.setup-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 28px 0 24px;
+}
+
+/*
+ * Ten codes, numbered.
+ *
+ * A real `<ol>`, so the numbering is the document's rather than drawn: it is
+ * how somebody keeps track of which ones they have spent, and a screen reader
+ * announces the count. One column on a phone, two once `ABCD-EFGH-IJKL-MNOP`
+ * and its marker both fit.
+ */
+.recovery-codes {
+  margin: 0 0 20px;
+  padding-left: 1.6em;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px 24px;
+}
+
+@media (min-width: 420px) {
+  .recovery-codes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.recovery-code {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  /* One click selects a whole code, so none is half-copied. */
+  user-select: all;
+}
+
+/* Ten short lines, all visible at once: a box the customer has to scroll is a
+   box they will copy half of. */
+.recovery-codes__text {
+  min-height: 0;
+  line-height: 1.7;
+  resize: vertical;
+}

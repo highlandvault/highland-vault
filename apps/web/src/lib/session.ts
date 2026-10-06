@@ -22,6 +22,11 @@ const MESSAGES: Record<string, string> = {
   ACCOUNT_DISABLED: 'This account is disabled.',
   RATE_LIMITED: 'Too many attempts. Try again later.',
   INVALID_MFA_CODE: 'That code is invalid or has already been used.',
+  MFA_ALREADY_ENABLED:
+    'Two-step verification is already on for this account — it may have been set up in another session.',
+  MFA_NOT_ENROLLED: 'That setup attempt is no longer valid. Start again.',
+  STEP_UP_REQUIRED:
+    'That action needs a fresh code from your authenticator app. Set up two-step verification, or sign in again to confirm it.',
   EMAIL_TAKEN: 'An account with this email already exists.',
   VALIDATION_FAILED: 'Check the details: passwords need at least 12 characters.',
   ORIGIN_NOT_ALLOWED: 'This request was refused (origin not allowed).',

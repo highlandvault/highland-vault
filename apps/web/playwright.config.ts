@@ -118,7 +118,18 @@ export default defineConfig({
     {
       command: 'pnpm exec next start -H 127.0.0.1 -p 3100',
       url: E2E_WEB_ORIGIN,
-      env: { NODE_ENV: 'production', API_BASE_URL: E2E_API_URL },
+      env: {
+        NODE_ENV: 'production',
+        API_BASE_URL: E2E_API_URL,
+        // Seals the MFA enrolment handoff cookies (UI-9). Set here rather than
+        // inherited from .env so the suite does not depend on a file it did
+        // not write, and a fixed value rather than a random one so a failure
+        // is reproducible. It is not the all-zeros placeholder either, so the
+        // enrolment test exercises the sealing with a real key — the suite
+        // asserts the cookie does not carry the secret in clear, which a
+        // degenerate key would still satisfy but is worth not relying on.
+        MFA_HANDOFF_KEY: 'e2e'.padEnd(64, '7'),
+      },
       reuseExistingServer: false,
       timeout: 120_000,
     },
